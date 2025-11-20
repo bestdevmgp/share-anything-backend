@@ -1,0 +1,125 @@
+use serde::Deserialize;
+use std::env;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Config {
+    pub server: ServerConfig,
+    pub database: DatabaseConfig,
+    pub jwt: JwtConfig,
+    pub oauth: OAuthConfig,
+    pub s3: S3Config,
+    pub cors: CorsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+    pub base_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatabaseConfig {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JwtConfig {
+    pub secret: String,
+    pub expiration_hours: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthConfig {
+    pub google: OAuthProvider,
+    pub naver: OAuthProvider,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthProvider {
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uri: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct S3Config {
+    pub endpoint: Option<String>,
+    pub region: String,
+    pub bucket_name: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub prefix: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+}
+
+impl Config {
+    pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
+        // Load .env file if it exists
+        dotenvy::dotenv().ok();
+
+        let config = Config {
+            server: ServerConfig {
+                host: env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
+                port: env::var("SERVER_PORT")
+                    .unwrap_or_else(|_| "8080".to_string())
+                    .parse()?,
+                base_url: env::var("BASE_URL")
+                    .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+            },
+            database: DatabaseConfig {
+                url: env::var("DATABASE_URL")
+                    .expect("DATABASE_URL must be set in environment"),
+            },
+            jwt: JwtConfig {
+                secret: env::var("JWT_SECRET")
+                    .expect("JWT_SECRET must be set in environment"),
+                expiration_hours: env::var("JWT_EXPIRATION_HOURS")
+                    .unwrap_or_else(|_| "24".to_string())
+                    .parse()?,
+            },
+            oauth: OAuthConfig {
+                google: OAuthProvider {
+                    client_id: env::var("GOOGLE_CLIENT_ID")
+                        .expect("GOOGLE_CLIENT_ID must be set"),
+                    client_secret: env::var("GOOGLE_CLIENT_SECRET")
+                        .expect("GOOGLE_CLIENT_SECRET must be set"),
+                    redirect_uri: env::var("GOOGLE_REDIRECT_URI")
+                        .expect("GOOGLE_REDIRECT_URI must be set"),
+                },
+                naver: OAuthProvider {
+                    client_id: env::var("NAVER_CLIENT_ID")
+                        .expect("NAVER_CLIENT_ID must be set"),
+                    client_secret: env::var("NAVER_CLIENT_SECRET")
+                        .expect("NAVER_CLIENT_SECRET must be set"),
+                    redirect_uri: env::var("NAVER_REDIRECT_URI")
+                        .expect("NAVER_REDIRECT_URI must be set"),
+                },
+            },
+            s3: S3Config {
+                endpoint: env::var("S3_ENDPOINT").ok(),
+                region: env::var("S3_REGION").unwrap_or_else(|_| "auto".to_string()),
+                bucket_name: env::var("S3_BUCKET_NAME")
+                    .expect("S3_BUCKET_NAME must be set"),
+                access_key_id: env::var("S3_ACCESS_KEY_ID")
+                    .expect("S3_ACCESS_KEY_ID must be set"),
+                secret_access_key: env::var("S3_SECRET_ACCESS_KEY")
+                    .expect("S3_SECRET_ACCESS_KEY must be set"),
+                prefix: env::var("S3_PREFIX").unwrap_or_else(|_| "".to_string()),
+            },
+            cors: CorsConfig {
+                allowed_origins: env::var("CORS_ALLOWED_ORIGINS")
+                    .unwrap_or_else(|_| "http://localhost:3000".to_string())
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect(),
+            },
+        };
+
+        Ok(config)
+    }
+}

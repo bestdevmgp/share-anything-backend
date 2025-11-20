@@ -1,6 +1,64 @@
 [package]
 name = "share-anything"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+# Web framework
+axum = { version = "0.7", features = ["multipart", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
+
+# API Documentation
+utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql", "chrono", "uuid"] }
+
+# Object Storage (S3-compatible)
+aws-sdk-s3 = "1.11"
+aws-config = "1.1"
+aws-credential-types = "1.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication
+jsonwebtoken = "9.2"
+oauth2 = "4.4"
+reqwest = { version = "0.11", features = ["json"] }
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+bcrypt = "0.15"
+qrcode = "0.14"
+image = "0.24"
+base64 = "0.21"
+
+# Configuration
+dotenvy = "0.15"
+config = "0.13"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# User agent parsing
+woothee = "0.13"
+
+# File compression
+zip = "0.6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

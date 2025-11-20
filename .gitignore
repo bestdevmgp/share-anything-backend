@@ -1,0 +1,26 @@
+# Environment files
+.env
+.env.local
+
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# ETC
+.claude/
+API.md
