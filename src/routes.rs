@@ -62,7 +62,9 @@ pub fn create_router(
                 .collect::<Vec<_>>(),
         )
         .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_headers(Any)
+        .allow_credentials(true)
+        .expose_headers(Any);
 
     // Auth routes (no auth required)
     let auth_routes = Router::new()
