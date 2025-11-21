@@ -13,17 +13,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
         with:
-          toolchain: stable
-          override: true
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build project
-        run: cargo build --verbose
-
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: pmg3858/share-anything:latest
+          platforms: linux/amd64
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.7
@@ -32,7 +37,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/share-anything-backend
-            git pull
-            cargo build --release
-            sudo systemctl restart share-anything.service
+            docker pull pmg3858/share-anything:latest
+            docker stop share-anything-app || true
+            docker rm share-anything-app || true
+            docker run -d --name share-anything-app -p 8080:8080 pmg3858/share-anything:latest

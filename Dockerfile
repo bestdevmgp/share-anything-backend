@@ -1,4 +1,4 @@
-FROM rust:latest AS builder
+FROM --platform=linux/amd64 rust:latest AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY . .
 
 RUN cargo build --release
 
-FROM debian:bookworm-slim
+FROM --platform=linux/amd64 debian:bookworm-slim
 
 WORKDIR /app
 
