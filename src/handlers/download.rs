@@ -77,6 +77,17 @@ pub async fn get_file_list(
     // Use first file's metadata for group info
     let first_file = &file_shares[0];
 
+    // Get uploader name if available
+    let uploader_name = if let Some(user_id) = &first_file.user_id {
+        repository::find_user_by_id(&state.db, user_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|u| u.name)
+    } else {
+        None
+    };
+
     let files: Vec<FileInfoInGroup> = file_shares
         .iter()
         .map(|f| FileInfoInGroup {
@@ -94,6 +105,7 @@ pub async fn get_file_list(
         description: first_file.description.clone(),
         has_password: first_file.password_hash.is_some(),
         expires_at: first_file.expires_at,
+        uploader_name,
     }))
 }
 
@@ -241,6 +253,15 @@ pub async fn download_single_file(
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
 
+    // If one-time file, delete it immediately after download
+    if file_share.is_one_time {
+        // Delete from storage
+        let _ = state.storage.delete_file(&file_share.storage_key).await;
+
+        // Delete from database
+        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
+    }
+
     // Build response with appropriate headers
     let mut response = Response::new(Body::from(file_data));
 
@@ -341,6 +362,15 @@ pub async fn download_file(
         .download_file(&file_share.storage_key)
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+
+    // If one-time file, delete it immediately after download
+    if file_share.is_one_time {
+        // Delete from storage
+        let _ = state.storage.delete_file(&file_share.storage_key).await;
+
+        // Delete from database
+        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
+    }
 
     // Build response with appropriate headers
     let mut response = Response::new(Body::from(file_data));
@@ -455,6 +485,18 @@ pub async fn download_multiple_files(
         .map_err(|_| internal_error("ZIP 파일 완성 실패"))?;
 
     let zip_data = buffer.into_inner();
+
+    // If one-time files, delete them immediately after download
+    let is_one_time = files_to_download[0].is_one_time;
+    if is_one_time {
+        for file_share in files_to_download.iter() {
+            // Delete from storage
+            let _ = state.storage.delete_file(&file_share.storage_key).await;
+
+            // Delete from database
+            let _ = repository::delete_file_share(&state.db, &file_share.id).await;
+        }
+    }
 
     // Build response
     let mut response = Response::new(Body::from(zip_data));

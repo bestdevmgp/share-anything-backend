@@ -4,7 +4,6 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client as S3Client,
 };
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct StorageService {

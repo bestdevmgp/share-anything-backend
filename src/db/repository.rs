@@ -13,6 +13,7 @@ pub async fn create_user(
 ) -> Result<User, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
+    let provider_str = dto.oauth_provider.to_string();
 
     sqlx::query(
         r#"
@@ -21,7 +22,7 @@ pub async fn create_user(
         "#,
     )
     .bind(&id)
-    .bind(&dto.oauth_provider)
+    .bind(&provider_str)
     .bind(&dto.oauth_id)
     .bind(&dto.email)
     .bind(&dto.name)
@@ -31,7 +32,6 @@ pub async fn create_user(
     .execute(pool)
     .await?;
 
-    // Fetch the created user
     find_user_by_id(pool, &id).await?.ok_or(sqlx::Error::RowNotFound)
 }
 
@@ -40,13 +40,15 @@ pub async fn find_user_by_oauth(
     provider: &OAuthProvider,
     oauth_id: &str,
 ) -> Result<Option<User>, sqlx::Error> {
+    let provider_str = provider.to_string();
+
     sqlx::query_as::<_, User>(
         r#"
         SELECT * FROM users
         WHERE oauth_provider = ? AND oauth_id = ?
         "#,
     )
-    .bind(provider)
+    .bind(&provider_str)
     .bind(oauth_id)
     .fetch_optional(pool)
     .await
@@ -81,6 +83,7 @@ pub async fn create_file_share(
     storage_key: String,
     description: Option<String>,
     password_hash: Option<String>,
+    is_one_time: bool,
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
@@ -90,8 +93,8 @@ pub async fn create_file_share(
         r#"
         INSERT INTO file_shares
         (id, share_group_id, user_id, share_code, file_name, file_size, file_type, storage_key,
-         description, password_hash, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, password_hash, is_one_time, expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -104,6 +107,7 @@ pub async fn create_file_share(
     .bind(&storage_key)
     .bind(&description)
     .bind(&password_hash)
+    .bind(is_one_time)
     .bind(expires_at)
     .bind(now)
     .bind(now)

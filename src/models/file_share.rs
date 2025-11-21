@@ -15,6 +15,7 @@ pub struct FileShare {
     pub storage_key: String,
     pub description: Option<String>,
     pub password_hash: Option<String>,
+    pub is_one_time: bool,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -34,6 +35,7 @@ pub struct CreateFileShareDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpirationPeriod {
+    OneTime,     // 일회용 (첫 다운로드 후 즉시 삭제)
     OneHour,
     OneDay,
     ThreeDays,
@@ -44,12 +46,17 @@ pub enum ExpirationPeriod {
 impl ExpirationPeriod {
     pub fn to_duration(&self) -> chrono::Duration {
         match self {
+            ExpirationPeriod::OneTime => chrono::Duration::days(7), // 일회용이지만 다운로드 안 하면 7일 후 만료
             ExpirationPeriod::OneHour => chrono::Duration::hours(1),
             ExpirationPeriod::OneDay => chrono::Duration::days(1),
             ExpirationPeriod::ThreeDays => chrono::Duration::days(3),
             ExpirationPeriod::OneWeek => chrono::Duration::weeks(1),
             ExpirationPeriod::OneMonth => chrono::Duration::days(30),
         }
+    }
+
+    pub fn is_one_time(&self) -> bool {
+        matches!(self, ExpirationPeriod::OneTime)
     }
 }
 
@@ -90,6 +97,7 @@ pub struct FileListResponse {
     pub description: Option<String>,
     pub has_password: bool,
     pub expires_at: DateTime<Utc>,
+    pub uploader_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

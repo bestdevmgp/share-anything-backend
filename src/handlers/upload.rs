@@ -153,6 +153,7 @@ pub async fn upload_file(
         ExpirationPeriod::OneDay // Default
     };
 
+    let is_one_time = expiration.is_one_time();
     let expires_at = Utc::now() + expiration.to_duration();
 
     // Hash password if provided (only allowed for logged-in users)
@@ -217,6 +218,7 @@ pub async fn upload_file(
             storage_key,
             metadata.description.clone(),
             password_hash.clone(),
+            is_one_time,
             expires_at,
         )
         .await

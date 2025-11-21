@@ -63,7 +63,6 @@ pub async fn google_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    // Store frontend redirect_uri in state parameter (we'll use it in callback)
     let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
         format!("{}/auth/callback/google", state.config.server.base_url)
     });
@@ -93,13 +92,11 @@ pub async fn google_login(
     )
 )]
 pub async fn google_callback(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(query): Query<GoogleCallbackQuery>,
 ) -> impl IntoResponse {
-    // The 'state' parameter contains the frontend callback URL
     let frontend_callback = query.state;
 
-    // Redirect to frontend with the authorization code
     let redirect_url = format!(
         "{}?code={}&state=google",
         frontend_callback,
@@ -129,19 +126,22 @@ pub async fn google_callback_handler(
 ) -> Result<Json<AuthResponse>, StatusCode> {
     let client = create_google_oauth_client(&state.config);
 
-    // Exchange code for token
     let token = client
-        .exchange_code(AuthorizationCode::new(query.code))
+        .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(oauth2::reqwest::async_http_client)
         .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        .map_err(|e| {
+            tracing::error!("Google OAuth token exchange failed: {:?}", e);
+            StatusCode::UNAUTHORIZED
+        })?;
 
-    // Fetch user info from Google
     let user_info = fetch_google_user_info(token.access_token().secret())
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to fetch Google user info: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    // Find or create user
     let user = match repository::find_user_by_oauth(
         &state.db,
         &OAuthProvider::Google,
@@ -153,20 +153,25 @@ pub async fn google_callback_handler(
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Google,
-                oauth_id: user_info.id,
-                email: user_info.email,
-                name: user_info.name,
-                profile_image: user_info.picture,
+                oauth_id: user_info.id.clone(),
+                email: user_info.email.clone(),
+                name: user_info.name.clone(),
+                profile_image: user_info.picture.clone(),
             };
 
             repository::create_user(&state.db, dto)
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|e| {
+                    tracing::error!("Failed to create user: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         }
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            tracing::error!("Database query failed: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
-    // Create JWT
     let jwt = create_jwt(
         &user.id,
         &user.email,
@@ -174,7 +179,10 @@ pub async fn google_callback_handler(
         &state.config.jwt.secret,
         state.config.jwt.expiration_hours,
     )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("JWT creation failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(AuthResponse {
         token: jwt,
@@ -207,11 +215,16 @@ async fn fetch_google_user_info(
         .get("https://www.googleapis.com/oauth2/v2/userinfo")
         .bearer_auth(access_token)
         .send()
-        .await?
-        .json::<GoogleUserInfo>()
         .await?;
 
-    Ok(response)
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
+        return Err(format!("Google API error: {} - {}", status, body).into());
+    }
+
+    let user_info = response.json::<GoogleUserInfo>().await?;
+    Ok(user_info)
 }
 
 // ============================================================================
@@ -222,6 +235,38 @@ async fn fetch_google_user_info(
 pub struct NaverCallbackQuery {
     code: String,
     state: String,
+}
+
+// Naver returns expires_in as a string, not a number (non-standard OAuth 2.0)
+#[derive(Debug, Deserialize)]
+struct NaverTokenResponse {
+    access_token: String,
+    #[allow(dead_code)]
+    refresh_token: String,
+    #[allow(dead_code)]
+    token_type: String,
+    #[allow(dead_code)]
+    #[serde(deserialize_with = "deserialize_expires_in")]
+    expires_in: u64,
+}
+
+fn deserialize_expires_in<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        String(String),
+        Number(u64),
+    }
+
+    match StringOrNumber::deserialize(deserializer)? {
+        StringOrNumber::String(s) => s.parse::<u64>().map_err(Error::custom),
+        StringOrNumber::Number(n) => Ok(n),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -252,7 +297,6 @@ pub async fn naver_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    // Store frontend redirect_uri in state parameter
     let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
         format!("{}/auth/callback/naver", state.config.server.base_url)
     });
@@ -280,13 +324,11 @@ pub async fn naver_login(
     )
 )]
 pub async fn naver_callback(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(query): Query<NaverCallbackQuery>,
 ) -> impl IntoResponse {
-    // The 'state' parameter contains the frontend callback URL
     let frontend_callback = query.state;
 
-    // Redirect to frontend with the authorization code
     let redirect_url = format!(
         "{}?code={}&state=naver",
         frontend_callback,
@@ -314,21 +356,48 @@ pub async fn naver_callback_handler(
     State(state): State<AppState>,
     Query(query): Query<NaverCallbackQuery>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
-    let client = create_naver_oauth_client(&state.config);
-
-    // Exchange code for token
-    let token = client
-        .exchange_code(AuthorizationCode::new(query.code))
-        .request_async(oauth2::reqwest::async_http_client)
+    // Exchange code for token (using direct HTTP request because Naver returns expires_in as string)
+    let http_client = reqwest::Client::new();
+    let token_response = http_client
+        .post("https://nid.naver.com/oauth2.0/token")
+        .query(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", &state.config.oauth.naver.client_id),
+            ("client_secret", &state.config.oauth.naver.client_secret),
+            ("code", &query.code),
+            ("state", &query.state),
+        ])
+        .send()
         .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        .map_err(|e| {
+            tracing::error!("Naver OAuth token request failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    // Fetch user info from Naver
-    let user_info = fetch_naver_user_info(token.access_token().secret())
+    if !token_response.status().is_success() {
+        let status = token_response.status();
+        let body = token_response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
+        tracing::error!("Naver token exchange failed {}: {}", status, body);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let body_text = token_response.text().await.map_err(|e| {
+        tracing::error!("Failed to read Naver token response: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let naver_token: NaverTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
+        tracing::error!("Failed to parse Naver token response: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let user_info = fetch_naver_user_info(&naver_token.access_token)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to fetch Naver user info: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
-    // Find or create user
     let user = match repository::find_user_by_oauth(
         &state.db,
         &OAuthProvider::Naver,
@@ -340,20 +409,25 @@ pub async fn naver_callback_handler(
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Naver,
-                oauth_id: user_info.response.id,
-                email: user_info.response.email,
-                name: user_info.response.name,
-                profile_image: user_info.response.profile_image,
+                oauth_id: user_info.response.id.clone(),
+                email: user_info.response.email.clone(),
+                name: user_info.response.name.clone(),
+                profile_image: user_info.response.profile_image.clone(),
             };
 
             repository::create_user(&state.db, dto)
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|e| {
+                    tracing::error!("Failed to create user: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         }
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            tracing::error!("Database query failed: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
 
-    // Create JWT
     let jwt = create_jwt(
         &user.id,
         &user.email,
@@ -361,7 +435,10 @@ pub async fn naver_callback_handler(
         &state.config.jwt.secret,
         state.config.jwt.expiration_hours,
     )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("JWT creation failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     Ok(Json(AuthResponse {
         token: jwt,
@@ -394,11 +471,16 @@ async fn fetch_naver_user_info(
         .get("https://openapi.naver.com/v1/nid/me")
         .bearer_auth(access_token)
         .send()
-        .await?
-        .json::<NaverUserInfo>()
         .await?;
 
-    Ok(response)
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
+        return Err(format!("Naver API error: {} - {}", status, body).into());
+    }
+
+    let user_info = response.json::<NaverUserInfo>().await?;
+    Ok(user_info)
 }
 
 // ============================================================================
