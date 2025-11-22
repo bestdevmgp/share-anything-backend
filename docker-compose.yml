@@ -45,7 +45,7 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - RUST_LOG=info,share_anything=debug
     ports:
-      - "8080:8080"
+      - "80:8080"
     depends_on:
       mysql:
         condition: service_healthy
