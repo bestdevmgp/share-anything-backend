@@ -222,8 +222,14 @@ pub async fn download_single_file(
     // Log download
     let ip_address = headers
         .get("X-Forwarded-For")
-        .or_else(|| headers.get("X-Real-IP"))
         .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim())
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .and_then(|v| v.to_str().ok())
+        })
         .unwrap_or("unknown")
         .to_string();
 
@@ -332,8 +338,14 @@ pub async fn download_file(
     // Log download
     let ip_address = headers
         .get("X-Forwarded-For")
-        .or_else(|| headers.get("X-Real-IP"))
         .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim())
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .and_then(|v| v.to_str().ok())
+        })
         .unwrap_or("unknown")
         .to_string();
 
