@@ -61,7 +61,7 @@ pub fn create_router(
                 .map(|s| s.parse().unwrap())
                 .collect::<Vec<_>>(),
         )
-        .allow_methods(Any)
+        .allow_methods(tower_http::cors::AllowMethods::mirror_request())
         .allow_headers(tower_http::cors::AllowHeaders::mirror_request())
         .allow_credentials(true)
         .expose_headers(Any);
