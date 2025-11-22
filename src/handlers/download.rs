@@ -71,7 +71,7 @@ pub async fn get_file_list(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("파일을 찾을 수 없거나 만료되었습니다"));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
     }
 
     // Use first file's metadata for group info
@@ -129,7 +129,7 @@ pub async fn get_file_info(
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없거나 만료되었습니다"))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
     // Get uploader name if available
     let uploader_name = if let Some(user_id) = &file_share.user_id {
@@ -193,7 +193,7 @@ pub async fn download_single_file(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("파일을 찾을 수 없거나 만료되었습니다"));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
     }
 
     let file_share = file_shares
@@ -309,7 +309,7 @@ pub async fn download_file(
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없거나 만료되었습니다"))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
     // If password protected, check password in query or header
     if let Some(password_hash) = &file_share.password_hash {
@@ -431,7 +431,7 @@ pub async fn download_multiple_files(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if all_files.is_empty() {
-        return Err(not_found("파일을 찾을 수 없거나 만료되었습니다"));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
     }
 
     // Filter only requested files
@@ -535,7 +535,7 @@ pub async fn verify_password(
     let file_share = repository::find_file_share_by_code(&state.db, &req.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없거나 만료되었습니다"))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let is_valid = bcrypt::verify(&req.password, password_hash)
