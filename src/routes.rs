@@ -62,7 +62,7 @@ pub fn create_router(
                 .collect::<Vec<_>>(),
         )
         .allow_methods(Any)
-        .allow_headers(Any)
+        .allow_headers(tower_http::cors::AllowHeaders::mirror_request())
         .allow_credentials(true)
         .expose_headers(Any);
 

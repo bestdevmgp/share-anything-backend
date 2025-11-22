@@ -3298,6 +3298,7 @@ dependencies = [
  "chrono",
  "config",
  "dotenvy",
+ "http 0.2.12",
  "image 0.24.9",
  "jsonwebtoken",
  "oauth2",

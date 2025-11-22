@@ -57,6 +57,7 @@ woothee = "0.13"
 
 # File compression
 zip = "0.6"
+http = "0.2.12"
 
 [profile.release]
 opt-level = 3

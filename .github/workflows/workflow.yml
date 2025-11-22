@@ -37,7 +37,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd ~/share-anything
             docker pull pmg3858/share-anything:latest
-            docker stop share-anything-app || true
-            docker rm share-anything-app || true
-            docker run -d --name share-anything-app -p 8080:8080 pmg3858/share-anything:latest
+            docker compose down
+            docker compose up -d
