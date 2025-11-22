@@ -5,7 +5,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -63,8 +63,7 @@ pub fn create_router(
         )
         .allow_methods(tower_http::cors::AllowMethods::mirror_request())
         .allow_headers(tower_http::cors::AllowHeaders::mirror_request())
-        .allow_credentials(true)
-        .expose_headers(Any);
+        .allow_credentials(true);
 
     // Auth routes (no auth required)
     let auth_routes = Router::new()
