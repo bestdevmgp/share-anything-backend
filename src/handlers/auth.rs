@@ -95,12 +95,13 @@ pub async fn google_callback(
     State(_state): State<AppState>,
     Query(query): Query<GoogleCallbackQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.state;
+    let frontend_callback = &query.state;
 
     let redirect_url = format!(
-        "{}?code={}&state=google",
+        "{}?code={}&state={}",
         frontend_callback,
-        query.code
+        query.code,
+        query.state
     );
 
     Redirect::temporary(&redirect_url)
@@ -327,12 +328,13 @@ pub async fn naver_callback(
     State(_state): State<AppState>,
     Query(query): Query<NaverCallbackQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.state;
+    let frontend_callback = &query.state;
 
     let redirect_url = format!(
-        "{}?code={}&state=naver",
+        "{}?code={}&state={}",
         frontend_callback,
-        query.code
+        query.code,
+        query.state
     );
 
     Redirect::temporary(&redirect_url)
