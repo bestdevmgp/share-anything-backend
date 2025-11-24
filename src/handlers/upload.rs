@@ -29,6 +29,7 @@ pub struct UploadMetadata {
     pub description: Option<String>,
     pub password: Option<String>,
     pub expiration: Option<ExpirationPeriod>,
+    pub is_one_time: Option<bool>,
 }
 
 #[utoipa::path(
@@ -62,6 +63,7 @@ pub async fn upload_file(
     let mut description: Option<String> = None;
     let mut password: Option<String> = None;
     let mut expiration: Option<ExpirationPeriod> = None;
+    let mut is_one_time: Option<bool> = None;
 
     // Parse multipart form data
     while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))? {
@@ -103,6 +105,12 @@ pub async fn upload_file(
                     expiration = serde_json::from_value(serde_json::json!(text)).ok();
                 }
             }
+            "is_one_time" => {
+                let text = field.text().await.map_err(|_| bad_request("is_one_time 필드를 읽을 수 없습니다"))?;
+                if !text.is_empty() {
+                    is_one_time = text.parse::<bool>().ok();
+                }
+            }
             _ => {}
         }
     }
@@ -140,6 +148,7 @@ pub async fn upload_file(
         description,
         password,
         expiration,
+        is_one_time,
     };
 
     // Determine expiration
@@ -153,7 +162,14 @@ pub async fn upload_file(
         ExpirationPeriod::FiveMinutes // Default
     };
 
-    let is_one_time = expiration.is_one_time();
+    // Determine if one-time download (default to false)
+    let is_one_time = metadata.is_one_time.unwrap_or(false);
+
+    // One-time feature requires authentication
+    if is_one_time && user_claims.is_none() {
+        return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
+    }
+
     let expires_at = Utc::now() + expiration.to_duration();
 
     // Hash password if provided (only allowed for logged-in users)
