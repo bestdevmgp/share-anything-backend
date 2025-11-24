@@ -35,23 +35,27 @@ pub struct CreateFileShareDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpirationPeriod {
-    OneTime,     // 일회용 (첫 다운로드 후 즉시 삭제)
-    OneHour,
-    OneDay,
-    ThreeDays,
-    OneWeek,
-    OneMonth,
+    OneTime,          // 일회용 (첫 다운로드 후 즉시 삭제)
+    FiveMinutes,      // 5분
+    ThirtyMinutes,    // 30분
+    OneHour,          // 1시간
+    ThreeHours,       // 3시간
+    SixHours,         // 6시간
+    TwelveHours,      // 12시간
+    TwentyFourHours,  // 24시간
 }
 
 impl ExpirationPeriod {
     pub fn to_duration(&self) -> chrono::Duration {
         match self {
             ExpirationPeriod::OneTime => chrono::Duration::days(7), // 일회용이지만 다운로드 안 하면 7일 후 만료
+            ExpirationPeriod::FiveMinutes => chrono::Duration::minutes(5),
+            ExpirationPeriod::ThirtyMinutes => chrono::Duration::minutes(30),
             ExpirationPeriod::OneHour => chrono::Duration::hours(1),
-            ExpirationPeriod::OneDay => chrono::Duration::days(1),
-            ExpirationPeriod::ThreeDays => chrono::Duration::days(3),
-            ExpirationPeriod::OneWeek => chrono::Duration::weeks(1),
-            ExpirationPeriod::OneMonth => chrono::Duration::days(30),
+            ExpirationPeriod::ThreeHours => chrono::Duration::hours(3),
+            ExpirationPeriod::SixHours => chrono::Duration::hours(6),
+            ExpirationPeriod::TwelveHours => chrono::Duration::hours(12),
+            ExpirationPeriod::TwentyFourHours => chrono::Duration::hours(24),
         }
     }
 

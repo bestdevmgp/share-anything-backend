@@ -144,13 +144,13 @@ pub async fn upload_file(
 
     // Determine expiration
     let expiration = if let Some(exp) = metadata.expiration {
-        // User can only set custom expiration if logged in
-        if user_claims.is_none() {
-            return Err(unauthorized("만료 기간 설정은 로그인이 필요합니다"));
+        // Non-logged-in users can only use FiveMinutes
+        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
+            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
         }
         exp
     } else {
-        ExpirationPeriod::OneDay // Default
+        ExpirationPeriod::FiveMinutes // Default
     };
 
     let is_one_time = expiration.is_one_time();
