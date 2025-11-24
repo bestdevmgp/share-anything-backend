@@ -289,6 +289,97 @@ pub async fn download_single_file(
     Ok(response)
 }
 
+/// Preview file without counting as download (for thumbnails/previews)
+#[utoipa::path(
+    get,
+    path = "/preview/file",
+    tag = "download",
+    params(
+        ("code" = String, Query, description = "6-digit share code"),
+        ("file_id" = String, Query, description = "File ID to preview")
+    ),
+    responses(
+        (status = 200, description = "File preview loaded successfully", content_type = "application/octet-stream"),
+        (status = 401, description = "Password required or invalid"),
+        (status = 404, description = "File not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn preview_file(
+    State(state): State<DownloadState>,
+    Query(params): Query<serde_json::Value>,
+    headers: HeaderMap,
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let code = params
+        .get("code")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| bad_request("code parameter is required"))?;
+
+    let file_id = params
+        .get("file_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| bad_request("file_id parameter is required"))?;
+
+    // Verify the file belongs to this share code
+    let file_shares = repository::find_file_shares_by_code(&state.db, code)
+        .await
+        .map_err(|_| internal_error("파일 조회 실패"))?;
+
+    if file_shares.is_empty() {
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+    }
+
+    let file_share = file_shares
+        .iter()
+        .find(|f| f.id == file_id)
+        .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+
+    // If password protected, check password in header
+    if let Some(password_hash) = &file_share.password_hash {
+        let password = headers
+            .get("X-File-Password")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+
+        let is_valid = bcrypt::verify(password, password_hash)
+            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+
+        if !is_valid {
+            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+        }
+    }
+
+    // Download file from storage (but don't log or delete)
+    let file_data = state
+        .storage
+        .download_file(&file_share.storage_key)
+        .await
+        .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+
+    // Build response with inline disposition for preview
+    let mut response = Response::new(Body::from(file_data));
+
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        file_share
+            .file_type
+            .parse()
+            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+    );
+
+    // Use inline instead of attachment for preview
+    response.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        format!("inline; filename=\"{}\"", file_share.file_name)
+            .parse()
+            .unwrap(),
+    );
+
+    Ok(response)
+}
+
 /// Download file (with optional password verification) - Legacy endpoint, downloads first file
 #[utoipa::path(
     get,

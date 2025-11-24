@@ -3,7 +3,6 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use chrono::Utc;
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -14,7 +13,7 @@ use crate::{
     middleware::auth::Claims,
     models::{bad_request, unauthorized, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse},
     services::{generate_qr_code, StorageService},
-    utils::generate_share_code,
+    utils::{generate_share_code, now_kst},
 };
 
 #[derive(Clone)]
@@ -170,7 +169,7 @@ pub async fn upload_file(
         return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
     }
 
-    let expires_at = Utc::now() + expiration.to_duration();
+    let expires_at = now_kst() + expiration.to_duration();
 
     // Hash password if provided (only allowed for logged-in users)
     let password_hash = if let Some(password) = metadata.password {

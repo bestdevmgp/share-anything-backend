@@ -94,6 +94,7 @@ pub fn create_router(
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
         .route("/download/bulk", post(handlers::download::download_multiple_files))
+        .route("/preview/file", get(handlers::download::preview_file))
         .route("/files/list", get(handlers::download::get_file_list))
         .route("/file/info", get(handlers::download::get_file_info))
         .route("/file/verify-password", post(handlers::download::verify_password))

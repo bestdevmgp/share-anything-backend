@@ -1,4 +1,5 @@
 use crate::models::*;
+use crate::utils::now_kst;
 use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
@@ -12,7 +13,7 @@ pub async fn create_user(
     dto: CreateUserDto,
 ) -> Result<User, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = Utc::now();
+    let now = now_kst();
     let provider_str = dto.oauth_provider.to_string();
 
     sqlx::query(
@@ -87,7 +88,7 @@ pub async fn create_file_share(
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = Utc::now();
+    let now = now_kst();
 
     sqlx::query(
         r#"
@@ -125,7 +126,7 @@ pub async fn find_file_share_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
+        WHERE share_code = ? AND expires_at > NOW()
         LIMIT 1
         "#,
     )
@@ -141,7 +142,7 @@ pub async fn find_file_shares_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
+        WHERE share_code = ? AND expires_at > NOW()
         ORDER BY created_at ASC
         "#,
     )
@@ -160,7 +161,7 @@ pub async fn find_file_shares_by_ids(
 
     let placeholders = vec!["?"; ids.len()].join(",");
     let query_str = format!(
-        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > UTC_TIMESTAMP()",
+        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > NOW()",
         placeholders
     );
 
@@ -230,7 +231,7 @@ pub async fn delete_expired_file_shares(
     let expired_files = sqlx::query_as::<_, (String,)>(
         r#"
         SELECT storage_key FROM file_shares
-        WHERE expires_at <= UTC_TIMESTAMP()
+        WHERE expires_at <= NOW()
         "#,
     )
     .fetch_all(pool)
@@ -241,7 +242,7 @@ pub async fn delete_expired_file_shares(
     // Then delete them
     sqlx::query(
         r#"
-        DELETE FROM file_shares WHERE expires_at <= UTC_TIMESTAMP()
+        DELETE FROM file_shares WHERE expires_at <= NOW()
         "#,
     )
     .execute(pool)
@@ -276,7 +277,7 @@ pub async fn create_download_log(
     device_platform: Option<String>,
 ) -> Result<DownloadLog, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = Utc::now();
+    let now = now_kst();
 
     sqlx::query(
         r#"
