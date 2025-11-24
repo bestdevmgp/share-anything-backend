@@ -59,6 +59,9 @@ woothee = "0.13"
 zip = "0.6"
 http = "0.2.12"
 
+# Rate limiting
+dashmap = "5.5"
+
 [profile.release]
 opt-level = 3
 lto = true

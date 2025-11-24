@@ -15,6 +15,7 @@ use crate::{
     docs::ApiDoc,
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
+    middleware::rate_limiter::RateLimiter,
     services::StorageService,
 };
 
@@ -51,6 +52,9 @@ pub fn create_router(
         storage: storage.clone(),
     };
 
+    // Create rate limiter
+    let rate_limiter = RateLimiter::new();
+
     // CORS configuration
     let cors = CorsLayer::new()
         .allow_origin(
@@ -85,7 +89,7 @@ pub fn create_router(
         ))
         .with_state(upload_state);
 
-    // Download routes (optional auth)
+    // Download routes (optional auth + rate limiting)
     let download_routes = Router::new()
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
@@ -94,6 +98,10 @@ pub fn create_router(
         .route("/file/info", get(handlers::download::get_file_info))
         .route("/file/verify-password", post(handlers::download::verify_password))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)) // 10GB limit for downloads too
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
