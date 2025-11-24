@@ -125,7 +125,7 @@ pub async fn find_file_share_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > NOW()
+        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
         LIMIT 1
         "#,
     )
@@ -141,7 +141,7 @@ pub async fn find_file_shares_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > NOW()
+        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
         ORDER BY created_at ASC
         "#,
     )
@@ -160,7 +160,7 @@ pub async fn find_file_shares_by_ids(
 
     let placeholders = vec!["?"; ids.len()].join(",");
     let query_str = format!(
-        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > NOW()",
+        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > UTC_TIMESTAMP()",
         placeholders
     );
 
@@ -230,7 +230,7 @@ pub async fn delete_expired_file_shares(
     let expired_files = sqlx::query_as::<_, (String,)>(
         r#"
         SELECT storage_key FROM file_shares
-        WHERE expires_at <= NOW()
+        WHERE expires_at <= UTC_TIMESTAMP()
         "#,
     )
     .fetch_all(pool)
@@ -241,7 +241,7 @@ pub async fn delete_expired_file_shares(
     // Then delete them
     sqlx::query(
         r#"
-        DELETE FROM file_shares WHERE expires_at <= NOW()
+        DELETE FROM file_shares WHERE expires_at <= UTC_TIMESTAMP()
         "#,
     )
     .execute(pool)
