@@ -54,9 +54,9 @@ impl RateLimiter {
     pub fn check_rate_limit(&self, ip: &str) -> Result<(), String> {
         // Check if IP is blocked
         if let Some(blocked_until) = self.blocked_ips.get(ip) {
-            if blocked_until.value().elapsed() < Duration::from_secs(3600) {
-                // Blocked for 1 hour
-                return Err("Your IP has been temporarily blocked due to suspicious activity. Please try again later.".to_string());
+            if blocked_until.value().elapsed() < Duration::from_secs(600) {
+                // Blocked for 10 minutes
+                return Err("비정상적인 활동으로 인해 사용자의 IP가 일시적으로 차단되었습니다. 나중에 다시 시도해 주세요.".to_string());
             } else {
                 // Block expired, remove it
                 self.blocked_ips.remove(ip);
@@ -65,7 +65,7 @@ impl RateLimiter {
 
         let now = Instant::now();
         let window_duration = Duration::from_secs(60); // 1 minute window
-        let max_requests_per_minute = 20; // Allow 20 requests per minute per IP
+        let max_requests_per_minute = 50; // Allow 50 requests per minute per IP
 
         // Check and update request count
         let mut should_allow = true;
@@ -89,7 +89,7 @@ impl RateLimiter {
             });
 
         if !should_allow {
-            return Err("Rate limit exceeded. You can make up to 20 requests per minute.".to_string());
+            return Err("Rate limit exceeded. You can make up to 50 requests per minute.".to_string());
         }
 
         Ok(())
@@ -153,7 +153,7 @@ impl RateLimiter {
 
         // Cleanup expired blocks
         self.blocked_ips.retain(|_, blocked_at| {
-            blocked_at.elapsed() < Duration::from_secs(3600)
+            blocked_at.elapsed() < Duration::from_secs(600)
         });
 
         tracing::debug!(
