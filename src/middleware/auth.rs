@@ -4,12 +4,12 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use chrono::Utc;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::config::Config;
-use crate::utils::now_kst;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -83,7 +83,7 @@ pub fn create_jwt(
     secret: &str,
     expiration_hours: i64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let now = now_kst();
+    let now = Utc::now();
     let exp = now + chrono::Duration::hours(expiration_hours);
 
     let claims = Claims {

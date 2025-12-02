@@ -1,5 +1,4 @@
 use crate::models::*;
-use crate::utils::now_kst;
 use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
@@ -9,7 +8,7 @@ pub async fn create_user(
     dto: CreateUserDto,
 ) -> Result<User, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = now_kst();
+    let now = Utc::now();
     let provider_str = dto.oauth_provider.to_string();
 
     sqlx::query(
@@ -80,7 +79,7 @@ pub async fn create_file_share(
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = now_kst();
+    let now = Utc::now();
 
     sqlx::query(
         r#"
@@ -262,7 +261,7 @@ pub async fn create_download_log(
     device_platform: Option<String>,
 ) -> Result<DownloadLog, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
-    let now = now_kst();
+    let now = Utc::now();
 
     sqlx::query(
         r#"

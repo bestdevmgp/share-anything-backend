@@ -483,9 +483,11 @@ pub async fn download_file(
 )]
 pub async fn download_multiple_files(
     State(state): State<DownloadState>,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     request: Request,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request.extensions().get::<Claims>().cloned();
+
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
         .map_err(|_| bad_request("요청 본문을 읽을 수 없습니다"))?;
@@ -527,6 +529,26 @@ pub async fn download_multiple_files(
         }
     }
 
+    let ip_address = headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim())
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .and_then(|v| v.to_str().ok())
+        })
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
+
     let buffer = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(buffer);
     let options = FileOptions::default()
@@ -545,6 +567,18 @@ pub async fn download_multiple_files(
 
         zip.write_all(&file_data)
             .map_err(|_| internal_error("ZIP 파일 쓰기 실패"))?;
+
+        let _ = repository::create_download_log(
+            &state.db,
+            CreateDownloadLogDto {
+                file_share_id: file_share.id.clone(),
+                downloader_user_id: user_claims.as_ref().map(|c| c.sub.clone()),
+                ip_address: ip_address.clone(),
+                user_agent: user_agent.clone(),
+            },
+            device_platform.clone(),
+        )
+        .await;
     }
 
     let buffer = zip

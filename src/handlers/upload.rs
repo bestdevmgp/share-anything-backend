@@ -13,8 +13,9 @@ use crate::{
     middleware::auth::Claims,
     models::{bad_request, unauthorized, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse},
     services::{generate_qr_code, StorageService},
-    utils::{generate_share_code, now_kst},
+    utils::generate_share_code,
 };
+use chrono::Utc;
 
 #[derive(Clone)]
 pub struct UploadState {
@@ -112,16 +113,14 @@ pub async fn upload_file(
         }
     }
 
-    // Check if at least one file was uploaded
     if files.is_empty() {
         return Err(bad_request("파일이 업로드되지 않았습니다. 최소 1개 이상의 파일이 필요합니다"));
     }
 
-    // Check file size limits based on user authentication
     let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024  // 3GB for logged-in users
+        3 * 1024 * 1024 * 1024
     } else {
-        500 * 1024 * 1024  // 500MB for anonymous users
+        500 * 1024 * 1024
     };
 
     let total_size: i64 = files.iter().map(|f| f.data.len() as i64).sum();
@@ -148,7 +147,6 @@ pub async fn upload_file(
         is_one_time,
     };
 
-    // Determine expiration
     let expiration = if let Some(exp) = metadata.expiration {
         // Non-logged-in users can only use FiveMinutes
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
@@ -159,7 +157,6 @@ pub async fn upload_file(
         ExpirationPeriod::FiveMinutes // Default
     };
 
-    // Determine if one-time download (default to false)
     let is_one_time = metadata.is_one_time.unwrap_or(false);
 
     // One-time feature requires authentication
@@ -167,9 +164,8 @@ pub async fn upload_file(
         return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
     }
 
-    let expires_at = now_kst() + expiration.to_duration();
+    let expires_at = Utc::now() + expiration.to_duration();
 
-    // Hash password if provided (only allowed for logged-in users)
     let password_hash = if let Some(password) = metadata.password {
         if user_claims.is_none() {
             return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
@@ -182,7 +178,6 @@ pub async fn upload_file(
         None
     };
 
-    // Generate one share_code and share_group_id for all files
     let share_code = loop {
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
@@ -196,11 +191,9 @@ pub async fn upload_file(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    // Process each file
     for file_data in files {
         let file_size = file_data.data.len() as i64;
 
-        // Generate storage key (prefix from config)
         let storage_key = if state.config.s3.prefix.is_empty() {
             format!("{}/{}", Uuid::new_v4(), file_data.name)
         } else {
@@ -212,7 +205,6 @@ pub async fn upload_file(
             )
         };
 
-        // Upload to storage
         state
             .storage
             .upload_file(&storage_key, file_data.data, &file_data.content_type)
@@ -247,12 +239,11 @@ pub async fn upload_file(
             has_password: file_share.password_hash.is_some(),
             expires_at: file_share.expires_at,
             created_at: file_share.created_at,
-            download_url: String::new(), // Will be set below
-            qr_code: None, // Will be set below
+            download_url: String::new(),
+            qr_code: None,
         });
     }
 
-    // Generate download URL and QR code once for the entire group
     let download_url = format!(
         "{}/download?code={}",
         state.config.server.base_url, share_code
@@ -260,7 +251,6 @@ pub async fn upload_file(
 
     let qr_code = generate_qr_code(&download_url).ok();
 
-    // Update all files with the same download_url and qr_code
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
