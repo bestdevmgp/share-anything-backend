@@ -1,13 +1,11 @@
 use rand::Rng;
 
-/// Generates a random 6-digit numeric code
 pub fn generate_share_code() -> String {
     let mut rng = rand::thread_rng();
     let code: u32 = rng.gen_range(100000..=999999);
     code.to_string()
 }
 
-/// Parse device platform from user agent using woothee
 pub fn parse_device_platform(user_agent: &str) -> String {
     match woothee::parser::Parser::new().parse(user_agent) {
         Some(result) => {

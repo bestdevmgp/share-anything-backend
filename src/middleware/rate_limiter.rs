@@ -10,14 +10,10 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// Rate limiter state that tracks requests per IP
 #[derive(Clone)]
 pub struct RateLimiter {
-    /// Tracks normal request counts per IP
     request_counts: Arc<DashMap<String, RequestRecord>>,
-    /// Tracks failed (404) request counts per IP
     failed_counts: Arc<DashMap<String, FailedRequestRecord>>,
-    /// IPs that are temporarily blocked
     blocked_ips: Arc<DashMap<String, Instant>>,
 }
 
@@ -41,7 +37,6 @@ impl RateLimiter {
             blocked_ips: Arc::new(DashMap::new()),
         };
 
-        // Spawn cleanup task
         let rate_limiter_clone = rate_limiter.clone();
         tokio::spawn(async move {
             rate_limiter_clone.cleanup_task().await;
@@ -50,29 +45,23 @@ impl RateLimiter {
         rate_limiter
     }
 
-    /// Check if the IP is allowed to make a request
     pub fn check_rate_limit(&self, ip: &str) -> Result<(), String> {
-        // Check if IP is blocked
         if let Some(blocked_until) = self.blocked_ips.get(ip) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                // Blocked for 10 minutes
                 return Err("비정상적인 활동으로 인해 사용자의 IP가 일시적으로 차단되었습니다. 나중에 다시 시도해 주세요.".to_string());
             } else {
-                // Block expired, remove it
                 self.blocked_ips.remove(ip);
             }
         }
 
         let now = Instant::now();
-        let window_duration = Duration::from_secs(60); // 1 minute window
-        let max_requests_per_minute = 50; // Allow 50 requests per minute per IP
+        let window_duration = Duration::from_secs(60);
+        let max_requests_per_minute = 50;
 
-        // Check and update request count
         let mut should_allow = true;
         self.request_counts
             .entry(ip.to_string())
             .and_modify(|record| {
-                // Reset window if expired
                 if now.duration_since(record.window_start) > window_duration {
                     record.count = 1;
                     record.window_start = now;
@@ -95,23 +84,20 @@ impl RateLimiter {
         Ok(())
     }
 
-    /// Record a failed request (404 response)
     pub fn record_failed_request(&self, ip: &str) {
         let now = Instant::now();
-        let window_duration = Duration::from_secs(60); // 1 minute window
-        let max_failures_per_minute = 10; // Allow max 10 failures per minute
+        let window_duration = Duration::from_secs(60);
+        let max_failures_per_minute = 10;
 
         let mut should_block = false;
         self.failed_counts
             .entry(ip.to_string())
             .and_modify(|record| {
-                // Reset window if expired
                 if now.duration_since(record.window_start) > window_duration {
                     record.count = 1;
                     record.window_start = now;
                 } else {
                     record.count += 1;
-                    // Block if too many failed requests
                     if record.count > max_failures_per_minute {
                         should_block = true;
                     }
@@ -128,9 +114,8 @@ impl RateLimiter {
         }
     }
 
-    /// Cleanup old entries periodically
     async fn cleanup_task(&self) {
-        let mut interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
         loop {
             interval.tick().await;
             self.cleanup();
@@ -139,19 +124,16 @@ impl RateLimiter {
 
     fn cleanup(&self) {
         let now = Instant::now();
-        let max_age = Duration::from_secs(3600); // Keep records for 1 hour
+        let max_age = Duration::from_secs(3600);
 
-        // Cleanup old request records
         self.request_counts.retain(|_, record| {
             now.duration_since(record.window_start) < max_age
         });
 
-        // Cleanup old failed request records
         self.failed_counts.retain(|_, record| {
             now.duration_since(record.window_start) < max_age
         });
 
-        // Cleanup expired blocks
         self.blocked_ips.retain(|_, blocked_at| {
             blocked_at.elapsed() < Duration::from_secs(600)
         });
@@ -164,7 +146,6 @@ impl RateLimiter {
     }
 }
 
-/// Extract IP address from request headers
 fn extract_ip(headers: &HeaderMap) -> String {
     headers
         .get("X-Forwarded-For")
@@ -176,7 +157,6 @@ fn extract_ip(headers: &HeaderMap) -> String {
         .to_string()
 }
 
-/// Middleware function for rate limiting share code lookups
 pub async fn rate_limit_middleware(
     State(rate_limiter): State<RateLimiter>,
     headers: HeaderMap,
@@ -185,7 +165,6 @@ pub async fn rate_limit_middleware(
 ) -> Response {
     let ip = extract_ip(&headers);
 
-    // Check rate limit
     if let Err(error_message) = rate_limiter.check_rate_limit(&ip) {
         tracing::warn!("Rate limit exceeded for IP: {}", ip);
         return (
@@ -197,10 +176,8 @@ pub async fn rate_limit_middleware(
             .into_response();
     }
 
-    // Process request
     let response = next.run(request).await;
 
-    // Record failed requests (404s)
     if response.status() == StatusCode::NOT_FOUND {
         rate_limiter.record_failed_request(&ip);
     }

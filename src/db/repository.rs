@@ -4,10 +4,6 @@ use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
-// ============================================================================
-// User Repository
-// ============================================================================
-
 pub async fn create_user(
     pool: &MySqlPool,
     dto: CreateUserDto,
@@ -69,10 +65,6 @@ pub async fn find_user_by_id(
     .await
 }
 
-// ============================================================================
-// FileShare Repository
-// ============================================================================
-
 pub async fn create_file_share(
     pool: &MySqlPool,
     share_group_id: Option<String>,
@@ -115,7 +107,6 @@ pub async fn create_file_share(
     .execute(pool)
     .await?;
 
-    // Fetch the created file share
     find_file_share_by_id(pool, &id).await?.ok_or(sqlx::Error::RowNotFound)
 }
 
@@ -227,7 +218,6 @@ pub async fn delete_file_share(
 pub async fn delete_expired_file_shares(
     pool: &MySqlPool,
 ) -> Result<Vec<String>, sqlx::Error> {
-    // First, get the storage keys of expired files
     let expired_files = sqlx::query_as::<_, (String,)>(
         r#"
         SELECT storage_key FROM file_shares
@@ -239,7 +229,6 @@ pub async fn delete_expired_file_shares(
 
     let storage_keys: Vec<String> = expired_files.into_iter().map(|(k,)| k).collect();
 
-    // Then delete them
     sqlx::query(
         r#"
         DELETE FROM file_shares WHERE expires_at <= NOW()
@@ -267,10 +256,6 @@ pub async fn check_code_exists(
     Ok(result.0 > 0)
 }
 
-// ============================================================================
-// DownloadLog Repository
-// ============================================================================
-
 pub async fn create_download_log(
     pool: &MySqlPool,
     dto: CreateDownloadLogDto,
@@ -296,7 +281,6 @@ pub async fn create_download_log(
     .execute(pool)
     .await?;
 
-    // Fetch the created download log
     sqlx::query_as::<_, DownloadLog>(
         r#"
         SELECT * FROM download_logs WHERE id = ?

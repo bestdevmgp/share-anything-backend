@@ -49,7 +49,6 @@ pub async fn upload_file(
     user_claims: Option<Extension<Claims>>,
     mut multipart: Multipart,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Extract optional user from extensions (set by optional_auth middleware)
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
     struct FileData {
@@ -64,7 +63,6 @@ pub async fn upload_file(
     let mut expiration: Option<ExpirationPeriod> = None;
     let mut is_one_time: Option<bool> = None;
 
-    // Parse multipart form data
     while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))? {
         let name = field.name().unwrap_or("").to_string();
 

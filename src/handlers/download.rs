@@ -45,11 +45,11 @@ pub struct FileInfoResponse {
     pub file_type: String,
     pub description: Option<String>,
     pub has_password: bool,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub uploader_name: Option<String>,
 }
 
-/// Get all files in a share group by share code
 #[utoipa::path(
     get,
     path = "/files/list",
@@ -74,10 +74,8 @@ pub async fn get_file_list(
         return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
     }
 
-    // Use first file's metadata for group info
     let first_file = &file_shares[0];
 
-    // Get uploader name if available
     let uploader_name = if let Some(user_id) = &first_file.user_id {
         repository::find_user_by_id(&state.db, user_id)
             .await
@@ -109,7 +107,6 @@ pub async fn get_file_list(
     }))
 }
 
-/// Get file information by share code (doesn't require password)
 #[utoipa::path(
     get,
     path = "/file/info",
@@ -131,7 +128,6 @@ pub async fn get_file_info(
         .map_err(|_| internal_error("파일 조회 실패"))?
         .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
-    // Get uploader name if available
     let uploader_name = if let Some(user_id) = &file_share.user_id {
         repository::find_user_by_id(&state.db, user_id)
             .await
@@ -153,7 +149,6 @@ pub async fn get_file_info(
     }))
 }
 
-/// Download single file by file ID
 #[utoipa::path(
     get,
     path = "/download/file",
@@ -187,7 +182,6 @@ pub async fn download_single_file(
         .and_then(|v| v.as_str())
         .ok_or_else(|| bad_request("file_id parameter is required"))?;
 
-    // Verify the file belongs to this share code
     let file_shares = repository::find_file_shares_by_code(&state.db, code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -201,7 +195,6 @@ pub async fn download_single_file(
         .find(|f| f.id == file_id)
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
 
-    // If password protected, check password in header
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
@@ -216,10 +209,8 @@ pub async fn download_single_file(
         }
     }
 
-    // Extract user claims if available
     let user_claims = request.extensions().get::<Claims>().cloned();
 
-    // Log download
     let ip_address = headers
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok())
@@ -252,23 +243,18 @@ pub async fn download_single_file(
     )
     .await;
 
-    // Download file from storage
     let file_data = state
         .storage
         .download_file(&file_share.storage_key)
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
 
-    // If one-time file, delete it immediately after download
     if file_share.is_one_time {
-        // Delete from storage
         let _ = state.storage.delete_file(&file_share.storage_key).await;
 
-        // Delete from database
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
-    // Build response with appropriate headers
     let mut response = Response::new(Body::from(file_data));
 
     response.headers_mut().insert(
@@ -289,7 +275,6 @@ pub async fn download_single_file(
     Ok(response)
 }
 
-/// Preview file without counting as download (for thumbnails/previews)
 #[utoipa::path(
     get,
     path = "/preview/file",
@@ -322,7 +307,6 @@ pub async fn preview_file(
         .and_then(|v| v.as_str())
         .ok_or_else(|| bad_request("file_id parameter is required"))?;
 
-    // Verify the file belongs to this share code
     let file_shares = repository::find_file_shares_by_code(&state.db, code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -336,7 +320,6 @@ pub async fn preview_file(
         .find(|f| f.id == file_id)
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
 
-    // If password protected, check password in header
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
@@ -351,14 +334,12 @@ pub async fn preview_file(
         }
     }
 
-    // Download file from storage (but don't log or delete)
     let file_data = state
         .storage
         .download_file(&file_share.storage_key)
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
 
-    // Build response with inline disposition for preview
     let mut response = Response::new(Body::from(file_data));
 
     response.headers_mut().insert(
@@ -369,7 +350,6 @@ pub async fn preview_file(
             .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
     );
 
-    // Use inline instead of attachment for preview
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         format!("inline; filename=\"{}\"", file_share.file_name)
@@ -380,7 +360,6 @@ pub async fn preview_file(
     Ok(response)
 }
 
-/// Download file (with optional password verification) - Legacy endpoint, downloads first file
 #[utoipa::path(
     get,
     path = "/download",
@@ -408,7 +387,6 @@ pub async fn download_file(
         .map_err(|_| internal_error("파일 조회 실패"))?
         .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
-    // If password protected, check password in query or header
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
@@ -423,10 +401,8 @@ pub async fn download_file(
         }
     }
 
-    // Extract user claims if available
     let user_claims = request.extensions().get::<Claims>().cloned();
 
-    // Log download
     let ip_address = headers
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok())
@@ -459,23 +435,18 @@ pub async fn download_file(
     )
     .await;
 
-    // Download file from storage
     let file_data = state
         .storage
         .download_file(&file_share.storage_key)
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
 
-    // If one-time file, delete it immediately after download
     if file_share.is_one_time {
-        // Delete from storage
         let _ = state.storage.delete_file(&file_share.storage_key).await;
 
-        // Delete from database
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
-    // Build response with appropriate headers
     let mut response = Response::new(Body::from(file_data));
 
     response.headers_mut().insert(
@@ -496,7 +467,6 @@ pub async fn download_file(
     Ok(response)
 }
 
-/// Download multiple files as ZIP
 #[utoipa::path(
     post,
     path = "/download/bulk",
@@ -516,7 +486,6 @@ pub async fn download_multiple_files(
     _headers: HeaderMap,
     request: Request,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
-    // Parse request body manually
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
         .map_err(|_| bad_request("요청 본문을 읽을 수 없습니다"))?;
@@ -528,7 +497,6 @@ pub async fn download_multiple_files(
         return Err(bad_request("최소 1개 이상의 파일 ID가 필요합니다"));
     }
 
-    // Get all files by code to verify they belong to the same group
     let all_files = repository::find_file_shares_by_code(&state.db, &req.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -537,7 +505,6 @@ pub async fn download_multiple_files(
         return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
     }
 
-    // Filter only requested files
     let files_to_download: Vec<_> = all_files
         .iter()
         .filter(|f| req.file_ids.contains(&f.id))
@@ -547,7 +514,6 @@ pub async fn download_multiple_files(
         return Err(not_found("요청한 파일을 찾을 수 없습니다"));
     }
 
-    // Check password if protected
     if let Some(password_hash) = &files_to_download[0].password_hash {
         if let Some(password) = &req.password {
             let is_valid = bcrypt::verify(password, password_hash)
@@ -561,14 +527,12 @@ pub async fn download_multiple_files(
         }
     }
 
-    // Create ZIP archive in memory
     let buffer = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(buffer);
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o755);
 
-    // Download and add each file to ZIP
     for file_share in files_to_download.iter() {
         let file_data = state
             .storage
@@ -589,19 +553,15 @@ pub async fn download_multiple_files(
 
     let zip_data = buffer.into_inner();
 
-    // If one-time files, delete them immediately after download
     let is_one_time = files_to_download[0].is_one_time;
     if is_one_time {
         for file_share in files_to_download.iter() {
-            // Delete from storage
             let _ = state.storage.delete_file(&file_share.storage_key).await;
 
-            // Delete from database
             let _ = repository::delete_file_share(&state.db, &file_share.id).await;
         }
     }
 
-    // Build response
     let mut response = Response::new(Body::from(zip_data));
 
     response.headers_mut().insert(
@@ -619,7 +579,6 @@ pub async fn download_multiple_files(
     Ok(response)
 }
 
-/// Verify password before download (optional endpoint)
 #[utoipa::path(
     post,
     path = "/file/verify-password",

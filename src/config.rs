@@ -59,7 +59,6 @@ pub struct CorsConfig {
 
 impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
-        // Load .env file if it exists
         dotenvy::dotenv().ok();
 
         let config = Config {

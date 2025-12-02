@@ -4,9 +4,8 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{error, info};
 
-/// Background task that periodically cleans up expired file shares
 pub async fn start_cleanup_task(pool: DbPool, storage: StorageService) {
-    let mut interval = time::interval(Duration::from_secs(3600)); // Run every hour
+    let mut interval = time::interval(Duration::from_secs(3600));
 
     loop {
         interval.tick().await;
@@ -20,7 +19,6 @@ pub async fn start_cleanup_task(pool: DbPool, storage: StorageService) {
                 } else {
                     info!("Deleted {} expired file shares from database", storage_keys.len());
 
-                    // Delete files from storage
                     match storage.delete_files(storage_keys.clone()).await {
                         Ok(_) => {
                             info!(

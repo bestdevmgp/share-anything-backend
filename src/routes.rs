@@ -24,7 +24,6 @@ pub fn create_router(
     db: DbPool,
     storage: StorageService,
 ) -> Router {
-    // Create states
     let auth_state = AuthState {
         config: config.clone(),
     };
@@ -52,10 +51,8 @@ pub fn create_router(
         storage: storage.clone(),
     };
 
-    // Create rate limiter
     let rate_limiter = RateLimiter::new();
 
-    // CORS configuration
     let cors = CorsLayer::new()
         .allow_origin(
             config
@@ -69,7 +66,6 @@ pub fn create_router(
         .allow_headers(tower_http::cors::AllowHeaders::mirror_request())
         .allow_credentials(true);
 
-    // Auth routes (no auth required)
     let auth_routes = Router::new()
         .route("/auth/google", get(handlers::auth::google_login))
         .route("/auth/google/callback", get(handlers::auth::google_callback))
@@ -79,17 +75,15 @@ pub fn create_router(
         .route("/auth/callback/naver", get(handlers::auth::naver_callback_handler))
         .with_state(app_state);
 
-    // Upload routes (optional auth - will use optional_auth middleware)
     let upload_routes = Router::new()
         .route("/file/upload", post(handlers::upload::upload_file))
-        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024)) // 3GB limit
+        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
         ))
         .with_state(upload_state);
 
-    // Download routes (optional auth + rate limiting)
     let download_routes = Router::new()
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
@@ -98,7 +92,7 @@ pub fn create_router(
         .route("/files/list", get(handlers::download::get_file_list))
         .route("/file/info", get(handlers::download::get_file_info))
         .route("/file/verify-password", post(handlers::download::verify_password))
-        .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)) // 10GB limit for downloads too
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),
             crate::middleware::rate_limiter::rate_limit_middleware,
@@ -109,7 +103,6 @@ pub fn create_router(
         ))
         .with_state(download_state);
 
-    // User routes (requires auth)
     let user_routes = Router::new()
         .route("/user/uploads", get(handlers::user::get_upload_history))
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
@@ -117,14 +110,11 @@ pub fn create_router(
         .layer(middleware::from_fn_with_state(auth_state, require_auth))
         .with_state(user_state);
 
-    // Health check
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
-    // Swagger UI
     let swagger_ui = SwaggerUi::new("/swagger-ui")
         .url("/api-docs/openapi.json", ApiDoc::openapi());
 
-    // Combine all routes
     Router::new()
         .merge(health_route)
         .merge(swagger_ui)

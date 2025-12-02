@@ -1,16 +1,19 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, FixedOffset, TimeZone};
 use chrono_tz::Asia::Seoul;
+use serde::Serializer;
 
-/// Get current time in KST (Korea Standard Time, UTC+9)
-/// Returns DateTime<Utc> but with KST time values for DB storage
 pub fn now_kst() -> DateTime<Utc> {
-    // Get current UTC time
     let utc_now = Utc::now();
-
-    // Convert to KST
     let kst_now = utc_now.with_timezone(&Seoul);
-
-    // Convert back to DateTime<Utc> with KST values
-    // This allows storing KST time in DB while keeping the type compatible
     kst_now.naive_local().and_utc()
+}
+
+pub fn serialize_as_kst<S>(dt: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let kst = FixedOffset::east_opt(9 * 3600).unwrap();
+    let naive = dt.naive_local();
+    let kst_time = kst.from_local_datetime(&naive).single().unwrap();
+    serializer.serialize_str(&kst_time.to_rfc3339())
 }

@@ -67,7 +67,9 @@ pub struct FileShareResponse {
     pub file_type: String,
     pub description: Option<String>,
     pub has_password: bool,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub created_at: DateTime<Utc>,
     pub download_url: String,
     pub qr_code: Option<String>, // Base64 encoded QR code image
@@ -94,6 +96,7 @@ pub struct FileListResponse {
     pub total_count: usize,
     pub description: Option<String>,
     pub has_password: bool,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: DateTime<Utc>,
     pub uploader_name: Option<String>,
 }

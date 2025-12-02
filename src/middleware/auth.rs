@@ -25,7 +25,6 @@ pub struct AuthState {
     pub config: Arc<Config>,
 }
 
-/// Extracts user from JWT token (optional - doesn't fail if no token)
 pub async fn optional_auth(
     State(state): State<AuthState>,
     mut request: Request,
@@ -44,7 +43,6 @@ pub async fn optional_auth(
     Ok(next.run(request).await)
 }
 
-/// Requires authentication - fails if no valid token
 pub async fn require_auth(
     State(state): State<AuthState>,
     mut request: Request,
@@ -69,7 +67,6 @@ pub async fn require_auth(
     Ok(next.run(request).await)
 }
 
-/// Verify JWT token and extract claims
 pub fn verify_jwt(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let decoding_key = DecodingKey::from_secret(secret.as_ref());
     let validation = Validation::default();
@@ -79,7 +76,6 @@ pub fn verify_jwt(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::err
     Ok(token_data.claims)
 }
 
-/// Create JWT token
 pub fn create_jwt(
     user_id: &str,
     email: &str,

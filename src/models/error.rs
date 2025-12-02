@@ -26,7 +26,6 @@ impl IntoResponse for ErrorResponse {
     }
 }
 
-// 편의 함수들
 pub fn bad_request(message: impl Into<String>) -> (StatusCode, Json<ErrorResponse>) {
     (
         StatusCode::BAD_REQUEST,

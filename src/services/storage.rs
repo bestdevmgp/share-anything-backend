@@ -32,7 +32,6 @@ impl StorageService {
             .credentials_provider(credentials)
             .region(Region::new(region));
 
-        // For S3-compatible services like Cloudflare R2 or MinIO
         if let Some(endpoint_url) = endpoint {
             config_builder = config_builder.endpoint_url(endpoint_url);
         }
@@ -46,7 +45,6 @@ impl StorageService {
         })
     }
 
-    /// Upload a file to object storage
     pub async fn upload_file(
         &self,
         key: &str,
@@ -67,7 +65,6 @@ impl StorageService {
         Ok(())
     }
 
-    /// Download a file from object storage
     pub async fn download_file(
         &self,
         key: &str,
@@ -84,7 +81,6 @@ impl StorageService {
         Ok(data.into_bytes().to_vec())
     }
 
-    /// Delete a file from object storage
     pub async fn delete_file(&self, key: &str) -> Result<(), Box<dyn std::error::Error>> {
         self.client
             .delete_object()
@@ -95,11 +91,9 @@ impl StorageService {
 
         Ok(())
     }
-    
-    /// Delete multiple files
+
     pub async fn delete_files(&self, keys: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         for key in keys {
-            // Ignore errors for individual deletions
             let _ = self.delete_file(&key).await;
         }
         Ok(())
