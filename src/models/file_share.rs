@@ -67,6 +67,7 @@ pub struct FileShareResponse {
     pub file_type: String,
     pub description: Option<String>,
     pub has_password: bool,
+    pub is_one_time: bool,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: DateTime<Utc>,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
@@ -96,6 +97,7 @@ pub struct FileListResponse {
     pub total_count: usize,
     pub description: Option<String>,
     pub has_password: bool,
+    pub is_one_time: bool,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: DateTime<Utc>,
     pub uploader_name: Option<String>,

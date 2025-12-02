@@ -45,6 +45,7 @@ pub struct FileInfoResponse {
     pub file_type: String,
     pub description: Option<String>,
     pub has_password: bool,
+    pub is_one_time: bool,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub uploader_name: Option<String>,
@@ -102,6 +103,7 @@ pub async fn get_file_list(
         total_count: file_shares.len(),
         description: first_file.description.clone(),
         has_password: first_file.password_hash.is_some(),
+        is_one_time: first_file.is_one_time,
         expires_at: first_file.expires_at,
         uploader_name,
     }))
@@ -144,6 +146,7 @@ pub async fn get_file_info(
         file_type: file_share.file_type,
         description: file_share.description,
         has_password: file_share.password_hash.is_some(),
+        is_one_time: file_share.is_one_time,
         expires_at: file_share.expires_at,
         uploader_name,
     }))
