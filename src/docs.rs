@@ -34,6 +34,7 @@ impl Modify for SecurityAddon {
         crate::handlers::download::get_file_list,
         crate::handlers::download::download_file,
         crate::handlers::download::download_single_file,
+        crate::handlers::download::preview_file,
         crate::handlers::download::download_multiple_files,
         crate::handlers::download::get_file_info,
         crate::handlers::download::verify_password,
