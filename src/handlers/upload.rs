@@ -131,10 +131,7 @@ pub async fn upload_file(
 
     verify_turnstile_token(&state.config.turnstile.secret_key, &token, Some(client_ip))
         .await
-        .map_err(|e| {
-            tracing::warn!("Turnstile verification failed: {}", e);
-            forbidden("보안 확인에 실패했습니다. 다시 시도해주세요")
-        })?;
+        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
     let max_total_size: i64 = if user_claims.is_some() {
         3 * 1024 * 1024 * 1024
