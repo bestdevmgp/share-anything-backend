@@ -1,6 +1,6 @@
 use axum::{
     extract::{Extension, Multipart, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use serde::Deserialize;
@@ -11,9 +11,9 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse},
+    models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse},
     services::{generate_qr_code, StorageService},
-    utils::generate_share_code,
+    utils::{generate_share_code, verify_turnstile_token, extract_client_ip},
 };
 use chrono::Utc;
 
@@ -48,6 +48,7 @@ pub struct UploadMetadata {
 pub async fn upload_file(
     State(state): State<UploadState>,
     user_claims: Option<Extension<Claims>>,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -63,6 +64,7 @@ pub async fn upload_file(
     let mut password: Option<String> = None;
     let mut expiration: Option<ExpirationPeriod> = None;
     let mut is_one_time: Option<bool> = None;
+    let mut turnstile_token: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))? {
         let name = field.name().unwrap_or("").to_string();
@@ -109,6 +111,12 @@ pub async fn upload_file(
                     is_one_time = text.parse::<bool>().ok();
                 }
             }
+            "turnstile_token" => {
+                let text = field.text().await.map_err(|_| bad_request("turnstile_token 필드를 읽을 수 없습니다"))?;
+                if !text.is_empty() {
+                    turnstile_token = Some(text);
+                }
+            }
             _ => {}
         }
     }
@@ -116,6 +124,17 @@ pub async fn upload_file(
     if files.is_empty() {
         return Err(bad_request("파일이 업로드되지 않았습니다. 최소 1개 이상의 파일이 필요합니다"));
     }
+
+    let token = turnstile_token.ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, &token, Some(client_ip))
+        .await
+        .map_err(|e| {
+            tracing::warn!("Turnstile verification failed: {}", e);
+            forbidden("보안 확인에 실패했습니다. 다시 시도해주세요")
+        })?;
 
     let max_total_size: i64 = if user_claims.is_some() {
         3 * 1024 * 1024 * 1024
@@ -211,7 +230,6 @@ pub async fn upload_file(
             .await
             .map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
 
-        // Save to database with shared share_code and share_group_id
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),

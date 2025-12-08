@@ -116,4 +116,5 @@ pub struct DownloadFilesRequest {
     pub code: String,
     pub file_ids: Vec<String>,
     pub password: Option<String>,
+    pub turnstile_token: Option<String>,
 }

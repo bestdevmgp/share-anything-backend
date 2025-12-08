@@ -9,6 +9,7 @@ pub struct Config {
     pub oauth: OAuthConfig,
     pub s3: S3Config,
     pub cors: CorsConfig,
+    pub turnstile: TurnstileConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -55,6 +56,11 @@ pub struct S3Config {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TurnstileConfig {
+    pub secret_key: String,
 }
 
 impl Config {
@@ -116,6 +122,10 @@ impl Config {
                     .split(',')
                     .map(|s| s.trim().to_string())
                     .collect(),
+            },
+            turnstile: TurnstileConfig {
+                secret_key: env::var("TURNSTILE_SECRET_KEY")
+                    .expect("TURNSTILE_SECRET_KEY must be set in environment"),
             },
         };
 

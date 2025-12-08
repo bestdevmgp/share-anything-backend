@@ -13,9 +13,9 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, not_found, internal_error, ErrorResponse, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
+    models::{bad_request, unauthorized, forbidden, not_found, internal_error, ErrorResponse, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
     services::StorageService,
-    utils::parse_device_platform,
+    utils::{parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
 use std::io::{Write as _, Cursor};
 use zip::write::{FileOptions, ZipWriter};
@@ -197,6 +197,20 @@ pub async fn download_single_file(
         .iter()
         .find(|f| f.id == file_id)
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+
+    let turnstile_token = headers
+        .get("X-Turnstile-Token")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
+        .await
+        .map_err(|e| {
+            tracing::warn!("Turnstile verification failed: {}", e);
+            forbidden("보안 확인에 실패했습니다. 다시 시도해주세요")
+        })?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
@@ -501,6 +515,20 @@ pub async fn download_multiple_files(
     if req.file_ids.is_empty() {
         return Err(bad_request("최소 1개 이상의 파일 ID가 필요합니다"));
     }
+
+    let turnstile_token = req
+        .turnstile_token
+        .as_ref()
+        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
+        .await
+        .map_err(|e| {
+            tracing::warn!("Turnstile verification failed: {}", e);
+            forbidden("보안 확인에 실패했습니다. 다시 시도해주세요")
+        })?;
 
     let all_files = repository::find_file_shares_by_code(&state.db, &req.code)
         .await
