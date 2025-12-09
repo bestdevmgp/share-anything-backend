@@ -66,7 +66,19 @@ pub struct FileInfoResponse {
 pub async fn get_file_list(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<FileListResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let turnstile_token = headers
+        .get("X-Turnstile-Token")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
+        .await
+        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+
     let file_shares = repository::find_file_shares_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -124,7 +136,19 @@ pub async fn get_file_list(
 pub async fn get_file_info(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
+    headers: HeaderMap,
 ) -> Result<Json<FileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let turnstile_token = headers
+        .get("X-Turnstile-Token")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
+        .await
+        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
@@ -197,17 +221,6 @@ pub async fn download_single_file(
         .iter()
         .find(|f| f.id == file_id)
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
-
-    let turnstile_token = headers
-        .get("X-Turnstile-Token")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
@@ -401,18 +414,6 @@ pub async fn download_file(
         .map_err(|_| internal_error("파일 조회 실패"))?
         .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
 
-    // Verify Turnstile token
-    let turnstile_token = headers
-        .get("X-Turnstile-Token")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
-
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
@@ -524,17 +525,6 @@ pub async fn download_multiple_files(
     if req.file_ids.is_empty() {
         return Err(bad_request("최소 1개 이상의 파일 ID가 필요합니다"));
     }
-
-    let turnstile_token = req
-        .turnstile_token
-        .as_ref()
-        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
     let all_files = repository::find_file_shares_by_code(&state.db, &req.code)
         .await
