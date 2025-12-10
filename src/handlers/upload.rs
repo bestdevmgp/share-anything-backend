@@ -190,13 +190,8 @@ pub async fn upload_file(
 
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);
 
-    if matches!(transfer_type, TransferType::P2p) {
-        if user_claims.is_none() {
-            return Err(unauthorized("P2P 전송은 로그인이 필요합니다"));
-        }
-        if !is_one_time {
-            return Err(bad_request("P2P 전송은 일회용 전송만 지원합니다"));
-        }
+    if matches!(transfer_type, TransferType::P2p) && !is_one_time {
+        return Err(bad_request("P2P 전송은 일회용 전송만 지원합니다"));
     }
 
     let expires_at = Utc::now() + expiration.to_duration();
