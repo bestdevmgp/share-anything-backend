@@ -72,6 +72,7 @@ pub async fn create_file_share(
     file_name: String,
     file_size: i64,
     file_type: String,
+    transfer_type: String,
     storage_key: String,
     description: Option<String>,
     password_hash: Option<String>,
@@ -84,9 +85,9 @@ pub async fn create_file_share(
     sqlx::query(
         r#"
         INSERT INTO file_shares
-        (id, share_group_id, user_id, share_code, file_name, file_size, file_type, storage_key,
+        (id, share_group_id, user_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -96,6 +97,7 @@ pub async fn create_file_share(
     .bind(&file_name)
     .bind(file_size)
     .bind(&file_type)
+    .bind(&transfer_type)
     .bind(&storage_key)
     .bind(&description)
     .bind(&password_hash)
@@ -320,4 +322,43 @@ pub async fn count_downloads_by_file_share(
     .await?;
 
     Ok(result.0)
+}
+
+pub async fn update_p2p_status(
+    pool: &MySqlPool,
+    share_code: &str,
+    status: &str,
+    uploader_peer_id: Option<String>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE file_shares
+        SET p2p_status = ?, uploader_peer_id = ?, updated_at = NOW()
+        WHERE share_code = ?
+        "#,
+    )
+    .bind(status)
+    .bind(uploader_peer_id)
+    .bind(share_code)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn complete_p2p_transfer(
+    pool: &MySqlPool,
+    share_code: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        DELETE FROM file_shares
+        WHERE share_code = ? AND transfer_type = 'p2p'
+        "#,
+    )
+    .bind(share_code)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }

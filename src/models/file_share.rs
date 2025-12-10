@@ -12,6 +12,9 @@ pub struct FileShare {
     pub file_name: String,
     pub file_size: i64,
     pub file_type: String,
+    pub transfer_type: String,
+    pub p2p_status: Option<String>,
+    pub uploader_peer_id: Option<String>,
     pub storage_key: String,
     pub description: Option<String>,
     pub password_hash: Option<String>,
@@ -44,6 +47,13 @@ pub enum ExpirationPeriod {
     TwentyFourHours,  // 24시간
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferType {
+    Server,
+    P2p,
+}
+
 impl ExpirationPeriod {
     pub fn to_duration(&self) -> chrono::Duration {
         match self {
@@ -65,6 +75,7 @@ pub struct FileShareResponse {
     pub file_name: String,
     pub file_size: i64,
     pub file_type: String,
+    pub transfer_type: String,
     pub description: Option<String>,
     pub has_password: bool,
     pub is_one_time: bool,
@@ -74,6 +85,7 @@ pub struct FileShareResponse {
     pub created_at: DateTime<Utc>,
     pub download_url: String,
     pub qr_code: Option<String>, // Base64 encoded QR code image
+    pub uploader_online: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -98,9 +110,11 @@ pub struct FileListResponse {
     pub description: Option<String>,
     pub has_password: bool,
     pub is_one_time: bool,
+    pub transfer_type: String,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: DateTime<Utc>,
     pub uploader_name: Option<String>,
+    pub uploader_online: Option<bool>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

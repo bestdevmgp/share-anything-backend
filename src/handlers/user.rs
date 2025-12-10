@@ -64,7 +64,6 @@ pub async fn get_upload_history(
     Query(pagination): Query<PaginationQuery>,
     request: Request,
 ) -> Result<Json<UploadHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Extract user claims (should be set by require_auth middleware)
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -100,6 +99,7 @@ pub async fn get_upload_history(
                 file_name: file_share.file_name.clone(),
                 file_size: file_share.file_size,
                 file_type: file_share.file_type.clone(),
+                transfer_type: file_share.transfer_type.clone(),
                 description: file_share.description.clone(),
                 has_password: file_share.password_hash.is_some(),
                 is_one_time: file_share.is_one_time,
@@ -107,6 +107,7 @@ pub async fn get_upload_history(
                 created_at: file_share.created_at,
                 download_url,
                 qr_code,
+                uploader_online: None,
             },
             download_count,
         });
@@ -145,13 +146,11 @@ pub async fn get_download_logs(
     Path(file_id): Path<String>,
     request: Request,
 ) -> Result<Json<Vec<DownloadLogResponse>>, (StatusCode, Json<ErrorResponse>)> {
-    // Extract user claims
     let user_claims = request
         .extensions()
         .get::<Claims>()
         .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
-    // Check if file belongs to user
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
@@ -161,7 +160,6 @@ pub async fn get_download_logs(
         return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
     }
 
-    // Get download logs
     let logs = repository::find_download_logs_by_file_share(&state.db, &file_id)
         .await
         .map_err(|e| internal_error(format!("다운로드 로그 조회 실패: {}", e)))?;
@@ -214,13 +212,11 @@ pub async fn delete_file_share(
     Path(file_id): Path<String>,
     request: Request,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    // Extract user claims
     let user_claims = request
         .extensions()
         .get::<Claims>()
         .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
-    // Check if file belongs to user
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
@@ -230,14 +226,12 @@ pub async fn delete_file_share(
         return Err(forbidden("다른 사용자의 파일을 삭제할 수 없습니다"));
     }
 
-    // Delete from storage
     state
         .storage
         .delete_file(&file_share.storage_key)
         .await
         .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
 
-    // Delete from database
     repository::delete_file_share(&state.db, &file_id)
         .await
         .map_err(|e| internal_error(format!("데이터베이스에서 파일 삭제 실패: {}", e)))?;

@@ -16,7 +16,7 @@ use crate::{
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
     middleware::rate_limiter::RateLimiter,
-    services::StorageService,
+    services::{StorageService, signaling::SignalingState},
 };
 
 pub fn create_router(
@@ -33,6 +33,8 @@ pub fn create_router(
         db: db.clone(),
     };
 
+    let signaling_state = SignalingState::new();
+
     let upload_state = handlers::upload::UploadState {
         config: config.clone(),
         db: db.clone(),
@@ -43,6 +45,7 @@ pub fn create_router(
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
+        signaling: signaling_state.clone(),
     };
 
     let user_state = handlers::user::UserState {
@@ -110,6 +113,14 @@ pub fn create_router(
         .layer(middleware::from_fn_with_state(auth_state, require_auth))
         .with_state(user_state);
 
+    let ws_routes = Router::new()
+        .route("/ws/signaling", get(handlers::signaling::websocket_handler))
+        .with_state((signaling_state.clone(), db.clone()));
+
+    let p2p_routes = Router::new()
+        .route("/p2p/status", get(handlers::p2p::check_uploader_status))
+        .with_state(signaling_state);
+
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")
@@ -122,5 +133,7 @@ pub fn create_router(
         .merge(upload_routes)
         .merge(download_routes)
         .merge(user_routes)
+        .merge(ws_routes)
+        .merge(p2p_routes)
         .layer(cors)
 }

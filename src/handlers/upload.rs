@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse},
+    models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
     services::{generate_qr_code, StorageService},
     utils::{generate_share_code, verify_turnstile_token, extract_client_ip},
 };
@@ -30,6 +30,7 @@ pub struct UploadMetadata {
     pub password: Option<String>,
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
+    pub transfer_type: Option<TransferType>,
 }
 
 #[utoipa::path(
@@ -64,6 +65,7 @@ pub async fn upload_file(
     let mut password: Option<String> = None;
     let mut expiration: Option<ExpirationPeriod> = None;
     let mut is_one_time: Option<bool> = None;
+    let mut transfer_type: Option<TransferType> = None;
     let mut turnstile_token: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))? {
@@ -109,6 +111,13 @@ pub async fn upload_file(
                 let text = field.text().await.map_err(|_| bad_request("is_one_time 필드를 읽을 수 없습니다"))?;
                 if !text.is_empty() {
                     is_one_time = text.parse::<bool>().ok();
+                }
+            }
+            "transfer_type" => {
+                let text = field.text().await.map_err(|_| bad_request("transfer_type 필드를 읽을 수 없습니다"))?;
+                if !text.is_empty() {
+                    transfer_type = serde_json::from_str(&format!("\"{}\"", text))
+                        .map_err(|_| bad_request("유효하지 않은 transfer_type"))?;
                 }
             }
             "turnstile_token" => {
@@ -161,10 +170,10 @@ pub async fn upload_file(
         password,
         expiration,
         is_one_time,
+        transfer_type,
     };
 
     let expiration = if let Some(exp) = metadata.expiration {
-        // Non-logged-in users can only use FiveMinutes
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
             return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
         }
@@ -175,9 +184,19 @@ pub async fn upload_file(
 
     let is_one_time = metadata.is_one_time.unwrap_or(false);
 
-    // One-time feature requires authentication
     if is_one_time && user_claims.is_none() {
         return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
+    }
+
+    let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);
+
+    if matches!(transfer_type, TransferType::P2p) {
+        if user_claims.is_none() {
+            return Err(unauthorized("P2P 전송은 로그인이 필요합니다"));
+        }
+        if !is_one_time {
+            return Err(bad_request("P2P 전송은 일회용 전송만 지원합니다"));
+        }
     }
 
     let expires_at = Utc::now() + expiration.to_duration();
@@ -210,22 +229,33 @@ pub async fn upload_file(
     for file_data in files {
         let file_size = file_data.data.len() as i64;
 
-        let storage_key = if state.config.s3.prefix.is_empty() {
-            format!("{}/{}", Uuid::new_v4(), file_data.name)
+        let storage_key = if matches!(transfer_type, TransferType::P2p) {
+            String::new()
         } else {
-            format!(
-                "{}{}/{}",
-                state.config.s3.prefix,
-                Uuid::new_v4(),
-                file_data.name
-            )
+            let key = if state.config.s3.prefix.is_empty() {
+                format!("{}/{}", Uuid::new_v4(), file_data.name)
+            } else {
+                format!(
+                    "{}{}/{}",
+                    state.config.s3.prefix,
+                    Uuid::new_v4(),
+                    file_data.name
+                )
+            };
+
+            state
+                .storage
+                .upload_file(&key, file_data.data, &file_data.content_type)
+                .await
+                .map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
+
+            key
         };
 
-        state
-            .storage
-            .upload_file(&storage_key, file_data.data, &file_data.content_type)
-            .await
-            .map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
+        let transfer_type_str = match transfer_type {
+            TransferType::Server => "server",
+            TransferType::P2p => "p2p",
+        };
 
         let file_share = repository::create_file_share(
             &state.db,
@@ -235,6 +265,7 @@ pub async fn upload_file(
             file_data.name.clone(),
             file_size,
             file_data.content_type.clone(),
+            transfer_type_str.to_string(),
             storage_key,
             metadata.description.clone(),
             password_hash.clone(),
@@ -250,6 +281,7 @@ pub async fn upload_file(
             file_name: file_share.file_name,
             file_size: file_share.file_size,
             file_type: file_share.file_type,
+            transfer_type: file_share.transfer_type.clone(),
             description: file_share.description,
             has_password: file_share.password_hash.is_some(),
             is_one_time: file_share.is_one_time,
@@ -257,6 +289,7 @@ pub async fn upload_file(
             created_at: file_share.created_at,
             download_url: String::new(),
             qr_code: None,
+            uploader_online: None,
         });
     }
 

@@ -14,7 +14,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{bad_request, unauthorized, forbidden, not_found, internal_error, ErrorResponse, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
-    services::StorageService,
+    services::{StorageService, signaling::SignalingState},
     utils::{parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
 use std::io::{Write as _, Cursor};
@@ -25,6 +25,7 @@ pub struct DownloadState {
     pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
+    pub signaling: SignalingState,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,11 +44,13 @@ pub struct FileInfoResponse {
     pub file_name: String,
     pub file_size: i64,
     pub file_type: String,
+    pub transfer_type: String,
     pub description: Option<String>,
     pub has_password: bool,
     pub is_one_time: bool,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub uploader_online: Option<bool>,
     pub uploader_name: Option<String>,
 }
 
@@ -109,6 +112,12 @@ pub async fn get_file_list(
         })
         .collect();
 
+    let uploader_online = if first_file.transfer_type == "p2p" {
+        Some(state.signaling.find_uploader(&query.code).is_some())
+    } else {
+        None
+    };
+
     Ok(Json(FileListResponse {
         share_code: query.code,
         files,
@@ -116,8 +125,10 @@ pub async fn get_file_list(
         description: first_file.description.clone(),
         has_password: first_file.password_hash.is_some(),
         is_one_time: first_file.is_one_time,
+        transfer_type: first_file.transfer_type.clone(),
         expires_at: first_file.expires_at,
         uploader_name,
+        uploader_online,
     }))
 }
 
@@ -164,14 +175,22 @@ pub async fn get_file_info(
         None
     };
 
+    let uploader_online = if file_share.transfer_type == "p2p" {
+        Some(state.signaling.find_uploader(&query.code).is_some())
+    } else {
+        None
+    };
+
     Ok(Json(FileInfoResponse {
         file_name: file_share.file_name,
         file_size: file_share.file_size,
         file_type: file_share.file_type,
+        transfer_type: file_share.transfer_type.clone(),
         description: file_share.description,
         has_password: file_share.password_hash.is_some(),
         is_one_time: file_share.is_one_time,
         expires_at: file_share.expires_at,
+        uploader_online,
         uploader_name,
     }))
 }
@@ -221,6 +240,12 @@ pub async fn download_single_file(
         .iter()
         .find(|f| f.id == file_id)
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+
+    if file_share.transfer_type == "p2p" {
+        return Err(bad_request(
+            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요.",
+        ));
+    }
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers

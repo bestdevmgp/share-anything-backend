@@ -5,10 +5,11 @@ edition = "2021"
 
 [dependencies]
 # Web framework
-axum = { version = "0.7", features = ["multipart", "macros"] }
+axum = { version = "0.7", features = ["multipart", "macros", "ws"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
+futures = "0.3"
 
 # API Documentation
 utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
