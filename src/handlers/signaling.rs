@@ -176,6 +176,8 @@ async fn handle_downloader_join(
         .find_uploader(&share_code)
         .ok_or("Uploader is not online")?;
 
+    state.register_downloader(share_code.clone(), peer_id.to_string());
+
     state.send_to_peer(
         &uploader_peer_id,
         SignalingMessage::PeerMatched {
@@ -212,12 +214,16 @@ async fn relay_to_uploader(
 }
 
 async fn relay_to_downloader(
-    _share_code: &str,
-    downloader_peer_id: &str,
+    share_code: &str,
+    _sender_peer_id: &str,
     message: SignalingMessage,
     state: &SignalingState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    state.send_to_peer(downloader_peer_id, message)?;
+    let downloader_peer_id = state
+        .find_downloader(share_code)
+        .ok_or("Downloader is not online")?;
+
+    state.send_to_peer(&downloader_peer_id, message)?;
     Ok(())
 }
 
@@ -262,15 +268,28 @@ async fn handle_transfer_complete(
 }
 
 async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
-    let share_codes: Vec<String> = state
+    let uploader_share_codes: Vec<String> = state
         .uploaders
         .iter()
         .filter(|entry| entry.value() == peer_id)
         .map(|entry| entry.key().clone())
         .collect();
 
-    for share_code in share_codes {
+    for share_code in uploader_share_codes {
         state.remove_uploader(&share_code);
+        state.remove_downloader(&share_code);
+        let _ = repository::update_p2p_status(db, &share_code, "failed", None).await;
+    }
+
+    let downloader_share_codes: Vec<String> = state
+        .downloaders
+        .iter()
+        .filter(|entry| entry.value() == peer_id)
+        .map(|entry| entry.key().clone())
+        .collect();
+
+    for share_code in downloader_share_codes {
+        state.remove_downloader(&share_code);
         let _ = repository::update_p2p_status(db, &share_code, "failed", None).await;
     }
 
