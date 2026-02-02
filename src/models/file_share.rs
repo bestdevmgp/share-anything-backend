@@ -131,3 +131,51 @@ pub struct DownloadFilesRequest {
     pub file_ids: Vec<String>,
     pub password: Option<String>,
 }
+
+// Presigned Upload Types
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PresignedUploadFileInfo {
+    pub file_name: String,
+    pub file_size: i64,
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PresignedUploadRequest {
+    pub files: Vec<PresignedUploadFileInfo>,
+    pub description: Option<String>,
+    pub password: Option<String>,
+    pub expiration: Option<ExpirationPeriod>,
+    pub is_one_time: Option<bool>,
+    pub turnstile_token: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PresignedUploadUrl {
+    pub file_name: String,
+    pub storage_key: String,
+    pub presigned_url: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PresignedUploadResponse {
+    pub upload_session_id: String,
+    pub share_code: String,
+    pub urls: Vec<PresignedUploadUrl>,
+    pub expires_in_secs: u64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompleteUploadFile {
+    pub file_name: String,
+    pub storage_key: String,
+    pub file_size: i64,
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompleteUploadRequest {
+    pub upload_session_id: String,
+    pub share_code: String,
+    pub files: Vec<CompleteUploadFile>,
+}

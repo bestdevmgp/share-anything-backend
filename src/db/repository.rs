@@ -362,3 +362,94 @@ pub async fn complete_p2p_transfer(
 
     Ok(())
 }
+
+// Upload Session functions for presigned upload
+#[derive(Debug, sqlx::FromRow)]
+pub struct UploadSession {
+    pub id: String,
+    pub share_code: String,
+    pub user_id: Option<String>,
+    pub description: Option<String>,
+    pub password_hash: Option<String>,
+    pub is_one_time: bool,
+    pub expires_at: chrono::DateTime<Utc>,
+    pub completed: bool,
+    pub created_at: chrono::DateTime<Utc>,
+}
+
+pub async fn create_upload_session(
+    pool: &MySqlPool,
+    id: &str,
+    share_code: &str,
+    user_id: Option<&str>,
+    description: Option<&str>,
+    password_hash: Option<&str>,
+    is_one_time: bool,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+
+    sqlx::query(
+        r#"
+        INSERT INTO upload_sessions
+        (id, share_code, user_id, description, password_hash, is_one_time, expires_at, completed, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, false, ?)
+        "#,
+    )
+    .bind(id)
+    .bind(share_code)
+    .bind(user_id)
+    .bind(description)
+    .bind(password_hash)
+    .bind(is_one_time)
+    .bind(expires_at)
+    .bind(now)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_upload_session(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<Option<UploadSession>, sqlx::Error> {
+    sqlx::query_as::<_, UploadSession>(
+        r#"
+        SELECT * FROM upload_sessions WHERE id = ?
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn complete_upload_session(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE upload_sessions SET completed = true WHERE id = ?
+        "#,
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_expired_upload_sessions(
+    pool: &MySqlPool,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM upload_sessions WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}

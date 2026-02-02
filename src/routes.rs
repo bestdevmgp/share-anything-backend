@@ -41,6 +41,12 @@ pub fn create_router(
         storage: storage.clone(),
     };
 
+    let presigned_state = handlers::presigned::PresignedState {
+        config: config.clone(),
+        db: db.clone(),
+        storage: storage.clone(),
+    };
+
     let download_state = handlers::download::DownloadState {
         config: config.clone(),
         db: db.clone(),
@@ -87,6 +93,15 @@ pub fn create_router(
         ))
         .with_state(upload_state);
 
+    let presigned_routes = Router::new()
+        .route("/file/presign", post(handlers::presigned::request_presigned_upload))
+        .route("/file/complete", post(handlers::presigned::complete_presigned_upload))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            optional_auth,
+        ))
+        .with_state(presigned_state);
+
     let download_routes = Router::new()
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
@@ -131,6 +146,7 @@ pub fn create_router(
         .merge(swagger_ui)
         .merge(auth_routes)
         .merge(upload_routes)
+        .merge(presigned_routes)
         .merge(download_routes)
         .merge(user_routes)
         .merge(ws_routes)

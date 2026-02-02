@@ -1,10 +1,11 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::{
     config::{Credentials, Region},
+    presigning::PresigningConfig,
     primitives::ByteStream,
     Client as S3Client,
 };
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tracing::{info, warn, error};
 
 const LARGE_FILE_THRESHOLD: usize = 100 * 1024 * 1024; // 100MB
@@ -215,5 +216,39 @@ impl StorageService {
             let _ = self.delete_file(&key).await;
         }
         Ok(())
+    }
+
+    pub async fn generate_presigned_put_url(
+        &self,
+        key: &str,
+        content_type: &str,
+        expires_in_secs: u64,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let presigning_config = PresigningConfig::builder()
+            .expires_in(Duration::from_secs(expires_in_secs))
+            .build()?;
+
+        let presigned_request = self.client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .content_type(content_type)
+            .presigned(presigning_config)
+            .await?;
+
+        let url = presigned_request.uri().to_string();
+
+        info!(
+            storage_key = %key,
+            content_type = %content_type,
+            expires_in_secs = expires_in_secs,
+            "[StorageService] Generated presigned PUT URL"
+        );
+
+        Ok(url)
+    }
+
+    pub fn get_bucket_name(&self) -> &str {
+        &self.bucket_name
     }
 }
