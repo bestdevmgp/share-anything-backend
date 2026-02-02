@@ -251,4 +251,126 @@ impl StorageService {
     pub fn get_bucket_name(&self) -> &str {
         &self.bucket_name
     }
+
+    // Multipart Upload Methods
+
+    pub async fn create_multipart_upload(
+        &self,
+        key: &str,
+        content_type: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let response = self.client
+            .create_multipart_upload()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .content_type(content_type)
+            .send()
+            .await?;
+
+        let upload_id = response.upload_id()
+            .ok_or("No upload_id returned from create_multipart_upload")?
+            .to_string();
+
+        info!(
+            storage_key = %key,
+            upload_id = %upload_id,
+            "[StorageService] Created multipart upload"
+        );
+
+        Ok(upload_id)
+    }
+
+    pub async fn generate_presigned_upload_part_url(
+        &self,
+        key: &str,
+        upload_id: &str,
+        part_number: i32,
+        expires_in_secs: u64,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let presigning_config = PresigningConfig::builder()
+            .expires_in(Duration::from_secs(expires_in_secs))
+            .build()?;
+
+        let presigned_request = self.client
+            .upload_part()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .upload_id(upload_id)
+            .part_number(part_number)
+            .presigned(presigning_config)
+            .await?;
+
+        let url = presigned_request.uri().to_string();
+
+        info!(
+            storage_key = %key,
+            upload_id = %upload_id,
+            part_number = part_number,
+            "[StorageService] Generated presigned URL for upload part"
+        );
+
+        Ok(url)
+    }
+
+    pub async fn complete_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+        parts: Vec<(i32, String)>, // (part_number, etag)
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
+
+        let completed_parts: Vec<CompletedPart> = parts
+            .into_iter()
+            .map(|(part_number, etag)| {
+                CompletedPart::builder()
+                    .part_number(part_number)
+                    .e_tag(etag)
+                    .build()
+            })
+            .collect();
+
+        let completed_upload = CompletedMultipartUpload::builder()
+            .set_parts(Some(completed_parts))
+            .build();
+
+        self.client
+            .complete_multipart_upload()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .upload_id(upload_id)
+            .multipart_upload(completed_upload)
+            .send()
+            .await?;
+
+        info!(
+            storage_key = %key,
+            upload_id = %upload_id,
+            "[StorageService] Completed multipart upload"
+        );
+
+        Ok(())
+    }
+
+    pub async fn abort_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.client
+            .abort_multipart_upload()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .upload_id(upload_id)
+            .send()
+            .await?;
+
+        info!(
+            storage_key = %key,
+            upload_id = %upload_id,
+            "[StorageService] Aborted multipart upload"
+        );
+
+        Ok(())
+    }
 }

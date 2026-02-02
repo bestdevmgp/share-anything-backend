@@ -179,3 +179,82 @@ pub struct CompleteUploadRequest {
     pub share_code: String,
     pub files: Vec<CompleteUploadFile>,
 }
+
+// Multipart Upload Types
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct MultipartUploadFileInfo {
+    pub file_name: String,
+    pub file_size: i64,
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct InitMultipartUploadRequest {
+    pub files: Vec<MultipartUploadFileInfo>,
+    pub description: Option<String>,
+    pub password: Option<String>,
+    pub expiration: Option<ExpirationPeriod>,
+    pub is_one_time: Option<bool>,
+    pub turnstile_token: String,
+    pub chunk_size: i64, // Size of each chunk in bytes
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MultipartUploadFileInit {
+    pub file_name: String,
+    pub storage_key: String,
+    pub upload_id: String,
+    pub total_parts: i32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InitMultipartUploadResponse {
+    pub upload_session_id: String,
+    pub share_code: String,
+    pub files: Vec<MultipartUploadFileInit>,
+    pub chunk_size: i64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GetPartUrlsRequest {
+    pub upload_session_id: String,
+    pub storage_key: String,
+    pub upload_id: String,
+    pub part_numbers: Vec<i32>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PartPresignedUrl {
+    pub part_number: i32,
+    pub presigned_url: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetPartUrlsResponse {
+    pub storage_key: String,
+    pub urls: Vec<PartPresignedUrl>,
+    pub expires_in_secs: u64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompletedPart {
+    pub part_number: i32,
+    pub etag: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompleteMultipartFileInfo {
+    pub file_name: String,
+    pub storage_key: String,
+    pub upload_id: String,
+    pub file_size: i64,
+    pub content_type: String,
+    pub parts: Vec<CompletedPart>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CompleteMultipartUploadRequest {
+    pub upload_session_id: String,
+    pub share_code: String,
+    pub files: Vec<CompleteMultipartFileInfo>,
+}

@@ -96,6 +96,9 @@ pub fn create_router(
     let presigned_routes = Router::new()
         .route("/file/presign", post(handlers::presigned::request_presigned_upload))
         .route("/file/complete", post(handlers::presigned::complete_presigned_upload))
+        .route("/file/multipart/init", post(handlers::presigned::init_multipart_upload))
+        .route("/file/multipart/presign-parts", post(handlers::presigned::get_part_presigned_urls))
+        .route("/file/multipart/complete", post(handlers::presigned::complete_multipart_upload))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
