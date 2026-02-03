@@ -383,7 +383,7 @@ pub async fn init_multipart_upload(
     let upload_session_id = Uuid::new_v4().to_string();
     let chunk_size = request.chunk_size;
 
-    // Initialize multipart uploads for each file
+    // Generate storage keys for each file (no S3 calls - Worker will handle multipart creation)
     let mut files: Vec<MultipartUploadFileInit> = Vec::new();
 
     for file_info in &request.files {
@@ -398,21 +398,12 @@ pub async fn init_multipart_upload(
             )
         };
 
-        let upload_id = state
-            .storage
-            .create_multipart_upload(&storage_key, &file_info.content_type)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to create multipart upload");
-                internal_error("멀티파트 업로드 생성 실패")
-            })?;
-
         let total_parts = ((file_info.file_size as f64) / (chunk_size as f64)).ceil() as i32;
 
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
             storage_key,
-            upload_id,
+            upload_id: String::new(), // Will be set by Worker
             total_parts,
         });
     }
@@ -555,23 +546,8 @@ pub async fn complete_multipart_upload(
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
     for file_info in &request.files {
-        // Complete the multipart upload in S3
-        let parts: Vec<(i32, String)> = file_info
-            .parts
-            .iter()
-            .map(|p| (p.part_number, p.etag.clone()))
-            .collect();
-
-        state
-            .storage
-            .complete_multipart_upload(&file_info.storage_key, &file_info.upload_id, parts)
-            .await
-            .map_err(|e| {
-                error!(error = %e, storage_key = %file_info.storage_key, "Failed to complete multipart upload in S3");
-                internal_error("S3 멀티파트 업로드 완료 실패")
-            })?;
-
-        // Create file share record
+        // S3 multipart upload is already completed by Worker
+        // Just create file share record in DB
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
