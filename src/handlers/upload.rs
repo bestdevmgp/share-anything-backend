@@ -5,11 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use std::time::Instant;
-use tracing::{info, warn, error};
 use uuid::Uuid;
-
-const LARGE_FILE_THRESHOLD: usize = 100 * 1024 * 1024; // 100MB
 
 use crate::{
     config::Config,
@@ -56,19 +52,6 @@ pub async fn upload_file(
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let upload_start = Instant::now();
-    let request_id = Uuid::new_v4().to_string()[..8].to_string();
-
-    let client_ip = extract_client_ip(&headers);
-    let user_id = user_claims.as_ref().map(|ext| ext.0.sub.clone());
-
-    info!(
-        request_id = %request_id,
-        client_ip = %client_ip,
-        user_id = ?user_id,
-        "Upload request started"
-    );
-
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
     struct FileData {
@@ -84,23 +67,12 @@ pub async fn upload_file(
     let mut is_one_time: Option<bool> = None;
     let mut transfer_type: Option<TransferType> = None;
     let mut turnstile_token: Option<String> = None;
-    let mut file_index: usize = 0;
 
-    info!(request_id = %request_id, "Starting multipart field parsing");
-
-    while let Some(field) = multipart.next_field().await.map_err(|e| {
-        error!(
-            request_id = %request_id,
-            error = %e,
-            "Failed to parse multipart data"
-        );
-        bad_request("멀티파트 데이터 파싱 실패")
-    })? {
+    while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))? {
         let name = field.name().unwrap_or("").to_string();
 
         match name.as_str() {
             "file" => {
-                file_index += 1;
                 let file_name = field
                     .file_name()
                     .ok_or_else(|| bad_request("파일 이름이 없습니다"))?
@@ -109,64 +81,7 @@ pub async fn upload_file(
                     .content_type()
                     .unwrap_or("application/octet-stream")
                     .to_string();
-
-                info!(
-                    request_id = %request_id,
-                    file_index = file_index,
-                    file_name = %file_name,
-                    content_type = %content_type,
-                    "Starting to receive file data from client"
-                );
-
-                let file_read_start = Instant::now();
-                let data = field.bytes().await.map_err(|e| {
-                    let elapsed = file_read_start.elapsed();
-                    error!(
-                        request_id = %request_id,
-                        file_index = file_index,
-                        file_name = %file_name,
-                        elapsed_ms = elapsed.as_millis(),
-                        error = %e,
-                        "Failed to read file data from client - possible timeout or connection issue"
-                    );
-                    bad_request("파일 데이터를 읽을 수 없습니다")
-                })?;
-
-                let file_size = data.len();
-                let file_read_elapsed = file_read_start.elapsed();
-                let is_large_file = file_size >= LARGE_FILE_THRESHOLD;
-                let file_size_mb = file_size as f64 / 1024.0 / 1024.0;
-                let throughput_mbps = if file_read_elapsed.as_secs_f64() > 0.0 {
-                    file_size_mb / file_read_elapsed.as_secs_f64()
-                } else {
-                    0.0
-                };
-
-                if is_large_file {
-                    warn!(
-                        request_id = %request_id,
-                        file_index = file_index,
-                        file_name = %file_name,
-                        file_size_bytes = file_size,
-                        file_size_mb = format!("{:.2}", file_size_mb),
-                        elapsed_ms = file_read_elapsed.as_millis(),
-                        elapsed_secs = format!("{:.2}", file_read_elapsed.as_secs_f64()),
-                        throughput_mbps = format!("{:.2}", throughput_mbps),
-                        content_type = %content_type,
-                        "LARGE FILE (>=100MB) received from client successfully"
-                    );
-                } else {
-                    info!(
-                        request_id = %request_id,
-                        file_index = file_index,
-                        file_name = %file_name,
-                        file_size_bytes = file_size,
-                        file_size_mb = format!("{:.2}", file_size_mb),
-                        elapsed_ms = file_read_elapsed.as_millis(),
-                        throughput_mbps = format!("{:.2}", throughput_mbps),
-                        "File data received from client"
-                    );
-                }
+                let data = field.bytes().await.map_err(|_| bad_request("파일 데이터를 읽을 수 없습니다"))?;
 
                 files.push(FileData {
                     name: file_name,
@@ -221,7 +136,9 @@ pub async fn upload_file(
 
     let token = turnstile_token.ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
 
-    verify_turnstile_token(&state.config.turnstile.secret_key, &token, Some(client_ip.clone()))
+    let client_ip = extract_client_ip(&headers);
+
+    verify_turnstile_token(&state.config.turnstile.secret_key, &token, Some(client_ip))
         .await
         .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
@@ -304,29 +221,10 @@ pub async fn upload_file(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    info!(
-        request_id = %request_id,
-        share_code = %share_code,
-        share_group_id = %share_group_id,
-        total_files = files.len(),
-        "Starting to process {} file(s) for storage upload",
-        files.len()
-    );
-
-    let mut storage_file_index: usize = 0;
     for file_data in files {
-        storage_file_index += 1;
         let file_size = file_data.data.len() as i64;
-        let file_size_mb = file_size as f64 / 1024.0 / 1024.0;
-        let is_large_file = file_size as usize >= LARGE_FILE_THRESHOLD;
 
         let storage_key = if matches!(transfer_type, TransferType::P2p) {
-            info!(
-                request_id = %request_id,
-                file_index = storage_file_index,
-                file_name = %file_data.name,
-                "P2P transfer mode - skipping S3 upload"
-            );
             String::new()
         } else {
             let key = if state.config.s3.prefix.is_empty() {
@@ -340,86 +238,11 @@ pub async fn upload_file(
                 )
             };
 
-            if is_large_file {
-                warn!(
-                    request_id = %request_id,
-                    file_index = storage_file_index,
-                    file_name = %file_data.name,
-                    file_size_bytes = file_size,
-                    file_size_mb = format!("{:.2}", file_size_mb),
-                    storage_key = %key,
-                    bucket = %state.config.s3.bucket_name,
-                    "LARGE FILE (>=100MB) - Starting S3 upload (this may take a while)"
-                );
-            } else {
-                info!(
-                    request_id = %request_id,
-                    file_index = storage_file_index,
-                    file_name = %file_data.name,
-                    file_size_bytes = file_size,
-                    storage_key = %key,
-                    "Starting S3 upload"
-                );
-            }
-
-            let s3_upload_start = Instant::now();
-            let upload_result = state
+            state
                 .storage
                 .upload_file(&key, file_data.data, &file_data.content_type)
-                .await;
-
-            let s3_elapsed = s3_upload_start.elapsed();
-            let s3_throughput_mbps = if s3_elapsed.as_secs_f64() > 0.0 {
-                file_size_mb / s3_elapsed.as_secs_f64()
-            } else {
-                0.0
-            };
-
-            match &upload_result {
-                Ok(_) => {
-                    if is_large_file {
-                        warn!(
-                            request_id = %request_id,
-                            file_index = storage_file_index,
-                            file_name = %file_data.name,
-                            file_size_bytes = file_size,
-                            file_size_mb = format!("{:.2}", file_size_mb),
-                            storage_key = %key,
-                            elapsed_ms = s3_elapsed.as_millis(),
-                            elapsed_secs = format!("{:.2}", s3_elapsed.as_secs_f64()),
-                            throughput_mbps = format!("{:.2}", s3_throughput_mbps),
-                            "LARGE FILE (>=100MB) - S3 upload completed successfully"
-                        );
-                    } else {
-                        info!(
-                            request_id = %request_id,
-                            file_index = storage_file_index,
-                            file_name = %file_data.name,
-                            file_size_bytes = file_size,
-                            elapsed_ms = s3_elapsed.as_millis(),
-                            throughput_mbps = format!("{:.2}", s3_throughput_mbps),
-                            "S3 upload completed"
-                        );
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        request_id = %request_id,
-                        file_index = storage_file_index,
-                        file_name = %file_data.name,
-                        file_size_bytes = file_size,
-                        file_size_mb = format!("{:.2}", file_size_mb),
-                        storage_key = %key,
-                        elapsed_ms = s3_elapsed.as_millis(),
-                        elapsed_secs = format!("{:.2}", s3_elapsed.as_secs_f64()),
-                        error = %e,
-                        is_large_file = is_large_file,
-                        "S3 upload FAILED - this may be a timeout issue for large files"
-                    );
-                }
-            }
-
-            upload_result.map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
+                .await
+                .map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
 
             key
         };
@@ -475,34 +298,6 @@ pub async fn upload_file(
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
-    }
-
-    let total_elapsed = upload_start.elapsed();
-    let total_size: i64 = uploaded_files.iter().map(|f| f.file_size).sum();
-    let total_size_mb = total_size as f64 / 1024.0 / 1024.0;
-
-    if total_size as usize >= LARGE_FILE_THRESHOLD {
-        warn!(
-            request_id = %request_id,
-            share_code = %share_code,
-            total_files = uploaded_files.len(),
-            total_size_bytes = total_size,
-            total_size_mb = format!("{:.2}", total_size_mb),
-            total_elapsed_ms = total_elapsed.as_millis(),
-            total_elapsed_secs = format!("{:.2}", total_elapsed.as_secs_f64()),
-            user_id = ?user_id,
-            client_ip = %client_ip,
-            "LARGE FILE UPLOAD (>=100MB) completed successfully - full request summary"
-        );
-    } else {
-        info!(
-            request_id = %request_id,
-            share_code = %share_code,
-            total_files = uploaded_files.len(),
-            total_size_bytes = total_size,
-            total_elapsed_ms = total_elapsed.as_millis(),
-            "Upload request completed successfully"
-        );
     }
 
     Ok(Json(MultipleFileUploadResponse {

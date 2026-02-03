@@ -5,10 +5,7 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client as S3Client,
 };
-use std::time::{Duration, Instant};
-use tracing::{info, warn, error};
-
-const LARGE_FILE_THRESHOLD: usize = 100 * 1024 * 1024; // 100MB
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct StorageService {
@@ -56,131 +53,17 @@ impl StorageService {
         data: Vec<u8>,
         content_type: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let file_size = data.len();
-        let file_size_mb = file_size as f64 / 1024.0 / 1024.0;
-        let is_large_file = file_size >= LARGE_FILE_THRESHOLD;
-
-        if is_large_file {
-            warn!(
-                storage_key = %key,
-                bucket = %self.bucket_name,
-                file_size_bytes = file_size,
-                file_size_mb = format!("{:.2}", file_size_mb),
-                content_type = %content_type,
-                "[StorageService] LARGE FILE (>=100MB) - Creating ByteStream for S3 put_object"
-            );
-        } else {
-            info!(
-                storage_key = %key,
-                file_size_bytes = file_size,
-                "[StorageService] Creating ByteStream for S3 upload"
-            );
-        }
-
-        let bytestream_start = Instant::now();
         let body = ByteStream::from(data);
-        let bytestream_elapsed = bytestream_start.elapsed();
 
-        if is_large_file {
-            info!(
-                storage_key = %key,
-                file_size_mb = format!("{:.2}", file_size_mb),
-                bytestream_creation_ms = bytestream_elapsed.as_millis(),
-                "[StorageService] LARGE FILE - ByteStream created, starting S3 put_object request"
-            );
-        }
-
-        let s3_request_start = Instant::now();
-
-        if is_large_file {
-            warn!(
-                storage_key = %key,
-                bucket = %self.bucket_name,
-                file_size_mb = format!("{:.2}", file_size_mb),
-                "[StorageService] LARGE FILE - Sending put_object request to S3 (this operation may take significant time)"
-            );
-        }
-
-        let result = self.client
+        self.client
             .put_object()
             .bucket(&self.bucket_name)
             .key(key)
             .body(body)
             .content_type(content_type)
             .send()
-            .await;
+            .await?;
 
-        let s3_request_elapsed = s3_request_start.elapsed();
-        let throughput_mbps = if s3_request_elapsed.as_secs_f64() > 0.0 {
-            file_size_mb / s3_request_elapsed.as_secs_f64()
-        } else {
-            0.0
-        };
-
-        match &result {
-            Ok(output) => {
-                if is_large_file {
-                    warn!(
-                        storage_key = %key,
-                        bucket = %self.bucket_name,
-                        file_size_bytes = file_size,
-                        file_size_mb = format!("{:.2}", file_size_mb),
-                        s3_elapsed_ms = s3_request_elapsed.as_millis(),
-                        s3_elapsed_secs = format!("{:.2}", s3_request_elapsed.as_secs_f64()),
-                        throughput_mbps = format!("{:.2}", throughput_mbps),
-                        e_tag = ?output.e_tag(),
-                        version_id = ?output.version_id(),
-                        "[StorageService] LARGE FILE (>=100MB) - S3 put_object SUCCESS"
-                    );
-                } else {
-                    info!(
-                        storage_key = %key,
-                        file_size_bytes = file_size,
-                        s3_elapsed_ms = s3_request_elapsed.as_millis(),
-                        "[StorageService] S3 put_object completed"
-                    );
-                }
-            }
-            Err(e) => {
-                error!(
-                    storage_key = %key,
-                    bucket = %self.bucket_name,
-                    file_size_bytes = file_size,
-                    file_size_mb = format!("{:.2}", file_size_mb),
-                    s3_elapsed_ms = s3_request_elapsed.as_millis(),
-                    s3_elapsed_secs = format!("{:.2}", s3_request_elapsed.as_secs_f64()),
-                    is_large_file = is_large_file,
-                    error_type = ?std::any::type_name_of_val(&e),
-                    error = %e,
-                    "[StorageService] S3 put_object FAILED - Check S3 connection, timeouts, and credentials"
-                );
-
-                // Additional debug info for large file failures
-                if is_large_file {
-                    error!(
-                        storage_key = %key,
-                        "[StorageService] LARGE FILE UPLOAD FAILURE DIAGNOSTICS:",
-                    );
-                    error!(
-                        "  - File size: {:.2} MB ({} bytes)",
-                        file_size_mb, file_size
-                    );
-                    error!(
-                        "  - Elapsed time: {:.2}s ({} ms)",
-                        s3_request_elapsed.as_secs_f64(),
-                        s3_request_elapsed.as_millis()
-                    );
-                    error!(
-                        "  - Potential causes: S3 timeout, network interruption, insufficient bandwidth, S3 rate limiting"
-                    );
-                    error!(
-                        "  - Suggestion: Consider implementing multipart upload for files >= 100MB"
-                    );
-                }
-            }
-        }
-
-        result?;
         Ok(())
     }
 
@@ -236,16 +119,7 @@ impl StorageService {
             .presigned(presigning_config)
             .await?;
 
-        let url = presigned_request.uri().to_string();
-
-        info!(
-            storage_key = %key,
-            content_type = %content_type,
-            expires_in_secs = expires_in_secs,
-            "[StorageService] Generated presigned PUT URL"
-        );
-
-        Ok(url)
+        Ok(presigned_request.uri().to_string())
     }
 
     pub fn get_bucket_name(&self) -> &str {
@@ -271,12 +145,6 @@ impl StorageService {
             .ok_or("No upload_id returned from create_multipart_upload")?
             .to_string();
 
-        info!(
-            storage_key = %key,
-            upload_id = %upload_id,
-            "[StorageService] Created multipart upload"
-        );
-
         Ok(upload_id)
     }
 
@@ -300,16 +168,7 @@ impl StorageService {
             .presigned(presigning_config)
             .await?;
 
-        let url = presigned_request.uri().to_string();
-
-        info!(
-            storage_key = %key,
-            upload_id = %upload_id,
-            part_number = part_number,
-            "[StorageService] Generated presigned URL for upload part"
-        );
-
-        Ok(url)
+        Ok(presigned_request.uri().to_string())
     }
 
     pub async fn complete_multipart_upload(
@@ -343,12 +202,6 @@ impl StorageService {
             .send()
             .await?;
 
-        info!(
-            storage_key = %key,
-            upload_id = %upload_id,
-            "[StorageService] Completed multipart upload"
-        );
-
         Ok(())
     }
 
@@ -364,12 +217,6 @@ impl StorageService {
             .upload_id(upload_id)
             .send()
             .await?;
-
-        info!(
-            storage_key = %key,
-            upload_id = %upload_id,
-            "[StorageService] Aborted multipart upload"
-        );
 
         Ok(())
     }
