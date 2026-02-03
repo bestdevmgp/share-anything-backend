@@ -399,10 +399,19 @@ pub async fn init_multipart_upload(
 
         let total_parts = ((file_info.file_size as f64) / (chunk_size as f64)).ceil() as i32;
 
+        // Create multipart upload on R2 to get upload_id (just an API call, no file data)
+        let upload_id = state.storage
+            .create_multipart_upload(&storage_key, &file_info.content_type)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to create multipart upload on R2");
+                internal_error("R2 멀티파트 업로드 생성 실패")
+            })?;
+
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
             storage_key,
-            upload_id: String::new(),
+            upload_id,
             total_parts,
         });
     }
@@ -545,8 +554,24 @@ pub async fn complete_multipart_upload(
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
     for file_info in &request.files {
-        // S3 multipart upload is already completed by Worker
-        // Just create file share record in DB
+        // Complete multipart upload on R2 (for presigned URL uploads)
+        // Skip if upload_id is 'direct' (direct upload, not multipart)
+        if file_info.upload_id != "direct" && !file_info.parts.is_empty() {
+            let parts: Vec<(i32, String)> = file_info.parts
+                .iter()
+                .map(|p| (p.part_number, p.etag.clone()))
+                .collect();
+
+            state.storage
+                .complete_multipart_upload(&file_info.storage_key, &file_info.upload_id, parts)
+                .await
+                .map_err(|e| {
+                    error!(error = %e, "Failed to complete multipart upload on R2");
+                    internal_error("R2 멀티파트 업로드 완료 실패")
+                })?;
+        }
+
+        // Create file share record in DB
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
