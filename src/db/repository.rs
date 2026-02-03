@@ -372,6 +372,7 @@ pub struct UploadSession {
     pub description: Option<String>,
     pub password_hash: Option<String>,
     pub is_one_time: bool,
+    pub expiration_period: String,
     pub expires_at: chrono::DateTime<Utc>,
     pub completed: bool,
     pub created_at: chrono::DateTime<Utc>,
@@ -385,6 +386,7 @@ pub async fn create_upload_session(
     description: Option<&str>,
     password_hash: Option<&str>,
     is_one_time: bool,
+    expiration_period: &str,
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
@@ -392,8 +394,8 @@ pub async fn create_upload_session(
     sqlx::query(
         r#"
         INSERT INTO upload_sessions
-        (id, share_code, user_id, description, password_hash, is_one_time, expires_at, completed, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, false, ?)
+        (id, share_code, user_id, description, password_hash, is_one_time, expiration_period, expires_at, completed, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, false, ?)
         "#,
     )
     .bind(id)
@@ -402,6 +404,7 @@ pub async fn create_upload_session(
     .bind(description)
     .bind(password_hash)
     .bind(is_one_time)
+    .bind(expiration_period)
     .bind(expires_at)
     .bind(now)
     .execute(pool)

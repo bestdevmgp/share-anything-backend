@@ -154,7 +154,9 @@ pub async fn request_presigned_upload(
         None
     };
 
-    let expires_at = Utc::now() + expiration.to_duration();
+    // Store expiration period string for calculation at completion time
+    let expiration_period_str = expiration.to_string();
+    let session_expires_at = Utc::now() + chrono::Duration::hours(1);
 
     // Create pending upload session record
     repository::create_upload_session(
@@ -165,7 +167,8 @@ pub async fn request_presigned_upload(
         request.description.as_deref(),
         password_hash.as_deref(),
         is_one_time,
-        expires_at,
+        &expiration_period_str,
+        session_expires_at,
     )
     .await
     .map_err(|e| {
@@ -216,6 +219,11 @@ pub async fn complete_presigned_upload(
         return Err(bad_request("이미 완료된 업로드 세션입니다"));
     }
 
+    // Calculate expires_at from NOW (upload completion time)
+    let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
+        .unwrap_or(ExpirationPeriod::FiveMinutes);
+    let expires_at = Utc::now() + expiration_period.to_duration();
+
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
@@ -233,7 +241,7 @@ pub async fn complete_presigned_upload(
             session.description.clone(),
             session.password_hash.clone(),
             session.is_one_time,
-            session.expires_at,
+            expires_at,
         )
         .await
         .map_err(|e| {
@@ -419,7 +427,10 @@ pub async fn init_multipart_upload(
         None
     };
 
-    let expires_at = Utc::now() + expiration.to_duration();
+    // Store expiration period string for calculation at completion time
+    let expiration_period_str = expiration.to_string();
+    // Temporary expires_at for session validity (1 hour from now)
+    let session_expires_at = Utc::now() + chrono::Duration::hours(1);
 
     repository::create_upload_session(
         &state.db,
@@ -429,7 +440,8 @@ pub async fn init_multipart_upload(
         request.description.as_deref(),
         password_hash.as_deref(),
         is_one_time,
-        expires_at,
+        &expiration_period_str,
+        session_expires_at,
     )
     .await
     .map_err(|e| {
@@ -534,6 +546,11 @@ pub async fn complete_multipart_upload(
         return Err(bad_request("이미 완료된 업로드 세션입니다"));
     }
 
+    // Calculate expires_at from NOW (upload completion time)
+    let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
+        .unwrap_or(ExpirationPeriod::FiveMinutes);
+    let expires_at = Utc::now() + expiration_period.to_duration();
+
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
@@ -568,7 +585,7 @@ pub async fn complete_multipart_upload(
             session.description.clone(),
             session.password_hash.clone(),
             session.is_one_time,
-            session.expires_at,
+            expires_at,
         )
         .await
         .map_err(|e| {

@@ -66,6 +66,34 @@ impl ExpirationPeriod {
             ExpirationPeriod::TwentyFourHours => chrono::Duration::hours(24),
         }
     }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "five_minutes" => Some(ExpirationPeriod::FiveMinutes),
+            "thirty_minutes" => Some(ExpirationPeriod::ThirtyMinutes),
+            "one_hour" => Some(ExpirationPeriod::OneHour),
+            "three_hours" => Some(ExpirationPeriod::ThreeHours),
+            "six_hours" => Some(ExpirationPeriod::SixHours),
+            "twelve_hours" => Some(ExpirationPeriod::TwelveHours),
+            "twenty_four_hours" => Some(ExpirationPeriod::TwentyFourHours),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for ExpirationPeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ExpirationPeriod::FiveMinutes => "five_minutes",
+            ExpirationPeriod::ThirtyMinutes => "thirty_minutes",
+            ExpirationPeriod::OneHour => "one_hour",
+            ExpirationPeriod::ThreeHours => "three_hours",
+            ExpirationPeriod::SixHours => "six_hours",
+            ExpirationPeriod::TwelveHours => "twelve_hours",
+            ExpirationPeriod::TwentyFourHours => "twenty_four_hours",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Debug, Serialize, ToSchema)]
