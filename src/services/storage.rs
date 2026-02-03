@@ -122,6 +122,33 @@ impl StorageService {
         Ok(presigned_request.uri().to_string())
     }
 
+    pub async fn generate_presigned_get_url(
+        &self,
+        key: &str,
+        expires_in_secs: u64,
+        file_name: Option<&str>,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let presigning_config = PresigningConfig::builder()
+            .expires_in(Duration::from_secs(expires_in_secs))
+            .build()?;
+
+        let mut request = self.client
+            .get_object()
+            .bucket(&self.bucket_name)
+            .key(key);
+
+        // Set Content-Disposition to force download with filename
+        if let Some(name) = file_name {
+            request = request.response_content_disposition(
+                format!("attachment; filename=\"{}\"", name)
+            );
+        }
+
+        let presigned_request = request.presigned(presigning_config).await?;
+
+        Ok(presigned_request.uri().to_string())
+    }
+
     pub fn get_bucket_name(&self) -> &str {
         &self.bucket_name
     }

@@ -108,6 +108,7 @@ pub fn create_router(
     let download_routes = Router::new()
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
+        .route("/download/url", get(handlers::download::get_download_url))
         .route("/download/bulk", post(handlers::download::download_multiple_files))
         .route("/preview/file", get(handlers::download::preview_file))
         .route("/files/list", get(handlers::download::get_file_list))

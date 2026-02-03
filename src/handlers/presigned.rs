@@ -383,7 +383,6 @@ pub async fn init_multipart_upload(
     let upload_session_id = Uuid::new_v4().to_string();
     let chunk_size = request.chunk_size;
 
-    // Generate storage keys for each file (no S3 calls - Worker will handle multipart creation)
     let mut files: Vec<MultipartUploadFileInit> = Vec::new();
 
     for file_info in &request.files {
@@ -403,7 +402,7 @@ pub async fn init_multipart_upload(
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
             storage_key,
-            upload_id: String::new(), // Will be set by Worker
+            upload_id: String::new(),
             total_parts,
         });
     }

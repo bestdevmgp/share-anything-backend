@@ -40,6 +40,12 @@ pub struct VerifyPasswordRequest {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+pub struct DownloadUrlResponse {
+    pub download_url: String,
+    pub expires_in_secs: u64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FileInfoResponse {
     pub file_name: String,
     pub file_size: i64,
@@ -697,4 +703,137 @@ pub async fn verify_password(
     } else {
         Ok(StatusCode::OK)
     }
+}
+
+const DOWNLOAD_URL_EXPIRY_SECS: u64 = 3600; // 1 hour
+
+#[utoipa::path(
+    get,
+    path = "/download/url",
+    tag = "download",
+    params(
+        ("code" = String, Query, description = "6-digit share code"),
+        ("file_id" = String, Query, description = "File ID to download")
+    ),
+    responses(
+        (status = 200, description = "Download URL generated", body = DownloadUrlResponse),
+        (status = 401, description = "Password required or invalid"),
+        (status = 404, description = "File not found")
+    )
+)]
+pub async fn get_download_url(
+    State(state): State<DownloadState>,
+    Query(params): Query<serde_json::Value>,
+    headers: HeaderMap,
+    request: Request,
+) -> Result<Json<DownloadUrlResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let code = params
+        .get("code")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| bad_request("code parameter is required"))?;
+
+    let file_id = params
+        .get("file_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| bad_request("file_id parameter is required"))?;
+
+    let file_shares = repository::find_file_shares_by_code(&state.db, code)
+        .await
+        .map_err(|_| internal_error("파일 조회 실패"))?;
+
+    if file_shares.is_empty() {
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+    }
+
+    let file_share = file_shares
+        .iter()
+        .find(|f| f.id == file_id)
+        .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+
+    if file_share.transfer_type == "p2p" {
+        return Err(bad_request(
+            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요.",
+        ));
+    }
+
+    // Check password if required
+    if let Some(password_hash) = &file_share.password_hash {
+        let password = headers
+            .get("X-File-Password")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+
+        let is_valid = bcrypt::verify(password, password_hash)
+            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+
+        if !is_valid {
+            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+        }
+    }
+
+    // Log download
+    let user_claims = request.extensions().get::<Claims>().cloned();
+
+    let ip_address = headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim())
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .and_then(|v| v.to_str().ok())
+        })
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
+
+    let _ = repository::create_download_log(
+        &state.db,
+        CreateDownloadLogDto {
+            file_share_id: file_share.id.clone(),
+            downloader_user_id: user_claims.map(|c| c.sub),
+            ip_address,
+            user_agent,
+        },
+        device_platform,
+    )
+    .await;
+
+    // Generate presigned URL for direct R2 download
+    let download_url = state
+        .storage
+        .generate_presigned_get_url(
+            &file_share.storage_key,
+            DOWNLOAD_URL_EXPIRY_SECS,
+            Some(&file_share.file_name),
+        )
+        .await
+        .map_err(|e| internal_error(format!("다운로드 URL 생성 실패: {}", e)))?;
+
+    // Handle one-time download (delete after URL generation)
+    if file_share.is_one_time {
+        let storage_key = file_share.storage_key.clone();
+        let file_id = file_share.id.clone();
+        let storage = state.storage.clone();
+        let db = state.db.clone();
+
+        // Delete asynchronously after a delay to allow download to start
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            let _ = storage.delete_file(&storage_key).await;
+            let _ = repository::delete_file_share(&db, &file_id).await;
+        });
+    }
+
+    Ok(Json(DownloadUrlResponse {
+        download_url,
+        expires_in_secs: DOWNLOAD_URL_EXPIRY_SECS,
+    }))
 }
