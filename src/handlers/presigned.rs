@@ -399,14 +399,17 @@ pub async fn init_multipart_upload(
 
         let total_parts = ((file_info.file_size as f64) / (chunk_size as f64)).ceil() as i32;
 
-        // Create multipart upload on R2 to get upload_id (just an API call, no file data)
-        let upload_id = state.storage
-            .create_multipart_upload(&storage_key, &file_info.content_type)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "Failed to create multipart upload on R2");
-                internal_error("R2 멀티파트 업로드 생성 실패")
-            })?;
+        let upload_id = if total_parts > 1 {
+            state.storage
+                .create_multipart_upload(&storage_key, &file_info.content_type)
+                .await
+                .map_err(|e| {
+                    error!(error = %e, "Failed to create multipart upload on R2");
+                    internal_error("R2 멀티파트 업로드 생성 실패")
+                })?
+        } else {
+            String::new()
+        };
 
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
