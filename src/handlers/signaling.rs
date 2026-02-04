@@ -92,8 +92,9 @@ async fn handle_message(
             sdp,
             peer_id: _,
         } => {
-            relay_to_uploader(
+            relay_to_downloader(
                 &share_code,
+                peer_id,
                 SignalingMessage::Offer {
                     share_code: share_code.clone(),
                     sdp,
@@ -108,9 +109,8 @@ async fn handle_message(
             sdp,
             peer_id: _,
         } => {
-            relay_to_downloader(
+            relay_to_uploader(
                 &share_code,
-                peer_id,
                 SignalingMessage::Answer {
                     share_code: share_code.clone(),
                     sdp,
