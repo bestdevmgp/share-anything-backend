@@ -91,6 +91,10 @@ pub fn create_router(
             auth_state.clone(),
             optional_auth,
         ))
+        .with_state(upload_state.clone());
+
+    let p2p_upload_routes = Router::new()
+        .route("/file/p2p/create", post(handlers::upload::create_p2p_session))
         .with_state(upload_state);
 
     let presigned_routes = Router::new()
@@ -150,6 +154,7 @@ pub fn create_router(
         .merge(swagger_ui)
         .merge(auth_routes)
         .merge(upload_routes)
+        .merge(p2p_upload_routes)
         .merge(presigned_routes)
         .merge(download_routes)
         .merge(user_routes)

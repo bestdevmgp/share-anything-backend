@@ -705,7 +705,7 @@ pub async fn verify_password(
     }
 }
 
-const DOWNLOAD_URL_EXPIRY_SECS: u64 = 3600; // 1 hour
+const DOWNLOAD_URL_EXPIRY_SECS: u64 = 3600;
 
 #[utoipa::path(
     get,
@@ -756,7 +756,6 @@ pub async fn get_download_url(
         ));
     }
 
-    // Check password if required
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
@@ -771,7 +770,6 @@ pub async fn get_download_url(
         }
     }
 
-    // Log download
     let user_claims = request.extensions().get::<Claims>().cloned();
 
     let ip_address = headers
@@ -806,7 +804,6 @@ pub async fn get_download_url(
     )
     .await;
 
-    // Generate presigned URL for direct R2 download
     let download_url = state
         .storage
         .generate_presigned_get_url(
@@ -817,14 +814,12 @@ pub async fn get_download_url(
         .await
         .map_err(|e| internal_error(format!("다운로드 URL 생성 실패: {}", e)))?;
 
-    // Handle one-time download (delete after URL generation)
     if file_share.is_one_time {
         let storage_key = file_share.storage_key.clone();
         let file_id = file_share.id.clone();
         let storage = state.storage.clone();
         let db = state.db.clone();
 
-        // Delete asynchronously after a delay to allow download to start
         tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             let _ = storage.delete_file(&storage_key).await;

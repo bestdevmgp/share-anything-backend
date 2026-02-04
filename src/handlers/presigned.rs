@@ -32,7 +32,7 @@ pub struct PresignedState {
     pub storage: StorageService,
 }
 
-const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600; // 1 hour
+const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
 
 pub async fn request_presigned_upload(
     State(state): State<PresignedState>,
@@ -44,7 +44,6 @@ pub async fn request_presigned_upload(
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
-    // Validate turnstile token
     verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
         .await
         .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
@@ -53,11 +52,10 @@ pub async fn request_presigned_upload(
         return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
     }
 
-    // Check total file size
     let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024 // 3GB
+        3 * 1024 * 1024 * 1024
     } else {
-        500 * 1024 * 1024 // 500MB
+        500 * 1024 * 1024
     };
 
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
@@ -71,7 +69,6 @@ pub async fn request_presigned_upload(
         )));
     }
 
-    // Validate expiration
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
             return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
@@ -87,12 +84,10 @@ pub async fn request_presigned_upload(
         return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
     }
 
-    // Validate password
     if request.password.is_some() && user_claims.is_none() {
         return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
     }
 
-    // Generate share code
     let share_code = loop {
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
@@ -104,8 +99,6 @@ pub async fn request_presigned_upload(
     };
 
     let upload_session_id = Uuid::new_v4().to_string();
-
-    // Generate presigned URLs for each file
     let mut urls: Vec<PresignedUploadUrl> = Vec::new();
 
     for file_info in &request.files {
@@ -131,7 +124,6 @@ pub async fn request_presigned_upload(
         });
     }
 
-    // Store upload session in database for later verification
     let password_hash = if let Some(password) = &request.password {
         Some(
             bcrypt::hash(password, bcrypt::DEFAULT_COST)
@@ -141,11 +133,9 @@ pub async fn request_presigned_upload(
         None
     };
 
-    // Store expiration period string for calculation at completion time
     let expiration_period_str = expiration.to_string();
     let session_expires_at = Utc::now() + chrono::Duration::hours(1);
 
-    // Create pending upload session record
     repository::create_upload_session(
         &state.db,
         &upload_session_id,
@@ -175,7 +165,6 @@ pub async fn complete_presigned_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Verify upload session exists and is valid
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -192,7 +181,6 @@ pub async fn complete_presigned_upload(
         return Err(bad_request("이미 완료된 업로드 세션입니다"));
     }
 
-    // Calculate expires_at from NOW (upload completion time)
     let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
         .unwrap_or(ExpirationPeriod::FiveMinutes);
     let expires_at = Utc::now() + expiration_period.to_duration();
@@ -240,7 +228,6 @@ pub async fn complete_presigned_upload(
         });
     }
 
-    // Mark session as completed
     repository::complete_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -267,8 +254,6 @@ pub async fn complete_presigned_upload(
     }))
 }
 
-// Multipart Upload Handlers
-
 pub async fn init_multipart_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
@@ -279,7 +264,6 @@ pub async fn init_multipart_upload(
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
-    // Validate turnstile token
     verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
         .await
         .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
@@ -288,11 +272,10 @@ pub async fn init_multipart_upload(
         return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
     }
 
-    // Check total file size
     let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024 // 3GB
+        3 * 1024 * 1024 * 1024
     } else {
-        500 * 1024 * 1024 // 500MB
+        500 * 1024 * 1024
     };
 
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
@@ -306,7 +289,6 @@ pub async fn init_multipart_upload(
         )));
     }
 
-    // Validate expiration
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
             return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
@@ -326,7 +308,6 @@ pub async fn init_multipart_upload(
         return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
     }
 
-    // Generate share code
     let share_code = loop {
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
@@ -371,7 +352,6 @@ pub async fn init_multipart_upload(
         });
     }
 
-    // Store upload session
     let password_hash = if let Some(password) = &request.password {
         Some(
             bcrypt::hash(password, bcrypt::DEFAULT_COST)
@@ -381,9 +361,7 @@ pub async fn init_multipart_upload(
         None
     };
 
-    // Store expiration period string for calculation at completion time
     let expiration_period_str = expiration.to_string();
-    // Temporary expires_at for session validity (1 hour from now)
     let session_expires_at = Utc::now() + chrono::Duration::hours(1);
 
     repository::create_upload_session(
@@ -415,7 +393,6 @@ pub async fn get_part_presigned_urls(
     State(state): State<PresignedState>,
     Json(request): Json<GetPartUrlsRequest>,
 ) -> Result<Json<GetPartUrlsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Verify upload session exists
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -462,7 +439,6 @@ pub async fn complete_multipart_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteMultipartUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Verify upload session
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -479,7 +455,6 @@ pub async fn complete_multipart_upload(
         return Err(bad_request("이미 완료된 업로드 세션입니다"));
     }
 
-    // Calculate expires_at from NOW (upload completion time)
     let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
         .unwrap_or(ExpirationPeriod::FiveMinutes);
     let expires_at = Utc::now() + expiration_period.to_duration();
@@ -488,8 +463,6 @@ pub async fn complete_multipart_upload(
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
     for file_info in &request.files {
-        // Complete multipart upload on R2 (for presigned URL uploads)
-        // Skip if upload_id is 'direct' (direct upload, not multipart)
         if file_info.upload_id != "direct" && !file_info.parts.is_empty() {
             let parts: Vec<(i32, String)> = file_info.parts
                 .iter()
@@ -505,7 +478,6 @@ pub async fn complete_multipart_upload(
                 })?;
         }
 
-        // Create file share record in DB
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
@@ -545,7 +517,6 @@ pub async fn complete_multipart_upload(
         });
     }
 
-    // Mark session as completed
     repository::complete_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {

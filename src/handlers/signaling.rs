@@ -244,7 +244,6 @@ async fn relay_ice_candidate(
             .find_downloader(&share_code)
             .ok_or("Downloader is not online")?
     } else {
-        // 다운로더가 보낸 ICE → 업로더에게
         uploader_peer_id
     };
 

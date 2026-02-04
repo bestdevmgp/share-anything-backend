@@ -301,3 +301,112 @@ pub async fn upload_file(
         files: uploaded_files,
     }))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct P2PFileInfo {
+    pub name: String,
+    pub size: i64,
+    #[serde(rename = "type")]
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateP2PSessionRequest {
+    pub files: Vec<P2PFileInfo>,
+    pub turnstile_token: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/file/p2p/create",
+    tag = "upload",
+    request_body = CreateP2PSessionRequest,
+    responses(
+        (status = 200, description = "P2P session created successfully", body = MultipleFileUploadResponse),
+        (status = 400, description = "Bad request"),
+        (status = 429, description = "Rate limited")
+    )
+)]
+pub async fn create_p2p_session(
+    State(state): State<UploadState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateP2PSessionRequest>,
+) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let client_ip = extract_client_ip(&headers);
+    verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip))
+        .await
+        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+
+    if request.files.is_empty() {
+        return Err(bad_request("파일 정보가 필요합니다"));
+    }
+
+    let share_code = loop {
+        let code = generate_share_code();
+        if !repository::check_code_exists(&state.db, &code)
+            .await
+            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
+        {
+            break code;
+        }
+    };
+
+    let expires_at = Utc::now() + chrono::Duration::minutes(5);
+    let share_group_id = Uuid::new_v4().to_string();
+    let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
+
+    for file_info in request.files {
+        let file_share = repository::create_file_share(
+            &state.db,
+            Some(share_group_id.clone()),
+            None,
+            share_code.clone(),
+            file_info.name.clone(),
+            file_info.size,
+            file_info.content_type.clone(),
+            "p2p".to_string(),
+            String::new(),
+            None,
+            None,
+            true,
+            expires_at,
+        )
+        .await
+        .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
+
+        uploaded_files.push(FileShareResponse {
+            id: file_share.id,
+            share_code: file_share.share_code.clone(),
+            file_name: file_share.file_name,
+            file_size: file_share.file_size,
+            file_type: file_share.file_type,
+            transfer_type: file_share.transfer_type.clone(),
+            description: file_share.description,
+            has_password: file_share.password_hash.is_some(),
+            is_one_time: file_share.is_one_time,
+            expires_at: file_share.expires_at,
+            created_at: file_share.created_at,
+            download_url: String::new(),
+            qr_code: None,
+            uploader_online: None,
+        });
+    }
+
+    let download_url = format!(
+        "{}/download?code={}",
+        state.config.server.base_url, share_code
+    );
+
+    let qr_code = generate_qr_code(&download_url).ok();
+
+    for file in &mut uploaded_files {
+        file.download_url = download_url.clone();
+        file.qr_code = qr_code.clone();
+    }
+
+    Ok(Json(MultipleFileUploadResponse {
+        share_code: share_code.clone(),
+        total_count: uploaded_files.len(),
+        files: uploaded_files,
+    }))
+}
