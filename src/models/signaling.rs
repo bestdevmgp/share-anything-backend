@@ -41,6 +41,9 @@ pub enum SignalingMessage {
     UploaderOffline {
         share_code: String,
     },
+    DownloaderOffline {
+        share_code: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

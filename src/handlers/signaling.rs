@@ -240,8 +240,11 @@ async fn relay_ice_candidate(
         .ok_or("Uploader is not online")?;
 
     let target_peer_id = if peer_id == uploader_peer_id {
-        return Err("Downloader peer ID not tracked".into());
+        state
+            .find_downloader(&share_code)
+            .ok_or("Downloader is not online")?
     } else {
+        // 다운로더가 보낸 ICE → 업로더에게
         uploader_peer_id
     };
 
@@ -289,8 +292,16 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         .collect();
 
     for share_code in downloader_share_codes {
+        if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
+            let _ = state.send_to_peer(
+                &uploader_peer_id,
+                SignalingMessage::DownloaderOffline {
+                    share_code: share_code.clone(),
+                },
+            );
+        }
         state.remove_downloader(&share_code);
-        let _ = repository::update_p2p_status(db, &share_code, "failed", None).await;
+        let _ = repository::update_p2p_status(db, &share_code, "waiting", None).await;
     }
 
     state.remove_connection(peer_id);
