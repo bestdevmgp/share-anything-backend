@@ -15,7 +15,7 @@ use crate::{
     middleware::auth::Claims,
     models::{bad_request, unauthorized, forbidden, not_found, internal_error, ErrorResponse, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
     services::{StorageService, signaling::SignalingState},
-    utils::{parse_device_platform, verify_turnstile_token, extract_client_ip},
+    utils::{encode_content_disposition, parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
 use std::io::{Write as _, Cursor};
 use zip::write::{FileOptions, ZipWriter};
@@ -325,9 +325,9 @@ pub async fn download_single_file(
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{}\"", file_share.file_name)
+        encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap(),
+            .unwrap_or_else(|_| "attachment".parse().unwrap()),
     );
 
     Ok(response)
@@ -410,9 +410,9 @@ pub async fn preview_file(
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
-        format!("inline; filename=\"{}\"", file_share.file_name)
+        encode_content_disposition("inline", &file_share.file_name)
             .parse()
-            .unwrap(),
+            .unwrap_or_else(|_| "inline".parse().unwrap()),
     );
 
     Ok(response)
@@ -517,9 +517,9 @@ pub async fn download_file(
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"{}\"", file_share.file_name)
+        encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap(),
+            .unwrap_or_else(|_| "attachment".parse().unwrap()),
     );
 
     Ok(response)

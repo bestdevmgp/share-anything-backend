@@ -61,6 +61,9 @@ woothee = "0.13"
 zip = "0.6"
 http = "0.2.12"
 
+# URL encoding
+percent-encoding = "2.3"
+
 # Rate limiting
 dashmap = "5.5"
 

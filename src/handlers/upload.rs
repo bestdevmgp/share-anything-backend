@@ -13,7 +13,7 @@ use crate::{
     middleware::auth::Claims,
     models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
     services::{generate_qr_code, StorageService},
-    utils::{generate_share_code, verify_turnstile_token, extract_client_ip},
+    utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 use chrono::Utc;
 
@@ -227,16 +227,11 @@ pub async fn upload_file(
         let storage_key = if matches!(transfer_type, TransferType::P2p) {
             String::new()
         } else {
-            let key = if state.config.s3.prefix.is_empty() {
-                format!("{}/{}", Uuid::new_v4(), file_data.name)
-            } else {
-                format!(
-                    "{}{}/{}",
-                    state.config.s3.prefix,
-                    Uuid::new_v4(),
-                    file_data.name
-                )
-            };
+            let key = generate_storage_key(
+                &state.config.s3.prefix,
+                &Uuid::new_v4().to_string(),
+                &file_data.name,
+            );
 
             state
                 .storage

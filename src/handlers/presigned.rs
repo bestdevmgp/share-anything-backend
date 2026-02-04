@@ -22,7 +22,7 @@ use crate::{
         CompleteMultipartUploadRequest,
     },
     services::{generate_qr_code, StorageService},
-    utils::{generate_share_code, verify_turnstile_token, extract_client_ip},
+    utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 
 #[derive(Clone)]
@@ -117,16 +117,11 @@ pub async fn request_presigned_upload(
     let mut urls: Vec<PresignedUploadUrl> = Vec::new();
 
     for file_info in &request.files {
-        let storage_key = if state.config.s3.prefix.is_empty() {
-            format!("{}/{}", Uuid::new_v4(), file_info.file_name)
-        } else {
-            format!(
-                "{}{}/{}",
-                state.config.s3.prefix,
-                Uuid::new_v4(),
-                file_info.file_name
-            )
-        };
+        let storage_key = generate_storage_key(
+            &state.config.s3.prefix,
+            &Uuid::new_v4().to_string(),
+            &file_info.file_name,
+        );
 
         let presigned_url = state
             .storage
@@ -386,16 +381,11 @@ pub async fn init_multipart_upload(
     let mut files: Vec<MultipartUploadFileInit> = Vec::new();
 
     for file_info in &request.files {
-        let storage_key = if state.config.s3.prefix.is_empty() {
-            format!("{}/{}", Uuid::new_v4(), file_info.file_name)
-        } else {
-            format!(
-                "{}{}/{}",
-                state.config.s3.prefix,
-                Uuid::new_v4(),
-                file_info.file_name
-            )
-        };
+        let storage_key = generate_storage_key(
+            &state.config.s3.prefix,
+            &Uuid::new_v4().to_string(),
+            &file_info.file_name,
+        );
 
         let total_parts = ((file_info.file_size as f64) / (chunk_size as f64)).ceil() as i32;
 

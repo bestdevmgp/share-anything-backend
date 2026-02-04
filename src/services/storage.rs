@@ -5,6 +5,7 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client as S3Client,
 };
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -137,11 +138,15 @@ impl StorageService {
             .bucket(&self.bucket_name)
             .key(key);
 
-        // Set Content-Disposition to force download with filename
+        // Set Content-Disposition to force download with filename (RFC 5987 encoded for non-ASCII)
         if let Some(name) = file_name {
-            request = request.response_content_disposition(
+            let content_disposition = if name.is_ascii() {
                 format!("attachment; filename=\"{}\"", name)
-            );
+            } else {
+                let encoded = utf8_percent_encode(name, NON_ALPHANUMERIC).to_string();
+                format!("attachment; filename*=UTF-8''{}", encoded)
+            };
+            request = request.response_content_disposition(content_disposition);
         }
 
         let presigned_request = request.presigned(presigning_config).await?;
