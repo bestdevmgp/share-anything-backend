@@ -78,14 +78,17 @@ async fn handle_message(
         SignalingMessage::UploaderReady {
             share_code,
             peer_id: _,
+            device_info,
         } => {
-            handle_uploader_ready(share_code, peer_id, state, db).await?;
+            handle_uploader_ready(share_code, peer_id, device_info, state, db).await?;
         }
         SignalingMessage::DownloaderJoin {
             share_code,
             peer_id: _,
+            file_name,
+            device_info,
         } => {
-            handle_downloader_join(share_code, peer_id, state, db).await?;
+            handle_downloader_join(share_code, peer_id, file_name, device_info, state, db).await?;
         }
         SignalingMessage::Offer {
             share_code,
@@ -149,6 +152,7 @@ async fn handle_message(
 async fn handle_uploader_ready(
     share_code: String,
     peer_id: &str,
+    device_info: Option<String>,
     state: &SignalingState,
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -160,7 +164,7 @@ async fn handle_uploader_ready(
         return Err("This share is not configured for P2P transfer".into());
     }
 
-    state.register_uploader(share_code.clone(), peer_id.to_string());
+    state.register_uploader_with_device(share_code.clone(), peer_id.to_string(), device_info);
     repository::update_p2p_status(db, &share_code, "waiting", Some(peer_id.to_string())).await?;
 
     Ok(())
@@ -169,11 +173,13 @@ async fn handle_uploader_ready(
 async fn handle_downloader_join(
     share_code: String,
     peer_id: &str,
+    file_name: Option<String>,
+    device_info: Option<String>,
     state: &SignalingState,
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let uploader_peer_id = state
-        .find_uploader(&share_code)
+    let (uploader_peer_id, uploader_device_info) = state
+        .find_uploader_with_device(&share_code)
         .ok_or("Uploader is not online")?;
 
     state.register_downloader(share_code.clone(), peer_id.to_string());
@@ -183,6 +189,8 @@ async fn handle_downloader_join(
         SignalingMessage::PeerMatched {
             peer_id: peer_id.to_string(),
             role: PeerRole::Downloader,
+            file_name: file_name.clone(),
+            device_info: device_info.clone(),
         },
     )?;
 
@@ -191,6 +199,8 @@ async fn handle_downloader_join(
         SignalingMessage::PeerMatched {
             peer_id: uploader_peer_id.clone(),
             role: PeerRole::Uploader,
+            file_name,
+            device_info: uploader_device_info,
         },
     )?;
 
@@ -273,7 +283,7 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
     let uploader_share_codes: Vec<String> = state
         .uploaders
         .iter()
-        .filter(|entry| entry.value() == peer_id)
+        .filter(|entry| entry.value().peer_id == peer_id)
         .map(|entry| entry.key().clone())
         .collect();
 

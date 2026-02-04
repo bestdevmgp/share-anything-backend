@@ -6,14 +6,29 @@ pub enum SignalingMessage {
     UploaderReady {
         share_code: String,
         peer_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_info: Option<String>,
     },
     DownloaderJoin {
         share_code: String,
         peer_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_info: Option<String>,
+    },
+    UploaderInfo {
+        share_code: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_info: Option<String>,
     },
     PeerMatched {
         peer_id: String,
         role: PeerRole,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_info: Option<String>,
     },
     Offer {
         share_code: String,

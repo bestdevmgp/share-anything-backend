@@ -9,8 +9,14 @@ pub type PeerId = String;
 pub type ShareCode = String;
 
 #[derive(Clone)]
+pub struct UploaderInfo {
+    pub peer_id: String,
+    pub device_info: Option<String>,
+}
+
+#[derive(Clone)]
 pub struct SignalingState {
-    pub uploaders: Arc<DashMap<ShareCode, PeerId>>,
+    pub uploaders: Arc<DashMap<ShareCode, UploaderInfo>>,
     pub downloaders: Arc<DashMap<ShareCode, PeerId>>,
     pub connections: Arc<DashMap<PeerId, mpsc::UnboundedSender<Message>>>,
 }
@@ -25,11 +31,25 @@ impl SignalingState {
     }
 
     pub fn register_uploader(&self, share_code: String, peer_id: String) {
-        self.uploaders.insert(share_code, peer_id);
+        self.uploaders.insert(share_code, UploaderInfo {
+            peer_id,
+            device_info: None,
+        });
+    }
+
+    pub fn register_uploader_with_device(&self, share_code: String, peer_id: String, device_info: Option<String>) {
+        self.uploaders.insert(share_code, UploaderInfo {
+            peer_id,
+            device_info,
+        });
     }
 
     pub fn find_uploader(&self, share_code: &str) -> Option<String> {
-        self.uploaders.get(share_code).map(|v| v.clone())
+        self.uploaders.get(share_code).map(|v| v.peer_id.clone())
+    }
+
+    pub fn find_uploader_with_device(&self, share_code: &str) -> Option<(String, Option<String>)> {
+        self.uploaders.get(share_code).map(|v| (v.peer_id.clone(), v.device_info.clone()))
     }
 
     pub fn remove_uploader(&self, share_code: &str) {
