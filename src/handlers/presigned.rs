@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use std::sync::Arc;
-use tracing::{info, error};
+use tracing::error;
 use uuid::Uuid;
 use chrono::Utc;
 
@@ -41,14 +41,6 @@ pub async fn request_presigned_upload(
     Json(request): Json<PresignedUploadRequest>,
 ) -> Result<Json<PresignedUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let client_ip = extract_client_ip(&headers);
-    let user_id = user_claims.as_ref().map(|ext| ext.0.sub.clone());
-
-    info!(
-        client_ip = %client_ip,
-        user_id = ?user_id,
-        file_count = request.files.len(),
-        "Presigned upload request started"
-    );
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
@@ -171,13 +163,6 @@ pub async fn request_presigned_upload(
         internal_error("업로드 세션 생성 실패")
     })?;
 
-    info!(
-        upload_session_id = %upload_session_id,
-        share_code = %share_code,
-        file_count = urls.len(),
-        "Presigned URLs generated successfully"
-    );
-
     Ok(Json(PresignedUploadResponse {
         upload_session_id,
         share_code,
@@ -190,13 +175,6 @@ pub async fn complete_presigned_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    info!(
-        upload_session_id = %request.upload_session_id,
-        share_code = %request.share_code,
-        file_count = request.files.len(),
-        "Complete presigned upload request"
-    );
-
     // Verify upload session exists and is valid
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
@@ -282,13 +260,6 @@ pub async fn complete_presigned_upload(
         file.qr_code = qr_code.clone();
     }
 
-    info!(
-        upload_session_id = %request.upload_session_id,
-        share_code = %session.share_code,
-        total_files = uploaded_files.len(),
-        "Presigned upload completed successfully"
-    );
-
     Ok(Json(MultipleFileUploadResponse {
         share_code: session.share_code,
         total_count: uploaded_files.len(),
@@ -305,15 +276,6 @@ pub async fn init_multipart_upload(
     Json(request): Json<InitMultipartUploadRequest>,
 ) -> Result<Json<InitMultipartUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let client_ip = extract_client_ip(&headers);
-    let user_id = user_claims.as_ref().map(|ext| ext.0.sub.clone());
-
-    info!(
-        client_ip = %client_ip,
-        user_id = ?user_id,
-        file_count = request.files.len(),
-        chunk_size = request.chunk_size,
-        "Multipart upload init request started"
-    );
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
@@ -441,13 +403,6 @@ pub async fn init_multipart_upload(
         internal_error("업로드 세션 생성 실패")
     })?;
 
-    info!(
-        upload_session_id = %upload_session_id,
-        share_code = %share_code,
-        file_count = files.len(),
-        "Multipart uploads initialized successfully"
-    );
-
     Ok(Json(InitMultipartUploadResponse {
         upload_session_id,
         share_code,
@@ -460,13 +415,6 @@ pub async fn get_part_presigned_urls(
     State(state): State<PresignedState>,
     Json(request): Json<GetPartUrlsRequest>,
 ) -> Result<Json<GetPartUrlsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    info!(
-        upload_session_id = %request.upload_session_id,
-        storage_key = %request.storage_key,
-        part_count = request.part_numbers.len(),
-        "Get part presigned URLs request"
-    );
-
     // Verify upload session exists
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
@@ -514,13 +462,6 @@ pub async fn complete_multipart_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteMultipartUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    info!(
-        upload_session_id = %request.upload_session_id,
-        share_code = %request.share_code,
-        file_count = request.files.len(),
-        "Complete multipart upload request"
-    );
-
     // Verify upload session
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
@@ -623,13 +564,6 @@ pub async fn complete_multipart_upload(
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
     }
-
-    info!(
-        upload_session_id = %request.upload_session_id,
-        share_code = %session.share_code,
-        total_files = uploaded_files.len(),
-        "Multipart upload completed successfully"
-    );
 
     Ok(Json(MultipleFileUploadResponse {
         share_code: session.share_code,

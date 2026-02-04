@@ -137,12 +137,6 @@ impl RateLimiter {
         self.blocked_ips.retain(|_, blocked_at| {
             blocked_at.elapsed() < Duration::from_secs(600)
         });
-
-        tracing::debug!(
-            "Rate limiter cleanup: {} IPs tracked, {} IPs blocked",
-            self.request_counts.len(),
-            self.blocked_ips.len()
-        );
     }
 }
 
@@ -166,7 +160,6 @@ pub async fn rate_limit_middleware(
     let ip = extract_ip(&headers);
 
     if let Err(error_message) = rate_limiter.check_rate_limit(&ip) {
-        tracing::warn!("Rate limit exceeded for IP: {}", ip);
         return (
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({
