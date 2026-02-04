@@ -182,16 +182,16 @@ pub async fn upload_file(
         ExpirationPeriod::FiveMinutes // Default
     };
 
-    let is_one_time = metadata.is_one_time.unwrap_or(false);
-
-    if is_one_time && user_claims.is_none() {
-        return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
-    }
-
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);
 
-    if matches!(transfer_type, TransferType::P2p) && !is_one_time {
-        return Err(bad_request("P2P 전송은 일회용 전송만 지원합니다"));
+    let is_one_time = if matches!(transfer_type, TransferType::P2p) {
+        true
+    } else {
+        metadata.is_one_time.unwrap_or(false)
+    };
+
+    if is_one_time && user_claims.is_none() && !matches!(transfer_type, TransferType::P2p) {
+        return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
     }
 
     let expires_at = Utc::now() + expiration.to_duration();
