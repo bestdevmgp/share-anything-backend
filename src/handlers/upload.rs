@@ -351,7 +351,7 @@ pub async fn create_p2p_session(
         }
     };
 
-    let expires_at = Utc::now() + chrono::Duration::minutes(5);
+    let expires_at = Utc::now() + chrono::Duration::hours(24);
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
