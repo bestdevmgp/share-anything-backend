@@ -27,14 +27,31 @@ pub struct TurnCredentialsResponse {
 #[derive(Debug, Deserialize)]
 struct CloudflareIceServersResponse {
     #[serde(rename = "iceServers")]
-    ice_servers: CloudflareIceServers,
+    ice_servers: Vec<CloudflareIceServer>,
 }
 
 #[derive(Debug, Deserialize)]
-struct CloudflareIceServers {
-    urls: Vec<String>,
+struct CloudflareIceServer {
+    urls: StringOrVec,
     username: String,
     credential: String,
+}
+
+// Cloudflare API can return urls as either a string or array
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StringOrVec {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl StringOrVec {
+    fn into_vec(self) -> Vec<String> {
+        match self {
+            StringOrVec::Single(s) => vec![s],
+            StringOrVec::Multiple(v) => v,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -111,20 +128,23 @@ pub async fn get_turn_credentials(
     })?;
 
     // Build ICE servers list with Cloudflare STUN and TURN servers
-    let ice_servers = vec![
+    let mut ice_servers = vec![
         // Cloudflare free STUN server
         IceServer {
             urls: vec!["stun:stun.cloudflare.com:3478".to_string()],
             username: None,
             credential: None,
         },
-        // Cloudflare TURN server with credentials
-        IceServer {
-            urls: cf_response.ice_servers.urls,
-            username: Some(cf_response.ice_servers.username),
-            credential: Some(cf_response.ice_servers.credential),
-        },
     ];
+
+    // Add all TURN servers from Cloudflare response
+    for server in cf_response.ice_servers {
+        ice_servers.push(IceServer {
+            urls: server.urls.into_vec(),
+            username: Some(server.username),
+            credential: Some(server.credential),
+        });
+    }
 
     Ok(Json(TurnCredentialsResponse { ice_servers }))
 }
