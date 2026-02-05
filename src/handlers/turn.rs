@@ -33,8 +33,8 @@ struct CloudflareIceServersResponse {
 #[derive(Debug, Deserialize)]
 struct CloudflareIceServer {
     urls: StringOrVec,
-    username: String,
-    credential: String,
+    username: Option<String>,
+    credential: Option<String>,
 }
 
 // Cloudflare API can return urls as either a string or array
@@ -141,8 +141,8 @@ pub async fn get_turn_credentials(
     for server in cf_response.ice_servers {
         ice_servers.push(IceServer {
             urls: server.urls.into_vec(),
-            username: Some(server.username),
-            credential: Some(server.credential),
+            username: server.username,
+            credential: server.credential,
         });
     }
 
