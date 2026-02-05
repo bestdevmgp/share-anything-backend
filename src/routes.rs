@@ -144,6 +144,14 @@ pub fn create_router(
         .route("/p2p/status", get(handlers::p2p::check_uploader_status))
         .with_state(signaling_state);
 
+    let turn_state = handlers::turn::TurnState {
+        config: config.clone(),
+    };
+
+    let turn_routes = Router::new()
+        .route("/turn/credentials", get(handlers::turn::get_turn_credentials))
+        .with_state(turn_state);
+
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")
@@ -160,5 +168,6 @@ pub fn create_router(
         .merge(user_routes)
         .merge(ws_routes)
         .merge(p2p_routes)
+        .merge(turn_routes)
         .layer(cors)
 }

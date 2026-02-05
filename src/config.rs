@@ -10,6 +10,7 @@ pub struct Config {
     pub s3: S3Config,
     pub cors: CorsConfig,
     pub turnstile: TurnstileConfig,
+    pub cloudflare_turn: CloudflareTurnConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -61,6 +62,12 @@ pub struct CorsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TurnstileConfig {
     pub secret_key: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CloudflareTurnConfig {
+    pub key_id: String,
+    pub api_token: String,
 }
 
 impl Config {
@@ -126,6 +133,12 @@ impl Config {
             turnstile: TurnstileConfig {
                 secret_key: env::var("TURNSTILE_SECRET_KEY")
                     .expect("TURNSTILE_SECRET_KEY must be set in environment"),
+            },
+            cloudflare_turn: CloudflareTurnConfig {
+                key_id: env::var("CLOUDFLARE_TURN_KEY_ID")
+                    .expect("CLOUDFLARE_TURN_KEY_ID must be set in environment"),
+                api_token: env::var("CLOUDFLARE_TURN_API_TOKEN")
+                    .expect("CLOUDFLARE_TURN_API_TOKEN must be set in environment"),
             },
         };
 
