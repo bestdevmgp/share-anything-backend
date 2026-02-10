@@ -55,7 +55,7 @@ fn thumbnail_s3_key(prefix: &str, file_id: &str) -> String {
 }
 
 async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
-    let output = Command::new("ffmpeg")
+    let output = match Command::new("ffmpeg")
         .args([
             "-i", presigned_url,
             "-vframes", "1",
@@ -67,11 +67,22 @@ async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
         ])
         .output()
         .await
-        .ok()?;
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::error!("ffmpeg not found or failed to execute: {}", e);
+            return None;
+        }
+    };
 
     if output.status.success() && !output.stdout.is_empty() {
         Some(output.stdout)
     } else {
+        tracing::error!(
+            "ffmpeg failed: status={}, stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
         None
     }
 }
@@ -90,15 +101,33 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
         output_prefix.display()
     );
 
-    let result = Command::new("sh")
+    let result = match Command::new("sh")
         .args(["-c", &cmd])
         .output()
         .await
-        .ok()?;
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::error!("pdf thumbnail shell failed to execute: {}", e);
+            let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+            return None;
+        }
+    };
 
     let data = if result.status.success() {
-        tokio::fs::read(&output_file).await.ok()
+        match tokio::fs::read(&output_file).await {
+            Ok(d) => Some(d),
+            Err(e) => {
+                tracing::error!("pdf thumbnail file read failed: {}", e);
+                None
+            }
+        }
     } else {
+        tracing::error!(
+            "pdftoppm failed: status={}, stderr={}",
+            result.status,
+            String::from_utf8_lossy(&result.stderr)
+        );
         None
     };
 
@@ -107,6 +136,8 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
 }
 
 async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
+    tracing::info!("resolve_og_image: file_type={}, file_id={}", file.file_type, file.id);
+
     if is_image_type(&file.file_type) {
         return state
             .storage
@@ -118,6 +149,7 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
     let thumb_key = thumbnail_s3_key(&state.config.s3.prefix, &file.id);
 
     if state.storage.key_exists(&thumb_key).await {
+        tracing::info!("resolve_og_image: cached thumbnail found at {}", thumb_key);
         return state
             .storage
             .generate_presigned_get_url(&thumb_key, 3600, None)
@@ -125,11 +157,19 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
             .ok();
     }
 
-    let original_url = state
+    let original_url = match state
         .storage
         .generate_presigned_get_url(&file.storage_key, 600, None)
         .await
-        .ok()?;
+    {
+        Ok(url) => url,
+        Err(e) => {
+            tracing::error!("resolve_og_image: failed to get presigned url: {}", e);
+            return None;
+        }
+    };
+
+    tracing::info!("resolve_og_image: generating thumbnail for {}", file.file_type);
 
     let thumbnail_data = if is_video_type(&file.file_type) {
         generate_video_thumbnail(&original_url).await
@@ -137,13 +177,27 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
         generate_pdf_thumbnail(&original_url).await
     } else {
         None
-    }?;
+    };
 
-    state
+    let thumbnail_data = match thumbnail_data {
+        Some(d) => {
+            tracing::info!("resolve_og_image: thumbnail generated, size={} bytes", d.len());
+            d
+        }
+        None => {
+            tracing::error!("resolve_og_image: thumbnail generation failed for {}", file.file_type);
+            return None;
+        }
+    };
+
+    if let Err(e) = state
         .storage
         .upload_file(&thumb_key, thumbnail_data, "image/jpeg")
         .await
-        .ok()?;
+    {
+        tracing::error!("resolve_og_image: failed to upload thumbnail: {}", e);
+        return None;
+    }
 
     state
         .storage
