@@ -29,7 +29,8 @@ pub async fn get_og_page(
     Path(code): Path<String>,
 ) -> impl IntoResponse {
     let frontend_url = &state.config.server.frontend_url;
-    let redirect_url = format!("{}/download/{}", frontend_url.trim_end_matches('/'), code);
+    let og_url = format!("{}/download/{}", frontend_url.trim_end_matches('/'), code);
+    let redirect_url = format!("{}?r=1", og_url);
 
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
@@ -83,6 +84,7 @@ pub async fn get_og_page(
 
     let og_title_escaped = html_escape(&og_title);
     let og_description_escaped = html_escape(&og_description);
+    let og_url_escaped = html_escape(&og_url);
     let redirect_url_escaped = html_escape(&redirect_url);
     let og_image = format!(
         "{}/og-image.png",
@@ -101,21 +103,22 @@ pub async fn get_og_page(
 <meta property="og:title" content="{title}"/>
 <meta property="og:description" content="{description}"/>
 <meta property="og:image" content="{image}"/>
-<meta property="og:url" content="{url}"/>
+<meta property="og:url" content="{og_url}"/>
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="{title}"/>
 <meta name="twitter:description" content="{description}"/>
 <meta name="twitter:image" content="{image}"/>
-<meta http-equiv="refresh" content="0;url={url}"/>
+<meta http-equiv="refresh" content="0;url={redirect_url}"/>
 </head>
 <body>
-<script>window.location.replace("{url}");</script>
+<script>window.location.replace("{redirect_url}");</script>
 </body>
 </html>"#,
         title = og_title_escaped,
         description = og_description_escaped,
         image = html_escape(&og_image),
-        url = redirect_url_escaped,
+        og_url = og_url_escaped,
+        redirect_url = redirect_url_escaped,
     );
 
     (
