@@ -55,7 +55,7 @@ fn thumbnail_s3_key(prefix: &str, file_id: &str) -> String {
 }
 
 async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
-    let output = match Command::new("ffmpeg")
+    let output = Command::new("ffmpeg")
         .args([
             "-i", presigned_url,
             "-vframes", "1",
@@ -67,22 +67,11 @@ async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
         ])
         .output()
         .await
-    {
-        Ok(o) => o,
-        Err(e) => {
-            tracing::error!("ffmpeg not found or failed to execute: {}", e);
-            return None;
-        }
-    };
+        .ok()?;
 
     if output.status.success() && !output.stdout.is_empty() {
         Some(output.stdout)
     } else {
-        tracing::error!(
-            "ffmpeg failed: status={}, stderr={}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
         None
     }
 }
@@ -96,25 +85,14 @@ async fn generate_pdf_thumbnail(storage: StorageService, storage_key: String) ->
     let output_prefix = temp_dir.join("thumb");
     let output_file = temp_dir.join("thumb.jpg");
 
-    let download_result = storage.download_file(&storage_key).await.map_err(|e| e.to_string());
-    let pdf_data = match download_result {
-        Ok(d) => d,
-        Err(err_msg) => {
-            tracing::error!("pdf thumbnail: S3 download failed: {}", err_msg);
-            let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-            return None;
-        }
-    };
+    let pdf_data = storage.download_file(&storage_key).await.map_err(|e| e.to_string()).ok()?;
 
-    tracing::error!("pdf thumbnail: downloaded {} bytes from S3", pdf_data.len());
-
-    if let Err(e) = tokio::fs::write(&input_file, &pdf_data).await {
-        tracing::error!("pdf thumbnail: failed to write temp file: {}", e);
+    if tokio::fs::write(&input_file, &pdf_data).await.is_err() {
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
         return None;
     }
 
-    let result = match Command::new("pdftoppm")
+    let result = Command::new("pdftoppm")
         .args([
             "-jpeg", "-f", "1", "-l", "1", "-singlefile", "-scale-to", "1200",
             input_file.to_str().unwrap_or(""),
@@ -122,29 +100,11 @@ async fn generate_pdf_thumbnail(storage: StorageService, storage_key: String) ->
         ])
         .output()
         .await
-    {
-        Ok(o) => o,
-        Err(e) => {
-            tracing::error!("pdftoppm failed to execute: {}", e);
-            let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-            return None;
-        }
-    };
+        .ok()?;
 
     let data = if result.status.success() {
-        match tokio::fs::read(&output_file).await {
-            Ok(d) => Some(d),
-            Err(e) => {
-                tracing::error!("pdf thumbnail file read failed: {}", e);
-                None
-            }
-        }
+        tokio::fs::read(&output_file).await.ok()
     } else {
-        tracing::error!(
-            "pdftoppm failed: status={}, stderr={}",
-            result.status,
-            String::from_utf8_lossy(&result.stderr)
-        );
         None
     };
 
@@ -153,8 +113,6 @@ async fn generate_pdf_thumbnail(storage: StorageService, storage_key: String) ->
 }
 
 async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
-    tracing::info!("resolve_og_image: file_type={}, file_id={}", file.file_type, file.id);
-
     if is_image_type(&file.file_type) {
         return state
             .storage
@@ -166,7 +124,6 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
     let thumb_key = thumbnail_s3_key(&state.config.s3.prefix, &file.id);
 
     if state.storage.key_exists(&thumb_key).await {
-        tracing::info!("resolve_og_image: cached thumbnail found at {}", thumb_key);
         return state
             .storage
             .generate_presigned_get_url(&thumb_key, 3600, None)
@@ -175,43 +132,23 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
     }
 
     let thumbnail_data = if is_video_type(&file.file_type) {
-        let original_url = match state
+        let original_url = state
             .storage
             .generate_presigned_get_url(&file.storage_key, 600, None)
             .await
-        {
-            Ok(url) => url,
-            Err(e) => {
-                tracing::error!("resolve_og_image: failed to get presigned url: {}", e);
-                return None;
-            }
-        };
+            .ok()?;
         generate_video_thumbnail(&original_url).await
     } else if is_pdf_type(&file.file_type) {
         generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await
     } else {
         None
-    };
+    }?;
 
-    let thumbnail_data = match thumbnail_data {
-        Some(d) => {
-            tracing::info!("resolve_og_image: thumbnail generated, size={} bytes", d.len());
-            d
-        }
-        None => {
-            tracing::error!("resolve_og_image: thumbnail generation failed for {}", file.file_type);
-            return None;
-        }
-    };
-
-    if let Err(e) = state
+    state
         .storage
         .upload_file(&thumb_key, thumbnail_data, "image/jpeg")
         .await
-    {
-        tracing::error!("resolve_og_image: failed to upload thumbnail: {}", e);
-        return None;
-    }
+        .ok()?;
 
     state
         .storage
