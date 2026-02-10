@@ -92,23 +92,41 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
     let temp_dir = std::env::temp_dir().join(format!("og-pdf-{}", temp_id));
     tokio::fs::create_dir_all(&temp_dir).await.ok()?;
 
+    let input_file = temp_dir.join("input.pdf");
     let output_prefix = temp_dir.join("thumb");
     let output_file = temp_dir.join("thumb.jpg");
 
-    let cmd = format!(
-        "curl -sL '{}' | pdftoppm -jpeg -f 1 -l 1 -singlefile -scale-to 1200 /dev/stdin {}",
-        presigned_url,
-        output_prefix.display()
-    );
-
-    let result = match Command::new("sh")
-        .args(["-c", &cmd])
+    let curl_result = match Command::new("curl")
+        .args(["-sL", "-o", input_file.to_str().unwrap_or(""), presigned_url])
         .output()
         .await
     {
         Ok(o) => o,
         Err(e) => {
-            tracing::error!("pdf thumbnail shell failed to execute: {}", e);
+            tracing::error!("pdf thumbnail curl failed: {}", e);
+            let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+            return None;
+        }
+    };
+
+    if !curl_result.status.success() {
+        tracing::error!("pdf thumbnail curl failed: status={}", curl_result.status);
+        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+        return None;
+    }
+
+    let result = match Command::new("pdftoppm")
+        .args([
+            "-jpeg", "-f", "1", "-l", "1", "-singlefile", "-scale-to", "1200",
+            input_file.to_str().unwrap_or(""),
+            output_prefix.to_str().unwrap_or(""),
+        ])
+        .output()
+        .await
+    {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::error!("pdftoppm failed to execute: {}", e);
             let _ = tokio::fs::remove_dir_all(&temp_dir).await;
             return None;
         }
