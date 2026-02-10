@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Extension, Multipart, State},
+    extract::{Extension, Multipart, Request, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
@@ -330,8 +330,16 @@ pub struct CreateP2PSessionRequest {
 pub async fn create_p2p_session(
     State(state): State<UploadState>,
     headers: HeaderMap,
-    Json(request): Json<CreateP2PSessionRequest>,
+    request_parts: Request,
 ) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request_parts.extensions().get::<Claims>().cloned();
+
+    let body_bytes = axum::body::to_bytes(request_parts.into_body(), usize::MAX)
+        .await
+        .map_err(|_| bad_request("요청 본문을 읽을 수 없습니다"))?;
+
+    let request: CreateP2PSessionRequest = serde_json::from_slice(&body_bytes)
+        .map_err(|_| bad_request("잘못된 요청 형식입니다"))?;
     let client_ip = extract_client_ip(&headers);
     verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip))
         .await
@@ -359,7 +367,7 @@ pub async fn create_p2p_session(
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
-            None,
+            user_claims.as_ref().map(|c| c.sub.clone()),
             share_code.clone(),
             file_info.name.clone(),
             file_info.size,

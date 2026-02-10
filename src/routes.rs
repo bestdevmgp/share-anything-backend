@@ -95,6 +95,10 @@ pub fn create_router(
 
     let p2p_upload_routes = Router::new()
         .route("/file/p2p/create", post(handlers::upload::create_p2p_session))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            optional_auth,
+        ))
         .with_state(upload_state);
 
     let presigned_routes = Router::new()
@@ -155,10 +159,12 @@ pub fn create_router(
     let og_state = handlers::og::OgState {
         config: config.clone(),
         db: db.clone(),
+        storage: storage.clone(),
     };
 
     let og_routes = Router::new()
         .route("/og/:code", get(handlers::og::get_og_page))
+        .route("/og/:code/image", get(handlers::og::get_og_image))
         .with_state(og_state);
 
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
