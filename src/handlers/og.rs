@@ -87,7 +87,7 @@ async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
     }
 }
 
-async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
+async fn generate_pdf_thumbnail(storage: StorageService, storage_key: String) -> Option<Vec<u8>> {
     let temp_id = uuid::Uuid::new_v4().to_string();
     let temp_dir = std::env::temp_dir().join(format!("og-pdf-{}", temp_id));
     tokio::fs::create_dir_all(&temp_dir).await.ok()?;
@@ -96,30 +96,20 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
     let output_prefix = temp_dir.join("thumb");
     let output_file = temp_dir.join("thumb.jpg");
 
-    let curl_result = match Command::new("curl")
-        .args(["-sL", "-o", input_file.to_str().unwrap_or(""), presigned_url])
-        .output()
-        .await
-    {
-        Ok(o) => o,
-        Err(e) => {
-            tracing::error!("pdf thumbnail curl failed: {}", e);
+    let download_result = storage.download_file(&storage_key).await.map_err(|e| e.to_string());
+    let pdf_data = match download_result {
+        Ok(d) => d,
+        Err(err_msg) => {
+            tracing::error!("pdf thumbnail: S3 download failed: {}", err_msg);
             let _ = tokio::fs::remove_dir_all(&temp_dir).await;
             return None;
         }
     };
 
-    if !curl_result.status.success() {
-        tracing::error!("pdf thumbnail curl failed: status={}", curl_result.status);
-        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
-        return None;
-    }
+    tracing::error!("pdf thumbnail: downloaded {} bytes from S3", pdf_data.len());
 
-    let file_size = tokio::fs::metadata(&input_file).await.map(|m| m.len()).unwrap_or(0);
-    tracing::info!("pdf thumbnail: downloaded {} bytes to {:?}", file_size, input_file);
-
-    if file_size == 0 {
-        tracing::error!("pdf thumbnail: curl downloaded empty file, presigned_url length={}", presigned_url.len());
+    if let Err(e) = tokio::fs::write(&input_file, &pdf_data).await {
+        tracing::error!("pdf thumbnail: failed to write temp file: {}", e);
         let _ = tokio::fs::remove_dir_all(&temp_dir).await;
         return None;
     }
@@ -184,24 +174,21 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
             .ok();
     }
 
-    let original_url = match state
-        .storage
-        .generate_presigned_get_url(&file.storage_key, 600, None)
-        .await
-    {
-        Ok(url) => url,
-        Err(e) => {
-            tracing::error!("resolve_og_image: failed to get presigned url: {}", e);
-            return None;
-        }
-    };
-
-    tracing::info!("resolve_og_image: generating thumbnail for {}", file.file_type);
-
     let thumbnail_data = if is_video_type(&file.file_type) {
+        let original_url = match state
+            .storage
+            .generate_presigned_get_url(&file.storage_key, 600, None)
+            .await
+        {
+            Ok(url) => url,
+            Err(e) => {
+                tracing::error!("resolve_og_image: failed to get presigned url: {}", e);
+                return None;
+            }
+        };
         generate_video_thumbnail(&original_url).await
     } else if is_pdf_type(&file.file_type) {
-        generate_pdf_thumbnail(&original_url).await
+        generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await
     } else {
         None
     };
@@ -405,19 +392,18 @@ pub async fn get_og_image(
         }
     }
 
-    let original_url = match state
-        .storage
-        .generate_presigned_get_url(&file.storage_key, 600, None)
-        .await
-    {
-        Ok(url) => url,
-        Err(_) => return Redirect::temporary(&default_image).into_response(),
-    };
-
     let thumbnail_data = if is_video_type(&file.file_type) {
+        let original_url = match state
+            .storage
+            .generate_presigned_get_url(&file.storage_key, 600, None)
+            .await
+        {
+            Ok(url) => url,
+            Err(_) => return Redirect::temporary(&default_image).into_response(),
+        };
         generate_video_thumbnail(&original_url).await
     } else if is_pdf_type(&file.file_type) {
-        generate_pdf_thumbnail(&original_url).await
+        generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await
     } else {
         None
     };

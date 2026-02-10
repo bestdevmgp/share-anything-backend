@@ -10,7 +10,7 @@ FROM --platform=linux/amd64 debian:sid-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y ca-certificates ffmpeg poppler-utils curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates ffmpeg poppler-utils && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/share-anything ./share-anything
 
