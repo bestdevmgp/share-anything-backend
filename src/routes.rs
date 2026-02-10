@@ -152,6 +152,15 @@ pub fn create_router(
         .route("/turn/credentials", get(handlers::turn::get_turn_credentials))
         .with_state(turn_state);
 
+    let og_state = handlers::og::OgState {
+        config: config.clone(),
+        db: db.clone(),
+    };
+
+    let og_routes = Router::new()
+        .route("/og/{code}", get(handlers::og::get_og_page))
+        .with_state(og_state);
+
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")
@@ -169,5 +178,6 @@ pub fn create_router(
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)
+        .merge(og_routes)
         .layer(cors)
 }

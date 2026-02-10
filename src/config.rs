@@ -18,6 +18,7 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub base_url: String,
+    pub frontend_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -82,6 +83,8 @@ impl Config {
                     .parse()?,
                 base_url: env::var("BASE_URL")
                     .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+                frontend_url: env::var("FRONTEND_URL")
+                    .unwrap_or_else(|_| "http://localhost:3000".to_string()),
             },
             database: DatabaseConfig {
                 url: env::var("DATABASE_URL")
