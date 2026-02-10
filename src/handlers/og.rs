@@ -9,6 +9,7 @@ use tokio::process::Command;
 use crate::{
     config::Config,
     db::{repository, DbPool},
+    models::file_share::FileShare,
     services::StorageService,
 };
 
@@ -105,12 +106,57 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
     data
 }
 
+async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
+    if is_image_type(&file.file_type) {
+        return state
+            .storage
+            .generate_presigned_get_url(&file.storage_key, 3600, None)
+            .await
+            .ok();
+    }
+
+    let thumb_key = thumbnail_s3_key(&state.config.s3.prefix, &file.id);
+
+    if state.storage.key_exists(&thumb_key).await {
+        return state
+            .storage
+            .generate_presigned_get_url(&thumb_key, 3600, None)
+            .await
+            .ok();
+    }
+
+    let original_url = state
+        .storage
+        .generate_presigned_get_url(&file.storage_key, 600, None)
+        .await
+        .ok()?;
+
+    let thumbnail_data = if is_video_type(&file.file_type) {
+        generate_video_thumbnail(&original_url).await
+    } else if is_pdf_type(&file.file_type) {
+        generate_pdf_thumbnail(&original_url).await
+    } else {
+        None
+    }?;
+
+    state
+        .storage
+        .upload_file(&thumb_key, thumbnail_data, "image/jpeg")
+        .await
+        .ok()?;
+
+    state
+        .storage
+        .generate_presigned_get_url(&thumb_key, 3600, None)
+        .await
+        .ok()
+}
+
 pub async fn get_og_page(
     State(state): State<OgState>,
     Path(code): Path<String>,
 ) -> impl IntoResponse {
     let frontend_url = &state.config.server.frontend_url;
-    let backend_url = &state.config.server.base_url;
     let og_url = format!("{}/download/{}", frontend_url.trim_end_matches('/'), code);
     let redirect_url = format!("{}?r=1", og_url);
 
@@ -171,17 +217,15 @@ pub async fn get_og_page(
         }
     };
 
+    let default_image = format!(
+        "{}/og-image.png",
+        frontend_url.trim_end_matches('/')
+    );
+
     let og_image = if use_file_image {
-        format!(
-            "{}/og/{}/image",
-            backend_url.trim_end_matches('/'),
-            code
-        )
+        resolve_og_image(&state, &file_shares[0]).await.unwrap_or(default_image.clone())
     } else {
-        format!(
-            "{}/og-image.png",
-            frontend_url.trim_end_matches('/')
-        )
+        default_image.clone()
     };
 
     let og_title_escaped = html_escape(&og_title);
