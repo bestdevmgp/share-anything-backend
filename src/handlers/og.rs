@@ -115,6 +115,15 @@ async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
         return None;
     }
 
+    let file_size = tokio::fs::metadata(&input_file).await.map(|m| m.len()).unwrap_or(0);
+    tracing::info!("pdf thumbnail: downloaded {} bytes to {:?}", file_size, input_file);
+
+    if file_size == 0 {
+        tracing::error!("pdf thumbnail: curl downloaded empty file, presigned_url length={}", presigned_url.len());
+        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+        return None;
+    }
+
     let result = match Command::new("pdftoppm")
         .args([
             "-jpeg", "-f", "1", "-l", "1", "-singlefile", "-scale-to", "1200",
