@@ -3,6 +3,7 @@ use axum::{
     http::{header, StatusCode},
     response::{Html, IntoResponse, Redirect},
 };
+use std::io::Cursor;
 use std::sync::Arc;
 use tokio::process::Command;
 
@@ -40,8 +41,12 @@ fn is_video_type(file_type: &str) -> bool {
     file_type.starts_with("video/")
 }
 
+fn is_pptx_type(file_type: &str) -> bool {
+    file_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+}
+
 fn is_previewable(file_type: &str) -> bool {
-    is_image_type(file_type) || is_pdf_type(file_type) || is_video_type(file_type)
+    is_image_type(file_type) || is_pdf_type(file_type) || is_video_type(file_type) || is_pptx_type(file_type)
 }
 
 const MAX_THUMBNAIL_FILE_SIZE: i64 = 100 * 1024 * 1024;
@@ -112,6 +117,26 @@ async fn generate_pdf_thumbnail(storage: StorageService, storage_key: String) ->
     data
 }
 
+fn extract_pptx_thumbnail(data: &[u8]) -> Option<Vec<u8>> {
+    let cursor = Cursor::new(data);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    for path in &["docProps/thumbnail.jpeg", "docProps/thumbnail.png"] {
+        if let Ok(mut file) = archive.by_name(path) {
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut file, &mut buf).ok()?;
+            if !buf.is_empty() {
+                return Some(buf);
+            }
+        }
+    }
+    None
+}
+
+async fn generate_pptx_thumbnail(storage: StorageService, storage_key: String) -> Option<Vec<u8>> {
+    let pptx_data = storage.download_file(&storage_key).await.map_err(|e| e.to_string()).ok()?;
+    extract_pptx_thumbnail(&pptx_data)
+}
+
 async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
     if is_image_type(&file.file_type) {
         return state
@@ -131,22 +156,24 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
             .ok();
     }
 
-    let thumbnail_data = if is_video_type(&file.file_type) {
+    let (thumbnail_data, content_type) = if is_video_type(&file.file_type) {
         let original_url = state
             .storage
             .generate_presigned_get_url(&file.storage_key, 600, None)
             .await
             .ok()?;
-        generate_video_thumbnail(&original_url).await
+        (generate_video_thumbnail(&original_url).await?, "image/jpeg")
     } else if is_pdf_type(&file.file_type) {
-        generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await
+        (generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await?, "image/jpeg")
+    } else if is_pptx_type(&file.file_type) {
+        (generate_pptx_thumbnail(state.storage.clone(), file.storage_key.clone()).await?, "image/jpeg")
     } else {
-        None
-    }?;
+        return None;
+    };
 
     state
         .storage
-        .upload_file(&thumb_key, thumbnail_data, "image/jpeg")
+        .upload_file(&thumb_key, thumbnail_data, content_type)
         .await
         .ok()?;
 
@@ -341,6 +368,8 @@ pub async fn get_og_image(
         generate_video_thumbnail(&original_url).await
     } else if is_pdf_type(&file.file_type) {
         generate_pdf_thumbnail(state.storage.clone(), file.storage_key.clone()).await
+    } else if is_pptx_type(&file.file_type) {
+        generate_pptx_thumbnail(state.storage.clone(), file.storage_key.clone()).await
     } else {
         None
     };
