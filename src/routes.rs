@@ -158,7 +158,7 @@ pub fn create_router(
     };
 
     let og_routes = Router::new()
-        .route("/og/{code}", get(handlers::og::get_og_page))
+        .route("/og/:code", get(handlers::og::get_og_page))
         .with_state(og_state);
 
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
