@@ -158,6 +158,16 @@ impl StorageService {
         &self.bucket_name
     }
 
+    pub async fn key_exists(&self, key: &str) -> bool {
+        self.client
+            .head_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .send()
+            .await
+            .is_ok()
+    }
+
     // Multipart Upload Methods
 
     pub async fn create_multipart_upload(

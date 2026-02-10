@@ -4,6 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
 };
 use std::sync::Arc;
+use tokio::process::Command;
 
 use crate::{
     config::Config,
@@ -28,6 +29,80 @@ fn html_escape(s: &str) -> String {
 
 fn is_image_type(file_type: &str) -> bool {
     file_type.starts_with("image/") && file_type != "image/svg+xml"
+}
+
+fn is_pdf_type(file_type: &str) -> bool {
+    file_type == "application/pdf"
+}
+
+fn is_video_type(file_type: &str) -> bool {
+    file_type.starts_with("video/")
+}
+
+fn is_previewable(file_type: &str) -> bool {
+    is_image_type(file_type) || is_pdf_type(file_type) || is_video_type(file_type)
+}
+
+const MAX_THUMBNAIL_FILE_SIZE: i64 = 100 * 1024 * 1024;
+
+fn thumbnail_s3_key(prefix: &str, file_id: &str) -> String {
+    if prefix.is_empty() {
+        format!("og-thumb/{}.jpg", file_id)
+    } else {
+        format!("{}og-thumb/{}.jpg", prefix.trim_end_matches('/'), file_id)
+    }
+}
+
+async fn generate_video_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
+    let output = Command::new("ffmpeg")
+        .args([
+            "-i", presigned_url,
+            "-vframes", "1",
+            "-f", "image2pipe",
+            "-vcodec", "mjpeg",
+            "-q:v", "5",
+            "-vf", "scale=1200:-1",
+            "pipe:1",
+        ])
+        .output()
+        .await
+        .ok()?;
+
+    if output.status.success() && !output.stdout.is_empty() {
+        Some(output.stdout)
+    } else {
+        None
+    }
+}
+
+async fn generate_pdf_thumbnail(presigned_url: &str) -> Option<Vec<u8>> {
+    let temp_id = uuid::Uuid::new_v4().to_string();
+    let temp_dir = std::env::temp_dir().join(format!("og-pdf-{}", temp_id));
+    tokio::fs::create_dir_all(&temp_dir).await.ok()?;
+
+    let output_prefix = temp_dir.join("thumb");
+    let output_file = temp_dir.join("thumb.jpg");
+
+    let cmd = format!(
+        "curl -sL '{}' | pdftoppm -jpeg -f 1 -l 1 -singlefile -scale-to 1200 /dev/stdin {}",
+        presigned_url,
+        output_prefix.display()
+    );
+
+    let result = Command::new("sh")
+        .args(["-c", &cmd])
+        .output()
+        .await
+        .ok()?;
+
+    let data = if result.status.success() {
+        tokio::fs::read(&output_file).await.ok()
+    } else {
+        None
+    };
+
+    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    data
 }
 
 pub async fn get_og_page(
@@ -80,11 +155,12 @@ pub async fn get_og_page(
                 false,
             )
         } else if file_shares.len() == 1 {
-            let is_image = is_image_type(&first.file_type);
+            let previewable = is_previewable(&first.file_type)
+                && first.file_size <= MAX_THUMBNAIL_FILE_SIZE;
             (
                 format!("ShareAnything - {}", first.file_name),
                 "파일이 공유되었습니다. 링크를 열어 다운로드하세요.".to_string(),
-                is_image,
+                previewable,
             )
         } else {
             (
@@ -173,19 +249,70 @@ pub async fn get_og_image(
 
     if file_shares.len() != 1
         || file_shares[0].password_hash.is_some()
-        || !is_image_type(&file_shares[0].file_type)
+        || !is_previewable(&file_shares[0].file_type)
+        || file_shares[0].file_size > MAX_THUMBNAIL_FILE_SIZE
     {
         return Redirect::temporary(&default_image).into_response();
     }
 
     let file = &file_shares[0];
 
-    match state
+    if is_image_type(&file.file_type) {
+        return match state
+            .storage
+            .generate_presigned_get_url(&file.storage_key, 3600, None)
+            .await
+        {
+            Ok(url) => Redirect::temporary(&url).into_response(),
+            Err(_) => Redirect::temporary(&default_image).into_response(),
+        };
+    }
+
+    let thumb_key = thumbnail_s3_key(&state.config.s3.prefix, &file.id);
+
+    if state.storage.key_exists(&thumb_key).await {
+        if let Ok(url) = state
+            .storage
+            .generate_presigned_get_url(&thumb_key, 3600, None)
+            .await
+        {
+            return Redirect::temporary(&url).into_response();
+        }
+    }
+
+    let original_url = match state
         .storage
-        .generate_presigned_get_url(&file.storage_key, 3600, None)
+        .generate_presigned_get_url(&file.storage_key, 600, None)
         .await
     {
-        Ok(presigned_url) => Redirect::temporary(&presigned_url).into_response(),
-        Err(_) => Redirect::temporary(&default_image).into_response(),
+        Ok(url) => url,
+        Err(_) => return Redirect::temporary(&default_image).into_response(),
+    };
+
+    let thumbnail_data = if is_video_type(&file.file_type) {
+        generate_video_thumbnail(&original_url).await
+    } else if is_pdf_type(&file.file_type) {
+        generate_pdf_thumbnail(&original_url).await
+    } else {
+        None
+    };
+
+    if let Some(data) = thumbnail_data {
+        if state
+            .storage
+            .upload_file(&thumb_key, data, "image/jpeg")
+            .await
+            .is_ok()
+        {
+            if let Ok(url) = state
+                .storage
+                .generate_presigned_get_url(&thumb_key, 3600, None)
+                .await
+            {
+                return Redirect::temporary(&url).into_response();
+            }
+        }
     }
+
+    Redirect::temporary(&default_image).into_response()
 }
