@@ -59,6 +59,12 @@ pub enum SignalingMessage {
     DownloaderOffline {
         share_code: String,
     },
+    DownloaderArrived {
+        share_code: String,
+        peer_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        device_info: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

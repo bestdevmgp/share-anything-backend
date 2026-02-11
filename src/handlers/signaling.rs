@@ -140,6 +140,13 @@ async fn handle_message(
             )
             .await?;
         }
+        SignalingMessage::DownloaderArrived {
+            share_code,
+            peer_id: _,
+            device_info,
+        } => {
+            handle_downloader_arrived(share_code, peer_id, device_info, state).await?;
+        }
         SignalingMessage::TransferComplete { share_code } => {
             handle_transfer_complete(share_code, db).await?;
         }
@@ -205,6 +212,30 @@ async fn handle_downloader_join(
     )?;
 
     repository::update_p2p_status(db, &share_code, "connected", None).await?;
+
+    Ok(())
+}
+
+async fn handle_downloader_arrived(
+    share_code: String,
+    peer_id: &str,
+    device_info: Option<String>,
+    state: &SignalingState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let uploader_peer_id = state
+        .find_uploader(&share_code)
+        .ok_or("Uploader is not online")?;
+
+    state.register_arrived_downloader(peer_id.to_string(), share_code.clone());
+
+    state.send_to_peer(
+        &uploader_peer_id,
+        SignalingMessage::DownloaderArrived {
+            share_code,
+            peer_id: peer_id.to_string(),
+            device_info,
+        },
+    )?;
 
     Ok(())
 }
@@ -311,6 +342,19 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         }
         state.remove_downloader(&share_code);
         let _ = repository::update_p2p_status(db, &share_code, "waiting", None).await;
+    }
+
+    if let Some((_, share_code)) = state.remove_arrived_downloader(peer_id) {
+        if state.find_downloader(&share_code).is_none() {
+            if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
+                let _ = state.send_to_peer(
+                    &uploader_peer_id,
+                    SignalingMessage::DownloaderOffline {
+                        share_code,
+                    },
+                );
+            }
+        }
     }
 
     state.remove_connection(peer_id);
