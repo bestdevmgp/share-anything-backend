@@ -770,39 +770,47 @@ pub async fn get_download_url(
         }
     }
 
-    let user_claims = request.extensions().get::<Claims>().cloned();
+    let preview = params
+        .get("preview")
+        .and_then(|v| v.as_str())
+        .unwrap_or("false")
+        == "true";
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| {
-            headers
-                .get("X-Real-IP")
-                .and_then(|v| v.to_str().ok())
-        })
-        .unwrap_or("unknown")
-        .to_string();
+    if !preview {
+        let user_claims = request.extensions().get::<Claims>().cloned();
 
-    let user_agent = headers
-        .get(header::USER_AGENT)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        let ip_address = headers
+            .get("X-Forwarded-For")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.split(',').next())
+            .map(|s| s.trim())
+            .or_else(|| {
+                headers
+                    .get("X-Real-IP")
+                    .and_then(|v| v.to_str().ok())
+            })
+            .unwrap_or("unknown")
+            .to_string();
 
-    let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
+        let user_agent = headers
+            .get(header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
 
-    let _ = repository::create_download_log(
-        &state.db,
-        CreateDownloadLogDto {
-            file_share_id: file_share.id.clone(),
-            downloader_user_id: user_claims.map(|c| c.sub),
-            ip_address,
-            user_agent,
-        },
-        device_platform,
-    )
-    .await;
+        let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
+
+        let _ = repository::create_download_log(
+            &state.db,
+            CreateDownloadLogDto {
+                file_share_id: file_share.id.clone(),
+                downloader_user_id: user_claims.map(|c| c.sub),
+                ip_address,
+                user_agent,
+            },
+            device_platform,
+        )
+        .await;
+    }
 
     let inline = params
         .get("inline")
