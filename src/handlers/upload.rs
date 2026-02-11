@@ -314,6 +314,7 @@ pub struct P2PFileInfo {
 pub struct CreateP2PSessionRequest {
     pub files: Vec<P2PFileInfo>,
     pub turnstile_token: String,
+    pub password: Option<String>,
 }
 
 #[utoipa::path(
@@ -349,6 +350,15 @@ pub async fn create_p2p_session(
         return Err(bad_request("파일 정보가 필요합니다"));
     }
 
+    let password_hash = if let Some(password) = &request.password {
+        Some(
+            bcrypt::hash(password, bcrypt::DEFAULT_COST)
+                .map_err(|_| internal_error("비밀번호 해싱 실패"))?,
+        )
+    } else {
+        None
+    };
+
     let share_code = loop {
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
@@ -375,7 +385,7 @@ pub async fn create_p2p_session(
             "p2p".to_string(),
             String::new(),
             None,
-            None,
+            password_hash.clone(),
             true,
             expires_at,
         )
