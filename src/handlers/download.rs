@@ -804,12 +804,20 @@ pub async fn get_download_url(
     )
     .await;
 
+    let inline = params
+        .get("inline")
+        .and_then(|v| v.as_str())
+        .unwrap_or("false")
+        == "true";
+
+    let file_name_param = if inline { None } else { Some(file_share.file_name.as_str()) };
+
     let download_url = state
         .storage
         .generate_presigned_get_url(
             &file_share.storage_key,
             DOWNLOAD_URL_EXPIRY_SECS,
-            Some(&file_share.file_name),
+            file_name_param,
         )
         .await
         .map_err(|e| internal_error(format!("다운로드 URL 생성 실패: {}", e)))?;
