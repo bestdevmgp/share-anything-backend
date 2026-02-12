@@ -150,6 +150,16 @@ async fn handle_message(
         SignalingMessage::TransferComplete { share_code } => {
             handle_transfer_complete(share_code, db).await?;
         }
+        SignalingMessage::UploaderCancelled { share_code } => {
+            if let Some(downloader_peer_id) = state.find_downloader(&share_code) {
+                let _ = state.send_to_peer(
+                    &downloader_peer_id,
+                    SignalingMessage::UploaderCancelled {
+                        share_code: share_code.clone(),
+                    },
+                );
+            }
+        }
         _ => {}
     }
 

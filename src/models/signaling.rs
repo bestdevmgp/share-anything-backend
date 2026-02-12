@@ -65,6 +65,9 @@ pub enum SignalingMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         device_info: Option<String>,
     },
+    UploaderCancelled {
+        share_code: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
