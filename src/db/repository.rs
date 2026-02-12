@@ -118,7 +118,7 @@ pub async fn find_file_share_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > NOW()
+        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
         LIMIT 1
         "#,
     )
@@ -134,7 +134,7 @@ pub async fn find_file_shares_by_code(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > NOW()
+        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
         ORDER BY created_at ASC
         "#,
     )
@@ -153,7 +153,7 @@ pub async fn find_file_shares_by_ids(
 
     let placeholders = vec!["?"; ids.len()].join(",");
     let query_str = format!(
-        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > NOW()",
+        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > UTC_TIMESTAMP()",
         placeholders
     );
 
@@ -222,7 +222,7 @@ pub async fn delete_expired_file_shares(
     let expired_files = sqlx::query_as::<_, (String,)>(
         r#"
         SELECT storage_key FROM file_shares
-        WHERE expires_at <= NOW()
+        WHERE expires_at <= UTC_TIMESTAMP()
         "#,
     )
     .fetch_all(pool)
@@ -232,7 +232,7 @@ pub async fn delete_expired_file_shares(
 
     sqlx::query(
         r#"
-        DELETE FROM file_shares WHERE expires_at <= NOW()
+        DELETE FROM file_shares WHERE expires_at <= UTC_TIMESTAMP()
         "#,
     )
     .execute(pool)
@@ -333,7 +333,7 @@ pub async fn update_p2p_status(
     sqlx::query(
         r#"
         UPDATE file_shares
-        SET p2p_status = ?, uploader_peer_id = ?, updated_at = NOW()
+        SET p2p_status = ?, uploader_peer_id = ?, updated_at = UTC_TIMESTAMP()
         WHERE share_code = ?
         "#,
     )
@@ -448,7 +448,7 @@ pub async fn delete_expired_upload_sessions(
 ) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         r#"
-        DELETE FROM upload_sessions WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)
+        DELETE FROM upload_sessions WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 HOUR)
         "#,
     )
     .execute(pool)

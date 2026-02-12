@@ -28,5 +28,6 @@ pub struct DownloadLogResponse {
     pub downloader_name: Option<String>, // If logged in user
     pub ip_address: String,
     pub device_platform: String,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub downloaded_at: DateTime<Utc>,
 }
