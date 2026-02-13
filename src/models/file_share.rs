@@ -19,6 +19,7 @@ pub struct FileShare {
     pub description: Option<String>,
     pub password_hash: Option<String>,
     pub is_one_time: bool,
+    pub is_quick_access: bool,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -285,4 +286,30 @@ pub struct CompleteMultipartUploadRequest {
     pub upload_session_id: String,
     pub share_code: String,
     pub files: Vec<CompleteMultipartFileInfo>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct QuickAccessUploadRequest {
+    pub files: Vec<MultipartUploadFileInfo>,
+    pub chunk_size: i64,
+    pub device_info: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct QuickAccessFileResponse {
+    pub id: String,
+    pub file_name: String,
+    pub file_size: i64,
+    pub file_type: String,
+    pub storage_key: String,
+    pub uploaded_from: Option<String>,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
+    pub expires_at: DateTime<Utc>,
+    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct QuickAccessListResponse {
+    pub files: Vec<QuickAccessFileResponse>,
 }

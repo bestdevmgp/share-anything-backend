@@ -133,6 +133,24 @@ pub fn create_router(
         ))
         .with_state(download_state);
 
+    let quick_access_state = handlers::quick_access::QuickAccessState {
+        config: config.clone(),
+        db: db.clone(),
+        storage: storage.clone(),
+    };
+
+    let quick_access_routes = Router::new()
+        .route("/user/quick-access/init", post(handlers::quick_access::init_quick_access_upload))
+        .route("/user/quick-access", get(handlers::quick_access::list_quick_access_files))
+        .route("/user/quick-access/:file_id", delete(handlers::quick_access::delete_quick_access_file))
+        .route("/user/quick-access/preview/:file_id", get(handlers::quick_access::preview_quick_access_file))
+        .route("/user/quick-access/download/:file_id", get(handlers::quick_access::download_quick_access_file))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            require_auth,
+        ))
+        .with_state(quick_access_state);
+
     let user_routes = Router::new()
         .route("/user/uploads", get(handlers::user::get_upload_history))
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
@@ -181,6 +199,7 @@ pub fn create_router(
         .merge(presigned_routes)
         .merge(download_routes)
         .merge(user_routes)
+        .merge(quick_access_routes)
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)

@@ -77,6 +77,7 @@ pub async fn create_file_share(
     description: Option<String>,
     password_hash: Option<String>,
     is_one_time: bool,
+    is_quick_access: bool,
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
@@ -86,8 +87,8 @@ pub async fn create_file_share(
         r#"
         INSERT INTO file_shares
         (id, share_group_id, user_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
-         description, password_hash, is_one_time, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -102,6 +103,7 @@ pub async fn create_file_share(
     .bind(&description)
     .bind(&password_hash)
     .bind(is_one_time)
+    .bind(is_quick_access)
     .bind(expires_at)
     .bind(now)
     .bind(now)
@@ -188,7 +190,7 @@ pub async fn find_file_shares_by_user(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE user_id = ?
+        WHERE user_id = ? AND is_quick_access = false
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
         "#,
@@ -196,6 +198,22 @@ pub async fn find_file_shares_by_user(
     .bind(user_id)
     .bind(limit)
     .bind(offset)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn find_quick_access_files_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<FileShare>, sqlx::Error> {
+    sqlx::query_as::<_, FileShare>(
+        r#"
+        SELECT * FROM file_shares
+        WHERE user_id = ? AND is_quick_access = true AND expires_at > UTC_TIMESTAMP()
+        ORDER BY created_at DESC
+        "#,
+    )
+    .bind(user_id)
     .fetch_all(pool)
     .await
 }
@@ -372,6 +390,7 @@ pub struct UploadSession {
     pub description: Option<String>,
     pub password_hash: Option<String>,
     pub is_one_time: bool,
+    pub is_quick_access: bool,
     pub expiration_period: String,
     pub expires_at: chrono::DateTime<Utc>,
     pub completed: bool,
@@ -386,6 +405,7 @@ pub async fn create_upload_session(
     description: Option<&str>,
     password_hash: Option<&str>,
     is_one_time: bool,
+    is_quick_access: bool,
     expiration_period: &str,
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
@@ -394,8 +414,8 @@ pub async fn create_upload_session(
     sqlx::query(
         r#"
         INSERT INTO upload_sessions
-        (id, share_code, user_id, description, password_hash, is_one_time, expiration_period, expires_at, completed, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, false, ?)
+        (id, share_code, user_id, description, password_hash, is_one_time, is_quick_access, expiration_period, expires_at, completed, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
         "#,
     )
     .bind(id)
@@ -404,6 +424,7 @@ pub async fn create_upload_session(
     .bind(description)
     .bind(password_hash)
     .bind(is_one_time)
+    .bind(is_quick_access)
     .bind(expiration_period)
     .bind(expires_at)
     .bind(now)

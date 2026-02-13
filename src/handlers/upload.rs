@@ -260,6 +260,7 @@ pub async fn upload_file(
             metadata.description.clone(),
             password_hash.clone(),
             is_one_time,
+            false,
             expires_at,
         )
         .await
@@ -387,6 +388,7 @@ pub async fn create_p2p_session(
             None,
             password_hash.clone(),
             true,
+            false,
             expires_at,
         )
         .await

@@ -144,6 +144,7 @@ pub async fn request_presigned_upload(
         request.description.as_deref(),
         password_hash.as_deref(),
         is_one_time,
+        false,
         &expiration_period_str,
         session_expires_at,
     )
@@ -202,6 +203,7 @@ pub async fn complete_presigned_upload(
             session.description.clone(),
             session.password_hash.clone(),
             session.is_one_time,
+            session.is_quick_access,
             expires_at,
         )
         .await
@@ -372,6 +374,7 @@ pub async fn init_multipart_upload(
         request.description.as_deref(),
         password_hash.as_deref(),
         is_one_time,
+        false,
         &expiration_period_str,
         session_expires_at,
     )
@@ -491,6 +494,7 @@ pub async fn complete_multipart_upload(
             session.description.clone(),
             session.password_hash.clone(),
             session.is_one_time,
+            session.is_quick_access,
             expires_at,
         )
         .await
