@@ -510,6 +510,7 @@ struct KakaoUserInfo {
 
 #[derive(Debug, Deserialize)]
 struct KakaoAccount {
+    email: Option<String>,
     profile: Option<KakaoProfile>,
 }
 
@@ -544,6 +545,7 @@ pub async fn kakao_login(
         .authorize_url(|| CsrfToken::new(frontend_callback))
         .add_scope(Scope::new("profile_nickname".to_string()))
         .add_scope(Scope::new("profile_image".to_string()))
+        .add_scope(Scope::new("account_email".to_string()))
         .url();
 
     Redirect::temporary(auth_url.as_str())
@@ -640,13 +642,14 @@ pub async fn kakao_callback_handler(
 
     let kakao_user_id = user_info.id.to_string();
     let account = user_info.kakao_account.unwrap_or(KakaoAccount {
+        email: None,
         profile: None,
     });
     let profile = account.profile.unwrap_or(KakaoProfile {
         nickname: None,
         profile_image_url: None,
     });
-    let email = String::new();
+    let email = account.email.unwrap_or_default();
     let name = profile.nickname.unwrap_or_else(|| "Kakao User".to_string());
     let profile_image = profile.profile_image_url;
 
