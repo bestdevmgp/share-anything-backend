@@ -36,6 +36,17 @@ pub struct JwtConfig {
 pub struct OAuthConfig {
     pub google: OAuthProvider,
     pub naver: OAuthProvider,
+    pub kakao: OAuthProvider,
+    pub apple: AppleOAuthConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppleOAuthConfig {
+    pub client_id: String,
+    pub team_id: String,
+    pub key_id: String,
+    pub private_key: String,
+    pub redirect_uri: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -113,6 +124,26 @@ impl Config {
                         .expect("NAVER_CLIENT_SECRET must be set"),
                     redirect_uri: env::var("NAVER_REDIRECT_URI")
                         .expect("NAVER_REDIRECT_URI must be set"),
+                },
+                kakao: OAuthProvider {
+                    client_id: env::var("KAKAO_CLIENT_ID")
+                        .expect("KAKAO_CLIENT_ID must be set"),
+                    client_secret: env::var("KAKAO_CLIENT_SECRET")
+                        .expect("KAKAO_CLIENT_SECRET must be set"),
+                    redirect_uri: env::var("KAKAO_REDIRECT_URI")
+                        .expect("KAKAO_REDIRECT_URI must be set"),
+                },
+                apple: AppleOAuthConfig {
+                    client_id: env::var("APPLE_CLIENT_ID")
+                        .expect("APPLE_CLIENT_ID must be set"),
+                    team_id: env::var("APPLE_TEAM_ID")
+                        .expect("APPLE_TEAM_ID must be set"),
+                    key_id: env::var("APPLE_KEY_ID")
+                        .expect("APPLE_KEY_ID must be set"),
+                    private_key: env::var("APPLE_PRIVATE_KEY")
+                        .expect("APPLE_PRIVATE_KEY must be set"),
+                    redirect_uri: env::var("APPLE_REDIRECT_URI")
+                        .expect("APPLE_REDIRECT_URI must be set"),
                 },
             },
             s3: S3Config {

@@ -2,8 +2,9 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
-    Json,
+    Form, Json,
 };
+use base64::{engine::general_purpose, Engine as _};
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
     RedirectUrl, Scope, TokenResponse, TokenUrl,
@@ -485,9 +486,562 @@ async fn fetch_naver_user_info(
     Ok(user_info)
 }
 
-// ============================================================================
-// Response Types
-// ============================================================================
+// Kakao OAuth
+#[derive(Debug, Deserialize)]
+pub struct KakaoCallbackQuery {
+    code: String,
+    state: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct KakaoTokenResponse {
+    access_token: String,
+    #[allow(dead_code)]
+    token_type: String,
+    #[allow(dead_code)]
+    expires_in: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct KakaoUserInfo {
+    id: i64,
+    kakao_account: Option<KakaoAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KakaoAccount {
+    profile: Option<KakaoProfile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KakaoProfile {
+    nickname: Option<String>,
+    profile_image_url: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/kakao",
+    tag = "auth",
+    params(
+        ("redirect_uri" = Option<String>, Query, description = "Frontend callback URL")
+    ),
+    responses(
+        (status = 302, description = "Redirect to Kakao OAuth login page")
+    )
+)]
+pub async fn kakao_login(
+    State(state): State<AppState>,
+    Query(query): Query<OAuthLoginQuery>,
+) -> impl IntoResponse {
+    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
+        format!("{}/auth/callback/kakao", state.config.server.base_url)
+    });
+
+    let client = create_kakao_oauth_client(&state.config);
+
+    let (auth_url, _csrf_token) = client
+        .authorize_url(|| CsrfToken::new(frontend_callback))
+        .add_scope(Scope::new("profile_nickname".to_string()))
+        .add_scope(Scope::new("profile_image".to_string()))
+        .url();
+
+    Redirect::temporary(auth_url.as_str())
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/kakao/callback",
+    tag = "auth",
+    params(
+        ("code" = String, Query, description = "OAuth authorization code"),
+        ("state" = String, Query, description = "Frontend callback URL")
+    ),
+    responses(
+        (status = 302, description = "Redirect to frontend with code and state"),
+        (status = 401, description = "Authentication failed")
+    )
+)]
+pub async fn kakao_callback(
+    State(_state): State<AppState>,
+    Query(query): Query<KakaoCallbackQuery>,
+) -> impl IntoResponse {
+    let frontend_callback = &query.state;
+
+    let redirect_url = format!(
+        "{}?code={}&state={}",
+        frontend_callback, query.code, query.state
+    );
+
+    Redirect::temporary(&redirect_url)
+}
+
+/// Frontend calls this with the code to get the token
+#[utoipa::path(
+    get,
+    path = "/auth/callback/kakao",
+    tag = "auth",
+    params(
+        ("code" = String, Query, description = "OAuth authorization code"),
+        ("state" = String, Query, description = "CSRF token state")
+    ),
+    responses(
+        (status = 200, description = "Successful authentication", body = AuthResponse),
+        (status = 401, description = "Authentication failed")
+    )
+)]
+pub async fn kakao_callback_handler(
+    State(state): State<AppState>,
+    Query(query): Query<KakaoCallbackQuery>,
+) -> Result<Json<AuthResponse>, StatusCode> {
+    let http_client = reqwest::Client::new();
+    let token_response = http_client
+        .post("https://kauth.kakao.com/oauth/token")
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", state.config.oauth.kakao.client_id.as_str()),
+            ("client_secret", state.config.oauth.kakao.client_secret.as_str()),
+            ("code", query.code.as_str()),
+            ("redirect_uri", state.config.oauth.kakao.redirect_uri.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Kakao OAuth token request failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if !token_response.status().is_success() {
+        let status = token_response.status();
+        let body = token_response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read body".to_string());
+        tracing::error!("Kakao token exchange failed {}: {}", status, body);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let body_text = token_response.text().await.map_err(|e| {
+        tracing::error!("Failed to read Kakao token response: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let kakao_token: KakaoTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
+        tracing::error!("Failed to parse Kakao token response: {} - body: {}", e, body_text);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let user_info = fetch_kakao_user_info(&kakao_token.access_token)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch Kakao user info: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let kakao_user_id = user_info.id.to_string();
+    let account = user_info.kakao_account.unwrap_or(KakaoAccount {
+        profile: None,
+    });
+    let profile = account.profile.unwrap_or(KakaoProfile {
+        nickname: None,
+        profile_image_url: None,
+    });
+    let email = String::new();
+    let name = profile.nickname.unwrap_or_else(|| "Kakao User".to_string());
+    let profile_image = profile.profile_image_url;
+
+    let user = match repository::find_user_by_oauth(
+        &state.db,
+        &OAuthProvider::Kakao,
+        &kakao_user_id,
+    )
+    .await
+    {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let dto = CreateUserDto {
+                oauth_provider: OAuthProvider::Kakao,
+                oauth_id: kakao_user_id,
+                email,
+                name,
+                profile_image,
+            };
+
+            repository::create_user(&state.db, dto)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to create user: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+        }
+        Err(e) => {
+            tracing::error!("Database query failed: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let jwt = create_jwt(
+        &user.id,
+        &user.email,
+        &user.name,
+        &state.config.jwt.secret,
+        state.config.jwt.expiration_hours,
+    )
+    .map_err(|e| {
+        tracing::error!("JWT creation failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(AuthResponse {
+        token: jwt,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            profile_image: user.profile_image,
+        },
+    }))
+}
+
+fn create_kakao_oauth_client(config: &Config) -> BasicClient {
+    BasicClient::new(
+        ClientId::new(config.oauth.kakao.client_id.clone()),
+        Some(ClientSecret::new(
+            config.oauth.kakao.client_secret.clone(),
+        )),
+        AuthUrl::new("https://kauth.kakao.com/oauth/authorize".to_string()).unwrap(),
+        Some(TokenUrl::new("https://kauth.kakao.com/oauth/token".to_string()).unwrap()),
+    )
+    .set_redirect_uri(RedirectUrl::new(config.oauth.kakao.redirect_uri.clone()).unwrap())
+}
+
+async fn fetch_kakao_user_info(
+    access_token: &str,
+) -> Result<KakaoUserInfo, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://kapi.kakao.com/v2/user/me")
+        .bearer_auth(access_token)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read body".to_string());
+        return Err(format!("Kakao API error: {} - {}", status, body).into());
+    }
+
+    let user_info = response.json::<KakaoUserInfo>().await?;
+    Ok(user_info)
+}
+
+// Apple OAuth
+#[derive(Debug, Deserialize)]
+pub struct AppleCallbackForm {
+    code: String,
+    state: String,
+    user: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AppleCallbackHandlerQuery {
+    code: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    state: Option<String>,
+    apple_user: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppleUserFormInfo {
+    name: Option<AppleNameInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppleNameInfo {
+    #[serde(rename = "firstName")]
+    first_name: Option<String>,
+    #[serde(rename = "lastName")]
+    last_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppleTokenResponse {
+    #[allow(dead_code)]
+    access_token: String,
+    id_token: String,
+    #[allow(dead_code)]
+    token_type: String,
+    #[allow(dead_code)]
+    expires_in: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppleIdTokenClaims {
+    sub: String,
+    email: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/apple",
+    tag = "auth",
+    params(
+        ("redirect_uri" = Option<String>, Query, description = "Frontend callback URL")
+    ),
+    responses(
+        (status = 302, description = "Redirect to Apple OAuth login page")
+    )
+)]
+pub async fn apple_login(
+    State(state): State<AppState>,
+    Query(query): Query<OAuthLoginQuery>,
+) -> impl IntoResponse {
+    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
+        format!("{}/auth/callback/apple", state.config.server.base_url)
+    });
+
+    let client = create_apple_oauth_client(&state.config);
+
+    let (auth_url, _csrf_token) = client
+        .authorize_url(|| CsrfToken::new(frontend_callback))
+        .add_scope(Scope::new("name".to_string()))
+        .add_scope(Scope::new("email".to_string()))
+        .add_extra_param("response_mode", "form_post")
+        .url();
+
+    Redirect::temporary(auth_url.as_str())
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/apple/callback",
+    tag = "auth",
+    responses(
+        (status = 302, description = "Redirect to frontend with code and state"),
+        (status = 401, description = "Authentication failed")
+    )
+)]
+pub async fn apple_callback(
+    State(_state): State<AppState>,
+    Form(form): Form<AppleCallbackForm>,
+) -> impl IntoResponse {
+    let frontend_callback = &form.state;
+
+    let mut redirect_url = format!(
+        "{}?code={}&state=apple",
+        frontend_callback, form.code
+    );
+
+    if let Some(user) = &form.user {
+        redirect_url = format!(
+            "{}&apple_user={}",
+            redirect_url,
+            percent_encoding::utf8_percent_encode(user, percent_encoding::NON_ALPHANUMERIC)
+        );
+    }
+
+    Redirect::temporary(&redirect_url)
+}
+
+/// Frontend calls this with the code to get the token
+#[utoipa::path(
+    get,
+    path = "/auth/callback/apple",
+    tag = "auth",
+    params(
+        ("code" = String, Query, description = "OAuth authorization code"),
+        ("state" = Option<String>, Query, description = "CSRF token state"),
+        ("apple_user" = Option<String>, Query, description = "Apple user info JSON (first auth only)")
+    ),
+    responses(
+        (status = 200, description = "Successful authentication", body = AuthResponse),
+        (status = 401, description = "Authentication failed")
+    )
+)]
+pub async fn apple_callback_handler(
+    State(state): State<AppState>,
+    Query(query): Query<AppleCallbackHandlerQuery>,
+) -> Result<Json<AuthResponse>, StatusCode> {
+    let client_secret = generate_apple_client_secret(&state.config).map_err(|e| {
+        tracing::error!("Failed to generate Apple client secret: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let http_client = reqwest::Client::new();
+    let token_response = http_client
+        .post("https://appleid.apple.com/auth/token")
+        .form(&[
+            ("client_id", state.config.oauth.apple.client_id.as_str()),
+            ("client_secret", &client_secret),
+            ("code", &query.code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", &state.config.oauth.apple.redirect_uri),
+        ])
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Apple OAuth token request failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if !token_response.status().is_success() {
+        let status = token_response.status();
+        let body = token_response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read body".to_string());
+        tracing::error!("Apple token exchange failed {}: {}", status, body);
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let body_text = token_response.text().await.map_err(|e| {
+        tracing::error!("Failed to read Apple token response: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let apple_token: AppleTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
+        tracing::error!("Failed to parse Apple token response: {} - body: {}", e, body_text);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let id_token_claims = decode_apple_id_token(&apple_token.id_token).map_err(|e| {
+        tracing::error!("Failed to decode Apple id_token: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let apple_user_id = id_token_claims.sub;
+    let email = id_token_claims.email.unwrap_or_default();
+
+    let name = query
+        .apple_user
+        .as_deref()
+        .and_then(|user_str| serde_json::from_str::<AppleUserFormInfo>(user_str).ok())
+        .and_then(|info| info.name)
+        .map(|name_info| {
+            let first = name_info.first_name.unwrap_or_default();
+            let last = name_info.last_name.unwrap_or_default();
+            let full = format!("{} {}", last, first).trim().to_string();
+            if full.is_empty() {
+                "Apple User".to_string()
+            } else {
+                full
+            }
+        })
+        .unwrap_or_else(|| "Apple User".to_string());
+
+    let user = match repository::find_user_by_oauth(
+        &state.db,
+        &OAuthProvider::Apple,
+        &apple_user_id,
+    )
+    .await
+    {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let dto = CreateUserDto {
+                oauth_provider: OAuthProvider::Apple,
+                oauth_id: apple_user_id,
+                email,
+                name,
+                profile_image: None,
+            };
+
+            repository::create_user(&state.db, dto)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to create user: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
+        }
+        Err(e) => {
+            tracing::error!("Database query failed: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let jwt = create_jwt(
+        &user.id,
+        &user.email,
+        &user.name,
+        &state.config.jwt.secret,
+        state.config.jwt.expiration_hours,
+    )
+    .map_err(|e| {
+        tracing::error!("JWT creation failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(AuthResponse {
+        token: jwt,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            profile_image: user.profile_image,
+        },
+    }))
+}
+
+fn create_apple_oauth_client(config: &Config) -> BasicClient {
+    BasicClient::new(
+        ClientId::new(config.oauth.apple.client_id.clone()),
+        None,
+        AuthUrl::new("https://appleid.apple.com/auth/authorize".to_string()).unwrap(),
+        Some(TokenUrl::new("https://appleid.apple.com/auth/token".to_string()).unwrap()),
+    )
+    .set_redirect_uri(RedirectUrl::new(config.oauth.apple.redirect_uri.clone()).unwrap())
+}
+
+fn generate_apple_client_secret(
+    config: &Config,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let now = chrono::Utc::now().timestamp() as usize;
+    let exp = now + (86400 * 180); // 6 months
+
+    #[derive(Serialize)]
+    struct AppleClientSecretClaims {
+        iss: String,
+        iat: usize,
+        exp: usize,
+        aud: String,
+        sub: String,
+    }
+
+    let claims = AppleClientSecretClaims {
+        iss: config.oauth.apple.team_id.clone(),
+        iat: now,
+        exp,
+        aud: "https://appleid.apple.com".to_string(),
+        sub: config.oauth.apple.client_id.clone(),
+    };
+
+    let header = jsonwebtoken::Header {
+        alg: jsonwebtoken::Algorithm::ES256,
+        kid: Some(config.oauth.apple.key_id.clone()),
+        ..Default::default()
+    };
+
+    let key = jsonwebtoken::EncodingKey::from_ec_pem(config.oauth.apple.private_key.as_bytes())?;
+    let token = jsonwebtoken::encode(&header, &claims, &key)?;
+    Ok(token)
+}
+
+fn decode_apple_id_token(
+    id_token: &str,
+) -> Result<AppleIdTokenClaims, Box<dyn std::error::Error>> {
+    let parts: Vec<&str> = id_token.split('.').collect();
+    if parts.len() != 3 {
+        return Err("Invalid id_token format".into());
+    }
+
+    let payload = general_purpose::URL_SAFE_NO_PAD.decode(parts[1])?;
+    let claims: AppleIdTokenClaims = serde_json::from_slice(&payload)?;
+    Ok(claims)
+}
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthResponse {

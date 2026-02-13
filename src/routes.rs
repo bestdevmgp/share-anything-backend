@@ -82,6 +82,12 @@ pub fn create_router(
         .route("/auth/naver", get(handlers::auth::naver_login))
         .route("/auth/naver/callback", get(handlers::auth::naver_callback))
         .route("/auth/callback/naver", get(handlers::auth::naver_callback_handler))
+        .route("/auth/kakao", get(handlers::auth::kakao_login))
+        .route("/auth/kakao/callback", get(handlers::auth::kakao_callback))
+        .route("/auth/callback/kakao", get(handlers::auth::kakao_callback_handler))
+        .route("/auth/apple", get(handlers::auth::apple_login))
+        .route("/auth/apple/callback", post(handlers::auth::apple_callback))
+        .route("/auth/callback/apple", get(handlers::auth::apple_callback_handler))
         .with_state(app_state);
 
     let upload_routes = Router::new()

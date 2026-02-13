@@ -24,6 +24,8 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
         let oauth_provider = match provider_str.as_str() {
             "google" => OAuthProvider::Google,
             "naver" => OAuthProvider::Naver,
+            "kakao" => OAuthProvider::Kakao,
+            "apple" => OAuthProvider::Apple,
             _ => return Err(sqlx::Error::Decode(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid oauth_provider: {}", provider_str)
@@ -51,6 +53,8 @@ where
     match s.as_str() {
         "google" => Ok(OAuthProvider::Google),
         "naver" => Ok(OAuthProvider::Naver),
+        "kakao" => Ok(OAuthProvider::Kakao),
+        "apple" => Ok(OAuthProvider::Apple),
         _ => Err(serde::de::Error::custom(format!("Invalid oauth_provider: {}", s))),
     }
 }
@@ -60,6 +64,8 @@ where
 pub enum OAuthProvider {
     Google,
     Naver,
+    Kakao,
+    Apple,
 }
 
 impl std::fmt::Display for OAuthProvider {
@@ -67,6 +73,8 @@ impl std::fmt::Display for OAuthProvider {
         match self {
             OAuthProvider::Google => write!(f, "google"),
             OAuthProvider::Naver => write!(f, "naver"),
+            OAuthProvider::Kakao => write!(f, "kakao"),
+            OAuthProvider::Apple => write!(f, "apple"),
         }
     }
 }
