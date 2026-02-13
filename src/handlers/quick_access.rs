@@ -288,15 +288,16 @@ pub async fn download_quick_access_file(
             internal_error("다운로드 URL 생성 실패")
         })?;
 
+    repository::delete_file_share(&state.db, &file_id)
+        .await
+        .map_err(|e| internal_error(format!("파일 삭제 실패: {}", e)))?;
+
     if !file_share.storage_key.is_empty() {
         let storage = state.storage.clone();
         let storage_key = file_share.storage_key.clone();
-        let db = state.db.clone();
-        let fid = file_id.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
             let _ = storage.delete_file(&storage_key).await;
-            let _ = repository::delete_file_share(&db, &fid).await;
         });
     }
 
