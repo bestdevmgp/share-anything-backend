@@ -847,7 +847,7 @@ pub async fn apple_callback(
         );
     }
 
-    Redirect::temporary(&redirect_url)
+    Redirect::to(&redirect_url)
 }
 
 /// Frontend calls this with the code to get the token
