@@ -141,7 +141,8 @@ impl Config {
                     key_id: env::var("APPLE_KEY_ID")
                         .expect("APPLE_KEY_ID must be set"),
                     private_key: env::var("APPLE_PRIVATE_KEY")
-                        .expect("APPLE_PRIVATE_KEY must be set"),
+                        .expect("APPLE_PRIVATE_KEY must be set")
+                        .replace("\\n", "\n"),
                     redirect_uri: env::var("APPLE_REDIRECT_URI")
                         .expect("APPLE_REDIRECT_URI must be set"),
                 },
