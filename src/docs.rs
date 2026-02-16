@@ -47,6 +47,7 @@ impl Modify for SecurityAddon {
         crate::handlers::user::get_upload_history,
         crate::handlers::user::get_download_logs,
         crate::handlers::user::delete_file_share,
+        crate::handlers::user::delete_all_file_shares,
     ),
     components(
         schemas(

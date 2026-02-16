@@ -238,3 +238,40 @@ pub async fn delete_file_share(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// Delete all file shares for the authenticated user
+#[utoipa::path(
+    delete,
+    path = "/user/uploads",
+    tag = "user",
+    responses(
+        (status = 204, description = "All files deleted successfully"),
+        (status = 401, description = "Unauthorized - authentication required")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn delete_all_file_shares(
+    State(state): State<UserState>,
+    request: Request,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+
+    let storage_keys = repository::delete_all_user_file_shares(&state.db, &user_claims.sub)
+        .await
+        .map_err(|e| internal_error(format!("전체 파일 삭제 실패: {}", e)))?;
+
+    if !storage_keys.is_empty() {
+        state
+            .storage
+            .delete_files(storage_keys)
+            .await
+            .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}

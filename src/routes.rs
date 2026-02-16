@@ -158,7 +158,7 @@ pub fn create_router(
         .with_state(quick_access_state);
 
     let user_routes = Router::new()
-        .route("/user/uploads", get(handlers::user::get_upload_history))
+        .route("/user/uploads", get(handlers::user::get_upload_history).delete(handlers::user::delete_all_file_shares))
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
         .route("/user/uploads/:file_id", delete(handlers::user::delete_file_share))
         .layer(middleware::from_fn_with_state(auth_state, require_auth))

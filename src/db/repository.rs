@@ -234,6 +234,34 @@ pub async fn delete_file_share(
     Ok(result.rows_affected())
 }
 
+pub async fn delete_all_user_file_shares(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let files = sqlx::query_as::<_, (String,)>(
+        r#"
+        SELECT storage_key FROM file_shares
+        WHERE user_id = ? AND is_quick_access = false
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    let storage_keys: Vec<String> = files.into_iter().map(|(k,)| k).collect();
+
+    sqlx::query(
+        r#"
+        DELETE FROM file_shares WHERE user_id = ? AND is_quick_access = false
+        "#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(storage_keys)
+}
+
 pub async fn delete_expired_file_shares(
     pool: &MySqlPool,
 ) -> Result<Vec<String>, sqlx::Error> {
