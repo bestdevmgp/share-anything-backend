@@ -88,18 +88,16 @@ impl DiscordNotifier {
         provider: &str,
         ip: &str,
     ) -> Result<(), reqwest::Error> {
-        let url = self.webhook_url.as_ref().unwrap();
+    let url = self.webhook_url.as_ref().unwrap();
+        let description = format!(
+            "**이름**\n{}\n\n**이메일**\n{}\n\n**Provider**\n{}\n\n**Client**\n{}\n\n**시간**\n{}",
+            name, email, provider, ip, Self::kst_now()
+        );
         let payload = json!({
             "embeds": [{
                 "title": "🟢 신규 유저 가입",
                 "color": 3066993,
-                "fields": [
-                    { "name": "이름", "value": name, "inline": false },
-                    { "name": "이메일", "value": email, "inline": false },
-                    { "name": "Provider", "value": provider, "inline": false },
-                    { "name": "Client", "value": ip, "inline": false },
-                    { "name": "시간", "value": Self::kst_now(), "inline": false }
-                ]
+                "description": description
             }]
         });
 
@@ -116,17 +114,15 @@ impl DiscordNotifier {
         ip: &str,
     ) -> Result<(), reqwest::Error> {
         let url = self.webhook_url.as_ref().unwrap();
+        let description = format!(
+            "**Status**\n{}\n\n**Endpoint**\n{} {}\n\n**Client**\n{}\n\n**상세 내용**\n```\n{}\n```\n\n**시간**\n{}",
+            status, method, uri, ip, error_detail, Self::kst_now()
+        );
         let payload = json!({
             "embeds": [{
                 "title": "🔴 에러 발생",
                 "color": 15158332,
-                "fields": [
-                    { "name": "Status", "value": status, "inline": true },
-                    { "name": "Endpoint", "value": format!("{} {}", method, uri), "inline": true },
-                    { "name": "Client", "value": ip, "inline": true },
-                    { "name": "상세 내용", "value": format!("```\n{}\n```", error_detail), "inline": false },
-                    { "name": "시간", "value": Self::kst_now(), "inline": false }
-                ]
+                "description": description
             }]
         });
 
