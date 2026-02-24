@@ -16,13 +16,15 @@ use crate::{
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
     middleware::rate_limiter::RateLimiter,
-    services::{StorageService, signaling::SignalingState},
+    services::{StorageService, discord::DiscordNotifier, email::EmailService, signaling::SignalingState},
 };
 
 pub fn create_router(
     config: Arc<Config>,
     db: DbPool,
     storage: StorageService,
+    discord: Arc<DiscordNotifier>,
+    email: Arc<EmailService>,
 ) -> Router {
     let auth_state = AuthState {
         config: config.clone(),
@@ -31,6 +33,8 @@ pub fn create_router(
     let app_state = handlers::auth::AppState {
         config: config.clone(),
         db: db.clone(),
+        discord: discord.clone(),
+        email: email.clone(),
     };
 
     let signaling_state = SignalingState::new();
@@ -210,5 +214,9 @@ pub fn create_router(
         .merge(p2p_routes)
         .merge(turn_routes)
         .merge(og_routes)
+        .layer(axum::middleware::from_fn(
+            crate::middleware::discord_error::discord_error_middleware,
+        ))
+        .layer(axum::Extension(discord))
         .layer(cors)
 }

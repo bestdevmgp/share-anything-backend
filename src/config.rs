@@ -11,6 +11,23 @@ pub struct Config {
     pub cors: CorsConfig,
     pub turnstile: TurnstileConfig,
     pub cloudflare_turn: CloudflareTurnConfig,
+    pub discord: DiscordConfig,
+    pub smtp: SmtpConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DiscordConfig {
+    pub webhook_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SmtpConfig {
+    pub host: Option<String>,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub from_email: Option<String>,
+    pub from_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -174,6 +191,19 @@ impl Config {
                     .expect("CLOUDFLARE_TURN_KEY_ID must be set in environment"),
                 api_token: env::var("CLOUDFLARE_TURN_API_TOKEN")
                     .expect("CLOUDFLARE_TURN_API_TOKEN must be set in environment"),
+            },
+            discord: DiscordConfig {
+                webhook_url: env::var("DISCORD_WEBHOOK_URL").ok(),
+            },
+            smtp: SmtpConfig {
+                host: env::var("SMTP_HOST").ok(),
+                port: env::var("SMTP_PORT")
+                    .unwrap_or_else(|_| "587".to_string())
+                    .parse()?,
+                username: env::var("SMTP_USERNAME").ok(),
+                password: env::var("SMTP_PASSWORD").ok(),
+                from_email: env::var("SMTP_FROM_EMAIL").ok(),
+                from_name: env::var("SMTP_FROM_NAME").ok(),
             },
         };
 

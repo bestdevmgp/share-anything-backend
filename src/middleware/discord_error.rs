@@ -1,0 +1,60 @@
+use axum::{body::Body, extract::Request, middleware::Next, response::Response};
+use http_body_util::BodyExt;
+use std::sync::Arc;
+
+use crate::services::discord::DiscordNotifier;
+
+fn extract_client_ip(headers: &axum::http::HeaderMap) -> String {
+    if let Some(forwarded) = headers.get("x-forwarded-for") {
+        if let Ok(value) = forwarded.to_str() {
+            if let Some(ip) = value.split(',').next() {
+                return ip.trim().to_string();
+            }
+        }
+    }
+    if let Some(real_ip) = headers.get("x-real-ip") {
+        if let Ok(value) = real_ip.to_str() {
+            return value.trim().to_string();
+        }
+    }
+    "unknown".to_string()
+}
+
+pub async fn discord_error_middleware(request: Request, next: Next) -> Response {
+    let method = request.method().to_string();
+    let uri = request.uri().path().to_string();
+    let ip = extract_client_ip(request.headers());
+    let discord = request.extensions().get::<Arc<DiscordNotifier>>().cloned();
+
+    let response = next.run(request).await;
+
+    if response.status().is_server_error() {
+        if let Some(discord) = discord {
+            let status = response.status().to_string();
+
+            let (parts, body) = response.into_parts();
+            let bytes = body
+                .collect()
+                .await
+                .map(|collected| collected.to_bytes())
+                .unwrap_or_default();
+
+            let error_detail = if bytes.is_empty() {
+                status.clone()
+            } else {
+                let text = String::from_utf8_lossy(&bytes).to_string();
+                if text.len() > 1000 {
+                    format!("{}...", &text[..1000])
+                } else {
+                    text
+                }
+            };
+
+            discord.notify_server_error(&method, &uri, &status, &error_detail, &ip);
+
+            return Response::from_parts(parts, Body::from(bytes));
+        }
+    }
+
+    response
+}

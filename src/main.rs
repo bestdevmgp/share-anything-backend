@@ -44,7 +44,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     tracing::info!("Cleanup background task started");
 
-    let app = routes::create_router(config.clone(), db_pool, storage);
+    let discord = Arc::new(services::discord::DiscordNotifier::new(
+        config.discord.webhook_url.clone(),
+    ));
+    if discord.is_enabled() {
+        tracing::info!("Discord notifications enabled");
+    }
+
+    let email = Arc::new(services::email::EmailService::new(
+        &config.smtp,
+        &config.server.frontend_url,
+    ));
+    if email.is_enabled() {
+        tracing::info!("Email notifications enabled");
+    }
+
+    let app = routes::create_router(config.clone(), db_pool, storage, discord, email);
 
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;

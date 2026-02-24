@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
     Form, Json,
 };
@@ -18,12 +18,32 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::create_jwt,
     models::{CreateUserDto, OAuthProvider},
+    services::discord::DiscordNotifier,
+    services::email::EmailService,
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
     pub db: DbPool,
+    pub discord: Arc<DiscordNotifier>,
+    pub email: Arc<EmailService>,
+}
+
+fn extract_client_ip(headers: &HeaderMap) -> String {
+    if let Some(forwarded) = headers.get("x-forwarded-for") {
+        if let Ok(value) = forwarded.to_str() {
+            if let Some(ip) = value.split(',').next() {
+                return ip.trim().to_string();
+            }
+        }
+    }
+    if let Some(real_ip) = headers.get("x-real-ip") {
+        if let Ok(value) = real_ip.to_str() {
+            return value.trim().to_string();
+        }
+    }
+    "unknown".to_string()
 }
 
 // ============================================================================
@@ -124,8 +144,10 @@ pub async fn google_callback(
 )]
 pub async fn google_callback_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<GoogleCallbackQuery>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
+    let client_ip = extract_client_ip(&headers);
     let client = create_google_oauth_client(&state.config);
 
     let token = client
@@ -161,12 +183,16 @@ pub async fn google_callback_handler(
                 profile_image: user_info.picture.clone(),
             };
 
-            repository::create_user(&state.db, dto)
+            let new_user = repository::create_user(&state.db, dto)
                 .await
                 .map_err(|e| {
                     tracing::error!("Failed to create user: {:?}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
-                })?
+                })?;
+
+            state.discord.notify_new_user(&new_user.name, &new_user.email, "Google", &client_ip);
+            state.email.send_welcome_email(&new_user.name, &new_user.email);
+            new_user
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
@@ -357,8 +383,10 @@ pub async fn naver_callback(
 )]
 pub async fn naver_callback_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<NaverCallbackQuery>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
+    let client_ip = extract_client_ip(&headers);
     // Exchange code for token (using direct HTTP request because Naver returns expires_in as string)
     let http_client = reqwest::Client::new();
     let token_response = http_client
@@ -418,12 +446,16 @@ pub async fn naver_callback_handler(
                 profile_image: user_info.response.profile_image.clone(),
             };
 
-            repository::create_user(&state.db, dto)
+            let new_user = repository::create_user(&state.db, dto)
                 .await
                 .map_err(|e| {
                     tracing::error!("Failed to create user: {:?}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
-                })?
+                })?;
+
+            state.discord.notify_new_user(&new_user.name, &new_user.email, "Naver", &client_ip);
+            state.email.send_welcome_email(&new_user.name, &new_user.email);
+            new_user
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
@@ -594,8 +626,10 @@ pub async fn kakao_callback(
 )]
 pub async fn kakao_callback_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<KakaoCallbackQuery>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
+    let client_ip = extract_client_ip(&headers);
     let http_client = reqwest::Client::new();
     let token_response = http_client
         .post("https://kauth.kakao.com/oauth/token")
@@ -670,12 +704,16 @@ pub async fn kakao_callback_handler(
                 profile_image,
             };
 
-            repository::create_user(&state.db, dto)
+            let new_user = repository::create_user(&state.db, dto)
                 .await
                 .map_err(|e| {
                     tracing::error!("Failed to create user: {:?}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
-                })?
+                })?;
+
+            state.discord.notify_new_user(&new_user.name, &new_user.email, "Kakao", &client_ip);
+            state.email.send_welcome_email(&new_user.name, &new_user.email);
+            new_user
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
@@ -867,8 +905,10 @@ pub async fn apple_callback(
 )]
 pub async fn apple_callback_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<AppleCallbackHandlerQuery>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
+    let client_ip = extract_client_ip(&headers);
     let client_secret = generate_apple_client_secret(&state.config).map_err(|e| {
         tracing::error!("Failed to generate Apple client secret: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -953,12 +993,16 @@ pub async fn apple_callback_handler(
                 profile_image: None,
             };
 
-            repository::create_user(&state.db, dto)
+            let new_user = repository::create_user(&state.db, dto)
                 .await
                 .map_err(|e| {
                     tracing::error!("Failed to create user: {:?}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
-                })?
+                })?;
+
+            state.discord.notify_new_user(&new_user.name, &new_user.email, "Apple", &client_ip);
+            state.email.send_welcome_email(&new_user.name, &new_user.email);
+            new_user
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
