@@ -269,6 +269,7 @@ pub async fn complete_presigned_upload(
                     notification_files,
                     expires_at,
                     None,
+                    session.description.clone(),
                     &user.notify_language,
                 );
             }
@@ -585,6 +586,7 @@ pub async fn complete_multipart_upload(
                     notification_files,
                     expires_at,
                     None,
+                    session.description.clone(),
                     &user.notify_language,
                 );
             }

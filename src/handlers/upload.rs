@@ -319,6 +319,7 @@ pub async fn upload_file(
                         notification_files,
                         expires_at,
                         original_password.clone(),
+                        metadata.description.clone(),
                         &user.notify_language,
                     );
                 }

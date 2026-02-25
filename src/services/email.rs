@@ -18,6 +18,7 @@ struct EmailTranslations {
     tagline: &'static str,
     share_code_label: &'static str,
     password_label: &'static str,
+    description_label: &'static str,
     expires_label: &'static str,
     uploader_label: &'static str,
     downloader_label: &'static str,
@@ -25,7 +26,6 @@ struct EmailTranslations {
     notification_disable_hint: &'static str,
 
     upload_desc: &'static str,
-    upload_history_hint: &'static str,
     upload_history_link_text: &'static str,
     upload_cta: &'static str,
     upload_footer: &'static str,
@@ -41,9 +41,10 @@ struct EmailTranslations {
 fn get_email_translations(lang: &str) -> &'static EmailTranslations {
     match lang {
         "en" => &EmailTranslations {
-            tagline: "File sharing, easier and faster",
+            tagline: "Simple and secure file sharing",
             share_code_label: "Share Code",
             password_label: "Password",
+            description_label: "Description",
             expires_label: "Expires",
             uploader_label: "Uploader",
             downloader_label: "Downloader",
@@ -51,7 +52,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             notification_disable_hint: "You can disable notifications in settings.",
 
             upload_desc: "Check the uploaded file details.",
-            upload_history_hint: "For more details, visit",
             upload_history_link_text: "Upload History",
             upload_cta: "Download File",
             upload_footer: "This email is automatically sent when a file is uploaded.",
@@ -64,9 +64,10 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "This email is automatically sent to uploaders when their file is downloaded.",
         },
         "ja" => &EmailTranslations {
-            tagline: "ファイル共有をもっと簡単に",
+            tagline: "簡単で安全なファイル共有サービス",
             share_code_label: "共有コード",
             password_label: "パスワード",
+            description_label: "説明",
             expires_label: "有効期限",
             uploader_label: "アップローダー",
             downloader_label: "ダウンローダー",
@@ -74,7 +75,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             notification_disable_hint: "設定で通知を解除できます。",
 
             upload_desc: "アップロードされたファイル情報をご確認ください。",
-            upload_history_hint: "詳細は",
             upload_history_link_text: "アップロード履歴ページ",
             upload_cta: "ファイルをダウンロード",
             upload_footer: "このメールはファイルアップロード時に自動送信される通知メールです。",
@@ -87,9 +87,10 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "このメールはファイルダウンロード時にアップローダーへ自動送信される通知メールです。",
         },
         "zh-CN" => &EmailTranslations {
-            tagline: "文件共享，更简单更快速",
+            tagline: "简便安全的文件共享服务",
             share_code_label: "共享码",
             password_label: "密码",
+            description_label: "说明",
             expires_label: "到期",
             uploader_label: "上传者",
             downloader_label: "下载者",
@@ -97,7 +98,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             notification_disable_hint: "您可以在设置中关闭通知。",
 
             upload_desc: "请确认上传的文件信息。",
-            upload_history_hint: "更多详情请访问",
             upload_history_link_text: "上传记录页面",
             upload_cta: "下载文件",
             upload_footer: "此邮件在文件上传时自动发送。",
@@ -110,9 +110,10 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "此邮件在文件被下载时自动发送给上传者。",
         },
         "zh-TW" => &EmailTranslations {
-            tagline: "檔案分享，更簡單更快速",
+            tagline: "簡便安全的檔案共享服務",
             share_code_label: "共享碼",
             password_label: "密碼",
+            description_label: "說明",
             expires_label: "到期",
             uploader_label: "上傳者",
             downloader_label: "下載者",
@@ -120,7 +121,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             notification_disable_hint: "您可以在設定中關閉通知。",
 
             upload_desc: "請確認上傳的檔案資訊。",
-            upload_history_hint: "更多詳情請訪問",
             upload_history_link_text: "上傳記錄頁面",
             upload_cta: "下載檔案",
             upload_footer: "此郵件在檔案上傳時自動發送。",
@@ -134,9 +134,10 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
         },
         // "ko" and any unknown language default to Korean
         _ => &EmailTranslations {
-            tagline: "파일 공유, 더 쉽고 빠르게",
+            tagline: "간편하고 안전한 파일 공유 서비스",
             share_code_label: "공유 코드",
             password_label: "비밀번호",
+            description_label: "설명",
             expires_label: "만료",
             uploader_label: "업로더",
             downloader_label: "다운로더",
@@ -144,7 +145,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             notification_disable_hint: "설정에서 알림을 해제할 수 있습니다.",
 
             upload_desc: "업로드된 파일 정보를 확인하세요.",
-            upload_history_hint: "더 자세한 내용은",
             upload_history_link_text: "업로드 기록 페이지",
             upload_cta: "파일 다운로드",
             upload_footer: "본 메일은 파일 업로드 시 자동으로 발송되는 알림 메일입니다.",
@@ -591,17 +591,17 @@ impl EmailService {
 
 <!-- Header -->
 <tr>
-<td style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:40px 40px 32px;text-align:center;">
-  <h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">ShareAnything</h1>
-  <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">파일 공유, 더 쉽고 빠르게</p>
+<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
+  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
+  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">간편하고 안전한 파일 공유 서비스</p>
 </td>
 </tr>
 
 <!-- Body -->
 <tr>
 <td style="padding:36px 40px 20px;">
-  <h2 style="margin:0 0 8px;font-size:22px;font-weight:600;color:#18181b;">환영합니다, {name}님!</h2>
-  <p style="margin:0 0 28px;font-size:15px;line-height:1.7;color:#52525b;">
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">환영합니다, {name}님!</h2>
+  <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">
     ShareAnything에 가입해 주셔서 감사합니다.<br>
     지금 바로 다양한 파일 공유 기능을 이용해 보세요.
   </p>
@@ -649,7 +649,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center" style="padding-bottom:8px;">
-        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           ShareAnything 시작하기
         </a>
       </td>
@@ -691,6 +691,7 @@ impl EmailService {
         files: Vec<FileNotificationInfo>,
         expires_at: DateTime<Utc>,
         password: Option<String>,
+        description: Option<String>,
         lang: &str,
     ) {
         if !self.is_enabled() {
@@ -705,7 +706,7 @@ impl EmailService {
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .do_send_upload_notification(&user_name, &user_email, &share_code, &files, expires_at, password.as_deref(), &lang)
+                .do_send_upload_notification(&user_name, &user_email, &share_code, &files, expires_at, password.as_deref(), description.as_deref(), &lang)
                 .await
             {
                 tracing::warn!("Upload notification email send failed: {}", e);
@@ -721,6 +722,7 @@ impl EmailService {
         files: &[FileNotificationInfo],
         expires_at: DateTime<Utc>,
         password: Option<&str>,
+        description: Option<&str>,
         lang: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
@@ -728,7 +730,7 @@ impl EmailService {
 
         let subject = upload_subject(lang, &files[0].file_name, files.len());
 
-        let html_body = self.build_upload_notification_html(user_name, share_code, files, expires_at, password, lang);
+        let html_body = self.build_upload_notification_html(user_name, share_code, files, expires_at, password, description, lang);
 
         let message = Message::builder()
             .from(from)
@@ -880,6 +882,7 @@ impl EmailService {
         files: &[FileNotificationInfo],
         expires_at: DateTime<Utc>,
         password: Option<&str>,
+        description: Option<&str>,
         lang: &str,
     ) -> String {
         let t = get_email_translations(lang);
@@ -895,9 +898,18 @@ impl EmailService {
         let expires_kst = expires_at + chrono::Duration::hours(9);
         let expires_str = expires_kst.format("%Y-%m-%d %H:%M").to_string();
 
+        let description_row = if let Some(desc) = description {
+            format!(
+                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
+                t.description_label, desc
+            )
+        } else {
+            String::new()
+        };
+
         let password_row = if let Some(pw) = password {
             format!(
-                r#"<p style="margin:0 0 4px;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></p>"#,
+                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
                 t.password_label, pw
             )
         } else {
@@ -921,17 +933,17 @@ impl EmailService {
 
 <!-- Header -->
 <tr>
-<td style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:40px 40px 32px;text-align:center;">
-  <h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">ShareAnything</h1>
-  <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">{tagline}</p>
+<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
+  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
+  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
 </td>
 </tr>
 
 <!-- Body -->
 <tr>
 <td style="padding:36px 40px 20px;">
-  <h2 style="margin:0 0 8px;font-size:22px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#52525b;">
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
+  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {upload_desc}
   </p>
   {history_hint}
@@ -944,10 +956,13 @@ impl EmailService {
   <!-- Info -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
     <tr>
-      <td style="padding:12px 16px;background-color:#f8fafc;border-radius:8px;">
-        <p style="margin:0 0 4px;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></p>
-        {password_row}
-        <p style="margin:0;font-size:13px;color:#71717a;">{expires_label}: <strong style="color:#18181b;">{expires_str} (KST)</strong></p>
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
+          {description_row}
+          {password_row}
+          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{expires_label}: <strong style="color:#18181b;">{expires_str} (KST)</strong></td></tr>
+        </table>
       </td>
     </tr>
   </table>
@@ -956,7 +971,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center" style="padding-bottom:8px;">
-        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {upload_cta}
         </a>
       </td>
@@ -990,6 +1005,7 @@ impl EmailService {
             file_rows = file_rows,
             share_code_label = t.share_code_label,
             share_code = share_code,
+            description_row = description_row,
             password_row = password_row,
             expires_label = t.expires_label,
             expires_str = expires_str,
@@ -1019,7 +1035,7 @@ impl EmailService {
 
         let uploader_row = if let Some(uname) = uploader_name {
             format!(
-                r#"<p style="margin:0 0 4px;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></p>"#,
+                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
                 t.uploader_label, uname
             )
         } else {
@@ -1041,17 +1057,17 @@ impl EmailService {
 
 <!-- Header -->
 <tr>
-<td style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:40px 40px 32px;text-align:center;">
-  <h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">ShareAnything</h1>
-  <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">{tagline}</p>
+<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
+  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
+  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
 </td>
 </tr>
 
 <!-- Body -->
 <tr>
 <td style="padding:36px 40px 20px;">
-  <h2 style="margin:0 0 8px;font-size:22px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#52525b;">
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
+  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {download_desc}
   </p>
 
@@ -1063,9 +1079,11 @@ impl EmailService {
   <!-- Info -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
     <tr>
-      <td style="padding:12px 16px;background-color:#f8fafc;border-radius:8px;">
-        <p style="margin:0 0 4px;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></p>
-        {uploader_row}
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
+          {uploader_row}
+        </table>
       </td>
     </tr>
   </table>
@@ -1074,7 +1092,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center" style="padding-bottom:8px;">
-        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {download_cta}
         </a>
       </td>
@@ -1136,16 +1154,11 @@ impl EmailService {
 
         let file_rows = Self::build_file_list_html(files);
 
-        let downloader_row = match downloader_name {
-            Some(name) => format!(
-                r#"<p style="margin:0 0 4px;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong> <span style="color:#a1a1aa;">({})</span></p>"#,
-                t.downloader_label, name, client_ip
-            ),
-            None => format!(
-                r#"<p style="margin:0 0 4px;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong> <span style="color:#a1a1aa;">({})</span></p>"#,
-                t.downloader_label, t.anonymous_user, client_ip
-            ),
-        };
+        let downloader_display = downloader_name.unwrap_or(t.anonymous_user);
+        let downloader_row = format!(
+            r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong> <span style="color:#a1a1aa;">({})</span></td></tr>"#,
+            t.downloader_label, downloader_display, client_ip
+        );
 
         format!(
             r##"<!DOCTYPE html>
@@ -1162,17 +1175,17 @@ impl EmailService {
 
 <!-- Header -->
 <tr>
-<td style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:40px 40px 32px;text-align:center;">
-  <h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">ShareAnything</h1>
-  <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">{tagline}</p>
+<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
+  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
+  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
 </td>
 </tr>
 
 <!-- Body -->
 <tr>
 <td style="padding:36px 40px 20px;">
-  <h2 style="margin:0 0 8px;font-size:22px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#52525b;">
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
+  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {downloader_desc}
   </p>
 
@@ -1184,9 +1197,11 @@ impl EmailService {
   <!-- Info -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
     <tr>
-      <td style="padding:12px 16px;background-color:#f8fafc;border-radius:8px;">
-        <p style="margin:0 0 4px;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></p>
-        {downloader_row}
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
+          {downloader_row}
+        </table>
       </td>
     </tr>
   </table>
@@ -1195,7 +1210,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center" style="padding-bottom:8px;">
-        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {alert_cta}
         </a>
       </td>
@@ -1239,7 +1254,7 @@ impl EmailService {
     fn build_file_list_html(files: &[FileNotificationInfo]) -> String {
         let mut rows = String::new();
         for (i, file) in files.iter().enumerate() {
-            let emoji = file_type_emoji(&file.file_type);
+            let (label, bg, fg) = file_type_label(&file.file_type);
             let size = format_file_size(file.file_size);
             if i > 0 {
                 rows.push_str("    <tr><td style=\"height:6px;\"></td></tr>\n");
@@ -1248,7 +1263,9 @@ impl EmailService {
                 r#"    <tr>
       <td style="padding:10px 16px;background-color:#f8fafc;border-radius:8px;">
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-size:18px;padding-right:10px;vertical-align:middle;">{emoji}</td>
+          <td style="padding-right:10px;vertical-align:middle;">
+            <span style="display:inline-block;background:{bg};color:{fg};padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.3px;line-height:18px;">{label}</span>
+          </td>
           <td>
             <span style="color:#18181b;font-size:14px;font-weight:500;">{file_name}</span>
             <span style="color:#a1a1aa;font-size:13px;margin-left:8px;">{size}</span>
@@ -1257,7 +1274,9 @@ impl EmailService {
       </td>
     </tr>
 "#,
-                emoji = emoji,
+                bg = bg,
+                fg = fg,
+                label = label,
                 file_name = file.file_name,
                 size = size,
             ));
@@ -1266,27 +1285,28 @@ impl EmailService {
     }
 }
 
-fn file_type_emoji(file_type: &str) -> &str {
+fn file_type_label(file_type: &str) -> (&str, &str, &str) {
+    // (label, background_color, text_color)
     if file_type.starts_with("image/") {
-        "&#x1F5BC;"
+        ("IMG", "#dbeafe", "#2563eb")
     } else if file_type.starts_with("video/") {
-        "&#x1F3AC;"
+        ("VID", "#ede9fe", "#7c3aed")
     } else if file_type.starts_with("audio/") {
-        "&#x1F3B5;"
+        ("AUD", "#fce7f3", "#db2777")
     } else if file_type.contains("pdf") {
-        "&#x1F4C4;"
+        ("PDF", "#fee2e2", "#dc2626")
     } else if file_type.contains("zip") || file_type.contains("rar") || file_type.contains("tar") || file_type.contains("gzip") || file_type.contains("7z") {
-        "&#x1F4E6;"
+        ("ZIP", "#fef3c7", "#d97706")
     } else if file_type.contains("word") || file_type.contains("document") {
-        "&#x1F4DD;"
+        ("DOC", "#dbeafe", "#2563eb")
     } else if file_type.contains("sheet") || file_type.contains("excel") || file_type.contains("csv") {
-        "&#x1F4CA;"
+        ("XLS", "#dcfce7", "#16a34a")
     } else if file_type.contains("presentation") || file_type.contains("powerpoint") {
-        "&#x1F4CA;"
+        ("PPT", "#ffedd5", "#ea580c")
     } else if file_type.starts_with("text/") {
-        "&#x1F4C3;"
+        ("TXT", "#f1f5f9", "#64748b")
     } else {
-        "&#x1F4CE;"
+        ("FILE", "#f1f5f9", "#64748b")
     }
 }
 
