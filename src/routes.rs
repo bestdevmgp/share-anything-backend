@@ -43,12 +43,14 @@ pub fn create_router(
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
+        email: email.clone(),
     };
 
     let presigned_state = handlers::presigned::PresignedState {
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
+        email: email.clone(),
     };
 
     let download_state = handlers::download::DownloadState {
@@ -56,6 +58,7 @@ pub fn create_router(
         db: db.clone(),
         storage: storage.clone(),
         signaling: signaling_state.clone(),
+        email: email.clone(),
     };
 
     let user_state = handlers::user::UserState {
@@ -165,6 +168,7 @@ pub fn create_router(
         .route("/user/uploads", get(handlers::user::get_upload_history).delete(handlers::user::delete_all_file_shares))
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
         .route("/user/uploads/:file_id", delete(handlers::user::delete_file_share))
+        .route("/user/settings", get(handlers::user::get_notification_settings).put(handlers::user::update_notification_settings))
         .layer(middleware::from_fn_with_state(auth_state, require_auth))
         .with_state(user_state);
 

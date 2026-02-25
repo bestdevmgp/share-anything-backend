@@ -12,6 +12,10 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub profile_image: Option<String>,
+    pub notify_upload: bool,
+    pub notify_download: bool,
+    pub notify_download_alert: bool,
+    pub notify_language: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -39,6 +43,10 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             email: row.try_get("email")?,
             name: row.try_get("name")?,
             profile_image: row.try_get("profile_image")?,
+            notify_upload: row.try_get("notify_upload")?,
+            notify_download: row.try_get("notify_download")?,
+            notify_download_alert: row.try_get("notify_download_alert")?,
+            notify_language: row.try_get("notify_language")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

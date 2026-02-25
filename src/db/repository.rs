@@ -64,6 +64,46 @@ pub async fn find_user_by_id(
     .await
 }
 
+pub async fn get_user_notification_settings(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<(bool, bool, bool, String), sqlx::Error> {
+    let result = sqlx::query_as::<_, (bool, bool, bool, String)>(
+        r#"
+        SELECT notify_upload, notify_download, notify_download_alert, notify_language FROM users WHERE id = ?
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(result)
+}
+
+pub async fn update_user_notification_settings(
+    pool: &MySqlPool,
+    user_id: &str,
+    notify_upload: bool,
+    notify_download: bool,
+    notify_download_alert: bool,
+    notify_language: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE users SET notify_upload = ?, notify_download = ?, notify_download_alert = ?, notify_language = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?
+        "#,
+    )
+    .bind(notify_upload)
+    .bind(notify_download)
+    .bind(notify_download_alert)
+    .bind(notify_language)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn create_file_share(
     pool: &MySqlPool,
     share_group_id: Option<String>,

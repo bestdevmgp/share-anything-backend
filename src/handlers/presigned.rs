@@ -21,7 +21,7 @@ use crate::{
         GetPartUrlsRequest, GetPartUrlsResponse, PartPresignedUrl,
         CompleteMultipartUploadRequest,
     },
-    services::{generate_qr_code, StorageService},
+    services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
     utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 
@@ -30,6 +30,7 @@ pub struct PresignedState {
     pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
+    pub email: Arc<EmailService>,
 }
 
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
@@ -247,6 +248,31 @@ pub async fn complete_presigned_upload(
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
+    }
+
+    // Send upload notification email (fire-and-forget)
+    if let Some(ref user_id) = session.user_id {
+        if let Ok(Some(user)) = repository::find_user_by_id(&state.db, user_id).await {
+            if user.notify_upload {
+                let notification_files: Vec<FileNotificationInfo> = uploaded_files
+                    .iter()
+                    .map(|f| FileNotificationInfo {
+                        file_name: f.file_name.clone(),
+                        file_size: f.file_size,
+                        file_type: f.file_type.clone(),
+                    })
+                    .collect();
+                state.email.send_upload_notification(
+                    &user.name,
+                    &user.email,
+                    &session.share_code,
+                    notification_files,
+                    expires_at,
+                    None,
+                    &user.notify_language,
+                );
+            }
+        }
     }
 
     Ok(Json(MultipleFileUploadResponse {
@@ -538,6 +564,31 @@ pub async fn complete_multipart_upload(
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
+    }
+
+    // Send upload notification email (fire-and-forget)
+    if let Some(ref user_id) = session.user_id {
+        if let Ok(Some(user)) = repository::find_user_by_id(&state.db, user_id).await {
+            if user.notify_upload {
+                let notification_files: Vec<FileNotificationInfo> = uploaded_files
+                    .iter()
+                    .map(|f| FileNotificationInfo {
+                        file_name: f.file_name.clone(),
+                        file_size: f.file_size,
+                        file_type: f.file_type.clone(),
+                    })
+                    .collect();
+                state.email.send_upload_notification(
+                    &user.name,
+                    &user.email,
+                    &session.share_code,
+                    notification_files,
+                    expires_at,
+                    None,
+                    &user.notify_language,
+                );
+            }
+        }
     }
 
     Ok(Json(MultipleFileUploadResponse {

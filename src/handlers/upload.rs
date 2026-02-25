@@ -12,7 +12,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
-    services::{generate_qr_code, StorageService},
+    services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
     utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 use chrono::Utc;
@@ -22,6 +22,7 @@ pub struct UploadState {
     pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
+    pub email: Arc<EmailService>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -196,6 +197,8 @@ pub async fn upload_file(
 
     let expires_at = Utc::now() + expiration.to_duration();
 
+    let original_password = metadata.password.clone();
+
     let password_hash = if let Some(password) = metadata.password {
         if user_claims.is_none() {
             return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
@@ -294,6 +297,33 @@ pub async fn upload_file(
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
+    }
+
+    // Send upload notification email (fire-and-forget)
+    if let Some(ref claims) = user_claims {
+        if !matches!(transfer_type, TransferType::P2p) {
+            if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
+                if user.notify_upload {
+                    let notification_files: Vec<FileNotificationInfo> = uploaded_files
+                        .iter()
+                        .map(|f| FileNotificationInfo {
+                            file_name: f.file_name.clone(),
+                            file_size: f.file_size,
+                            file_type: f.file_type.clone(),
+                        })
+                        .collect();
+                    state.email.send_upload_notification(
+                        &user.name,
+                        &user.email,
+                        &share_code,
+                        notification_files,
+                        expires_at,
+                        original_password.clone(),
+                        &user.notify_language,
+                    );
+                }
+            }
+        }
     }
 
     Ok(Json(MultipleFileUploadResponse {

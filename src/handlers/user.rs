@@ -275,3 +275,79 @@ pub async fn delete_all_file_shares(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct NotificationSettingsResponse {
+    pub notify_upload: bool,
+    pub notify_download: bool,
+    pub notify_download_alert: bool,
+    pub notify_language: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateNotificationSettingsRequest {
+    pub notify_upload: bool,
+    pub notify_download: bool,
+    pub notify_download_alert: bool,
+    pub notify_language: String,
+}
+
+/// Get user notification settings (requires authentication)
+pub async fn get_notification_settings(
+    State(state): State<UserState>,
+    request: Request,
+) -> Result<Json<NotificationSettingsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+
+    let (notify_upload, notify_download, notify_download_alert, notify_language) =
+        repository::get_user_notification_settings(&state.db, &user_claims.sub)
+            .await
+            .map_err(|e| internal_error(format!("알림 설정 조회 실패: {}", e)))?;
+
+    Ok(Json(NotificationSettingsResponse {
+        notify_upload,
+        notify_download,
+        notify_download_alert,
+        notify_language,
+    }))
+}
+
+/// Update user notification settings (requires authentication)
+pub async fn update_notification_settings(
+    State(state): State<UserState>,
+    request: Request,
+) -> Result<Json<NotificationSettingsResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
+        .clone();
+
+    let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
+        .await
+        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다"))?;
+
+    let req: UpdateNotificationSettingsRequest = serde_json::from_slice(&body_bytes)
+        .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
+
+    repository::update_user_notification_settings(
+        &state.db,
+        &user_claims.sub,
+        req.notify_upload,
+        req.notify_download,
+        req.notify_download_alert,
+        &req.notify_language,
+    )
+    .await
+    .map_err(|e| internal_error(format!("알림 설정 업데이트 실패: {}", e)))?;
+
+    Ok(Json(NotificationSettingsResponse {
+        notify_upload: req.notify_upload,
+        notify_download: req.notify_download,
+        notify_download_alert: req.notify_download_alert,
+        notify_language: req.notify_language,
+    }))
+}
