@@ -161,41 +161,41 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
 
 // --- Dynamic title/subject formatting helpers ---
 
-fn upload_title(lang: &str, name: &str, count: usize) -> String {
+fn upload_title(lang: &str, count: usize) -> String {
     match lang {
         "en" => {
             if count == 1 {
-                format!("{} uploaded a file.", name)
+                "File upload complete.".to_string()
             } else {
-                format!("{} uploaded {} files.", name, count)
+                format!("{} files upload complete.", count)
             }
         }
         "ja" => {
             if count == 1 {
-                format!("{}さんがファイルをアップロードしました。", name)
+                "ファイルのアップロードが完了しました。".to_string()
             } else {
-                format!("{}さんが{}個のファイルをアップロードしました。", name, count)
+                format!("{}個のファイルのアップロードが完了しました。", count)
             }
         }
         "zh-CN" => {
             if count == 1 {
-                format!("{}上传了文件。", name)
+                "文件上传完成。".to_string()
             } else {
-                format!("{}上传了{}个文件。", name, count)
+                format!("{}个文件上传完成。", count)
             }
         }
         "zh-TW" => {
             if count == 1 {
-                format!("{}上傳了檔案。", name)
+                "檔案上傳完成。".to_string()
             } else {
-                format!("{}上傳了{}個檔案。", name, count)
+                format!("{}個檔案上傳完成。", count)
             }
         }
         _ => {
             if count == 1 {
-                format!("{}님이 파일을 업로드하였습니다.", name)
+                "파일 업로드가 완료되었습니다.".to_string()
             } else {
-                format!("{}님이 {}개의 파일을 업로드하였습니다.", name, count)
+                format!("{}개의 파일 업로드가 완료되었습니다.", count)
             }
         }
     }
@@ -205,77 +205,77 @@ fn upload_subject(lang: &str, file_name: &str, count: usize) -> String {
     match lang {
         "en" => {
             if count == 1 {
-                format!("Uploaded {}", file_name)
+                format!("\"{}\" upload complete", file_name)
             } else {
-                format!("Uploaded {} files", count)
+                format!("{} files upload complete", count)
             }
         }
         "ja" => {
             if count == 1 {
-                format!("{}をアップロードしました", file_name)
+                format!("「{}」のアップロードが完了しました", file_name)
             } else {
-                format!("{}個のファイルをアップロードしました", count)
+                format!("{}個のファイルのアップロードが完了しました", count)
             }
         }
         "zh-CN" => {
             if count == 1 {
-                format!("上传了{}", file_name)
+                format!("\"{}\" 上传完成", file_name)
             } else {
-                format!("上传了{}个文件", count)
+                format!("{}个文件上传完成", count)
             }
         }
         "zh-TW" => {
             if count == 1 {
-                format!("上傳了{}", file_name)
+                format!("\"{}\" 上傳完成", file_name)
             } else {
-                format!("上傳了{}個檔案", count)
+                format!("{}個檔案上傳完成", count)
             }
         }
         _ => {
             if count == 1 {
-                format!("{} 파일을 업로드하였습니다.", file_name)
+                format!("\"{}\" 파일 업로드가 완료되었습니다.", file_name)
             } else {
-                format!("{}개의 파일을 업로드하였습니다.", count)
+                format!("{}개의 파일 업로드가 완료되었습니다.", count)
             }
         }
     }
 }
 
-fn download_title(lang: &str, name: &str, count: usize) -> String {
+fn download_title(lang: &str, count: usize) -> String {
     match lang {
         "en" => {
             if count == 1 {
-                format!("{} downloaded a file.", name)
+                "File download complete.".to_string()
             } else {
-                format!("{} downloaded {} files.", name, count)
+                format!("{} files downloaded.", count)
             }
         }
         "ja" => {
             if count == 1 {
-                format!("{}さんがファイルをダウンロードしました。", name)
+                "ファイルのダウンロードが完了しました。".to_string()
             } else {
-                format!("{}さんが{}個のファイルをダウンロードしました。", name, count)
+                format!("{}個のファイルをダウンロードしました。", count)
             }
         }
         "zh-CN" => {
             if count == 1 {
-                format!("{}下载了文件。", name)
+                "文件下载完成。".to_string()
             } else {
-                format!("{}下载了{}个文件。", name, count)
+                format!("已下载{}个文件。", count)
             }
         }
         "zh-TW" => {
             if count == 1 {
-                format!("{}下載了檔案。", name)
+                "檔案下載完成。".to_string()
             } else {
-                format!("{}下載了{}個檔案。", name, count)
+                format!("已下載{}個檔案。", count)
             }
         }
         _ => {
             if count == 1 {
-                format!("{}님이 파일을 다운로드하였습니다.", name)
+                "파일 다운로드가 완료되었습니다.".to_string()
             } else {
-                format!("{}님이 {}개의 파일을 다운로드하였습니다.", name, count)
+                format!("{}개의 파일 다운로드가 완료되었습니다.", count)
             }
         }
     }
@@ -285,37 +285,37 @@ fn download_subject(lang: &str, file_name: &str, count: usize) -> String {
     match lang {
         "en" => {
             if count == 1 {
-                format!("Downloaded {}", file_name)
+                format!("\"{}\" download complete", file_name)
             } else {
-                format!("Downloaded {} files", count)
+                format!("{} files download complete", count)
             }
         }
         "ja" => {
             if count == 1 {
-                format!("{}をダウンロードしました", file_name)
+                format!("「{}」のダウンロードが完了しました", file_name)
             } else {
-                format!("{}個のファイルをダウンロードしました", count)
+                format!("{}個のファイルのダウンロードが完了しました", count)
             }
         }
         "zh-CN" => {
             if count == 1 {
-                format!("下载了{}", file_name)
+                format!("\"{}\" 下载完成", file_name)
             } else {
-                format!("下载了{}个文件", count)
+                format!("{}个文件下载完成", count)
             }
         }
         "zh-TW" => {
             if count == 1 {
-                format!("下載了{}", file_name)
+                format!("\"{}\" 下載完成", file_name)
             } else {
-                format!("下載了{}個檔案", count)
+                format!("{}個檔案下載完成", count)
             }
         }
         _ => {
             if count == 1 {
-                format!("{} 파일을 다운로드하였습니다.", file_name)
+                format!("\"{}\" 파일 다운로드가 완료되었습니다.", file_name)
             } else {
-                format!("{}개의 파일을 다운로드하였습니다.", count)
+                format!("{}개의 파일 다운로드가 완료되었습니다.", count)
             }
         }
     }
@@ -361,43 +361,64 @@ fn alert_title(lang: &str, count: usize) -> String {
     }
 }
 
-fn alert_subject(lang: &str, file_name: &str, count: usize) -> String {
+fn alert_subject(lang: &str, downloader_name: Option<&str>, file_name: &str, count: usize) -> String {
     match lang {
         "en" => {
+            let who = downloader_name.unwrap_or("An anonymous user");
             if count == 1 {
-                format!("{} was downloaded", file_name)
+                format!("{} downloaded \"{}\"", who, file_name)
             } else {
-                format!("{} files were downloaded", count)
+                format!("{} downloaded {} files", who, count)
             }
         }
-        "ja" => {
-            if count == 1 {
-                format!("{}がダウンロードされました", file_name)
-            } else {
-                format!("{}個のファイルがダウンロードされました", count)
+        "ja" => match downloader_name {
+            Some(name) => {
+                if count == 1 {
+                    format!("{}さんが「{}」をダウンロードしました", name, file_name)
+                } else {
+                    format!("{}さんが{}個のファイルをダウンロードしました", name, count)
+                }
             }
-        }
+            None => {
+                if count == 1 {
+                    format!("匿名ユーザーが「{}」をダウンロードしました", file_name)
+                } else {
+                    format!("匿名ユーザーが{}個のファイルをダウンロードしました", count)
+                }
+            }
+        },
         "zh-CN" => {
+            let who = downloader_name.unwrap_or("匿名用户");
             if count == 1 {
-                format!("{}已被下载", file_name)
+                format!("{}下载了「{}」", who, file_name)
             } else {
-                format!("{}个文件已被下载", count)
+                format!("{}下载了{}个文件", who, count)
             }
         }
         "zh-TW" => {
+            let who = downloader_name.unwrap_or("匿名使用者");
             if count == 1 {
-                format!("{}已被下載", file_name)
+                format!("{}下載了「{}」", who, file_name)
             } else {
-                format!("{}個檔案已被下載", count)
+                format!("{}下載了{}個檔案", who, count)
             }
         }
-        _ => {
-            if count == 1 {
-                format!("{} 파일이 다운로드되었습니다.", file_name)
-            } else {
-                format!("{}개의 파일이 다운로드되었습니다.", count)
+        _ => match downloader_name {
+            Some(name) => {
+                if count == 1 {
+                    format!("{}님이 \"{}\" 파일을 다운로드하였습니다.", name, file_name)
+                } else {
+                    format!("{}님이 {}개의 파일을 다운로드하였습니다.", name, count)
+                }
             }
-        }
+            None => {
+                if count == 1 {
+                    format!("익명의 사용자가 \"{}\" 파일을 다운로드하였습니다.", file_name)
+                } else {
+                    format!("익명의 사용자가 {}개의 파일을 다운로드하였습니다.", count)
+                }
+            }
+        },
     }
 }
 
@@ -405,23 +426,23 @@ fn alert_desc(lang: &str, downloader_name: Option<&str>) -> String {
     match lang {
         "en" => match downloader_name {
             Some(name) => format!("{} downloaded your file.", name),
-            None => "Someone downloaded your file.".to_string(),
+            None => "An anonymous user downloaded your file.".to_string(),
         },
         "ja" => match downloader_name {
             Some(name) => format!("{}さんがあなたのファイルをダウンロードしました。", name),
-            None => "誰かがあなたのファイルをダウンロードしました。".to_string(),
+            None => "匿名ユーザーがあなたのファイルをダウンロードしました。".to_string(),
         },
         "zh-CN" => match downloader_name {
             Some(name) => format!("{}下载了您的文件。", name),
-            None => "有人下载了您的文件。".to_string(),
+            None => "匿名用户下载了您的文件。".to_string(),
         },
         "zh-TW" => match downloader_name {
             Some(name) => format!("{}下載了您的檔案。", name),
-            None => "有人下載了您的檔案。".to_string(),
+            None => "匿名使用者下載了您的檔案。".to_string(),
         },
         _ => match downloader_name {
             Some(name) => format!("{}님이 회원님의 파일을 다운로드하였습니다.", name),
-            None => "누군가 회원님의 파일을 다운로드하였습니다.".to_string(),
+            None => "익명의 사용자가 회원님의 파일을 다운로드하였습니다.".to_string(),
         },
     }
 }
@@ -832,7 +853,7 @@ impl EmailService {
         let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
         let to: Mailbox = uploader_email.parse()?;
 
-        let subject = alert_subject(lang, &files[0].file_name, files.len());
+        let subject = alert_subject(lang, downloader_name, &files[0].file_name, files.len());
 
         let html_body = self.build_download_alert_html(uploader_name, downloader_name, share_code, files, client_ip, lang);
 
@@ -854,7 +875,7 @@ impl EmailService {
 
     fn build_upload_notification_html(
         &self,
-        name: &str,
+        _name: &str,
         share_code: &str,
         files: &[FileNotificationInfo],
         expires_at: DateTime<Utc>,
@@ -867,7 +888,7 @@ impl EmailService {
         let download_link = format!("{}/download/{}", frontend_url, share_code);
 
         let file_count = files.len();
-        let title = upload_title(lang, name, file_count);
+        let title = upload_title(lang, file_count);
 
         let file_rows = Self::build_file_list_html(files);
 
@@ -981,7 +1002,7 @@ impl EmailService {
 
     fn build_download_notification_html(
         &self,
-        name: &str,
+        _name: &str,
         share_code: &str,
         files: &[FileNotificationInfo],
         uploader_name: Option<&str>,
@@ -992,7 +1013,7 @@ impl EmailService {
         let frontend_url = &self.frontend_url;
 
         let file_count = files.len();
-        let title = download_title(lang, name, file_count);
+        let title = download_title(lang, file_count);
 
         let file_rows = Self::build_file_list_html(files);
 
