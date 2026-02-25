@@ -15,7 +15,6 @@ pub struct FileNotificationInfo {
 }
 
 struct EmailTranslations {
-    tagline: &'static str,
     share_code_label: &'static str,
     password_label: &'static str,
     description_label: &'static str,
@@ -23,7 +22,6 @@ struct EmailTranslations {
     uploader_label: &'static str,
     downloader_label: &'static str,
     anonymous_user: &'static str,
-    notification_disable_hint: &'static str,
 
     upload_desc: &'static str,
     upload_history_link_text: &'static str,
@@ -41,7 +39,6 @@ struct EmailTranslations {
 fn get_email_translations(lang: &str) -> &'static EmailTranslations {
     match lang {
         "en" => &EmailTranslations {
-            tagline: "Simple and secure file sharing",
             share_code_label: "Share Code",
             password_label: "Password",
             description_label: "Description",
@@ -49,7 +46,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             uploader_label: "Uploader",
             downloader_label: "Downloader",
             anonymous_user: "Anonymous User",
-            notification_disable_hint: "You can disable notifications in settings.",
 
             upload_desc: "Check the uploaded file details.",
             upload_history_link_text: "Upload History",
@@ -64,7 +60,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "This email is automatically sent to uploaders when their file is downloaded.",
         },
         "ja" => &EmailTranslations {
-            tagline: "簡単で安全なファイル共有サービス",
             share_code_label: "共有コード",
             password_label: "パスワード",
             description_label: "説明",
@@ -72,7 +67,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             uploader_label: "アップローダー",
             downloader_label: "ダウンローダー",
             anonymous_user: "未ログインユーザー",
-            notification_disable_hint: "設定で通知を解除できます。",
 
             upload_desc: "アップロードされたファイル情報をご確認ください。",
             upload_history_link_text: "アップロード履歴ページ",
@@ -87,7 +81,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "このメールはファイルダウンロード時にアップローダーへ自動送信される通知メールです。",
         },
         "zh-CN" => &EmailTranslations {
-            tagline: "简便安全的文件共享服务",
             share_code_label: "共享码",
             password_label: "密码",
             description_label: "说明",
@@ -95,7 +88,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             uploader_label: "上传者",
             downloader_label: "下载者",
             anonymous_user: "未登录用户",
-            notification_disable_hint: "您可以在设置中关闭通知。",
 
             upload_desc: "请确认上传的文件信息。",
             upload_history_link_text: "上传记录页面",
@@ -110,7 +102,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_footer: "此邮件在文件被下载时自动发送给上传者。",
         },
         "zh-TW" => &EmailTranslations {
-            tagline: "簡便安全的檔案共享服務",
             share_code_label: "共享碼",
             password_label: "密碼",
             description_label: "說明",
@@ -118,7 +109,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             uploader_label: "上傳者",
             downloader_label: "下載者",
             anonymous_user: "未登入用戶",
-            notification_disable_hint: "您可以在設定中關閉通知。",
 
             upload_desc: "請確認上傳的檔案資訊。",
             upload_history_link_text: "上傳記錄頁面",
@@ -134,7 +124,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
         },
         // "ko" and any unknown language default to Korean
         _ => &EmailTranslations {
-            tagline: "간편하고 안전한 파일 공유 서비스",
             share_code_label: "공유 코드",
             password_label: "비밀번호",
             description_label: "설명",
@@ -142,7 +131,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             uploader_label: "업로더",
             downloader_label: "다운로더",
             anonymous_user: "비로그인 사용자",
-            notification_disable_hint: "설정에서 알림을 해제할 수 있습니다.",
 
             upload_desc: "업로드된 파일 정보를 확인하세요.",
             upload_history_link_text: "업로드 기록 페이지",
@@ -505,6 +493,39 @@ fn format_date_localized(dt: &DateTime<Utc>, lang: &str) -> String {
     }
 }
 
+fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
+    let settings_url = format!("{}/settings?tab=notifications", frontend_url);
+    let link = |text: &str| {
+        format!(
+            r#"<a href="{}" style="color:#71717a;text-decoration:underline;">{}</a>"#,
+            settings_url, text
+        )
+    };
+    match lang {
+        "en" => format!("You can disable notifications in {}.", link("settings")),
+        "ja" => format!("{}で通知を解除できます。", link("設定")),
+        "zh-CN" => format!("您可以在{}中关闭通知。", link("设置")),
+        "zh-TW" => format!("您可以在{}中關閉通知。", link("設定")),
+        _ => format!("{}에서 알림을 해제할 수 있습니다.", link("설정")),
+    }
+}
+
+/// Common email header: logo icon + "ShareAnything" + divider line
+fn email_header_html() -> &'static str {
+    r#"<!-- Logo -->
+<tr>
+<td style="padding:32px 0 20px;">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+    <td style="width:36px;height:36px;background-color:#2563eb;border-radius:10px;text-align:center;vertical-align:middle;font-size:18px;font-weight:700;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">S</td>
+    <td style="padding-left:12px;vertical-align:middle;">
+      <span style="font-size:20px;font-weight:700;color:#18181b;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">ShareAnything</span>
+    </td>
+  </tr></table>
+</td>
+</tr>
+<tr><td style="border-bottom:1px solid #e4e4e7;"></td></tr>"#
+}
+
 #[derive(Clone)]
 pub struct EmailService {
     transport: Option<AsyncSmtpTransport<Tokio1Executor>>,
@@ -593,6 +614,7 @@ impl EmailService {
 
     fn build_welcome_html(&self, name: &str) -> String {
         let frontend_url = &self.frontend_url;
+        let header = email_header_html();
 
         format!(
             r##"<!DOCTYPE html>
@@ -601,23 +623,18 @@ impl EmailService {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
 <tr>
 <td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
 
-<!-- Header -->
-<tr>
-<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
-  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
-  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">간편하고 안전한 파일 공유 서비스</p>
-</td>
-</tr>
+{header}
 
 <!-- Body -->
 <tr>
-<td style="padding:36px 40px 20px;">
+<td style="padding:28px 0 24px;">
+  <p style="margin:0 0 24px;font-size:13px;color:#a1a1aa;">간편하고 안전한 파일 공유 서비스</p>
   <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">환영합니다, {name}님!</h2>
   <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">
     ShareAnything에 가입해 주셔서 감사합니다.<br>
@@ -627,38 +644,23 @@ impl EmailService {
   <!-- Features -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
     <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;margin-bottom:8px;">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-size:20px;padding-right:12px;vertical-align:top;">&#x1F4E4;</td>
-          <td>
-            <strong style="color:#18181b;font-size:14px;">서버 업로드</strong>
-            <p style="margin:2px 0 0;font-size:13px;color:#71717a;">파일을 업로드하고 다운로드 코드를 공유하세요. 최대 5GB까지 지원합니다.</p>
-          </td>
-        </tr></table>
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <strong style="color:#18181b;font-size:14px;">서버 업로드</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">파일을 업로드하고 다운로드 코드를 공유하세요. 최대 5GB까지 지원합니다.</p>
       </td>
     </tr>
     <tr><td style="height:8px;"></td></tr>
     <tr>
       <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-size:20px;padding-right:12px;vertical-align:top;">&#x1F91D;</td>
-          <td>
-            <strong style="color:#18181b;font-size:14px;">P2P 전송</strong>
-            <p style="margin:2px 0 0;font-size:13px;color:#71717a;">서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 빠르게!</p>
-          </td>
-        </tr></table>
+        <strong style="color:#18181b;font-size:14px;">P2P 전송</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 빠르게!</p>
       </td>
     </tr>
     <tr><td style="height:8px;"></td></tr>
     <tr>
       <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-size:20px;padding-right:12px;vertical-align:top;">&#x26A1;</td>
-          <td>
-            <strong style="color:#18181b;font-size:14px;">Quick Access</strong>
-            <p style="margin:2px 0 0;font-size:13px;color:#71717a;">자주 사용하는 파일을 빠르게 저장하고 어디서든 접근하세요.</p>
-          </td>
-        </tr></table>
+        <strong style="color:#18181b;font-size:14px;">Quick Access</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">자주 사용하는 파일을 빠르게 저장하고 어디서든 접근하세요.</p>
       </td>
     </tr>
   </table>
@@ -666,7 +668,7 @@ impl EmailService {
   <!-- CTA Button -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="padding-bottom:8px;">
+      <td align="center">
         <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           ShareAnything 시작하기
         </a>
@@ -678,8 +680,8 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:20px 40px 32px;border-top:1px solid #f0f0f0;">
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.6;">
+<td style="padding:24px;background-color:#f4f4f5;margin-top:20px;">
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.<br>
     &copy; ShareAnything
   </p>
@@ -692,6 +694,7 @@ impl EmailService {
 </table>
 </body>
 </html>"##,
+            header = header,
             name = name,
             frontend_url = frontend_url,
         )
@@ -935,6 +938,8 @@ impl EmailService {
         };
 
         let history_hint = upload_history_hint_html(lang, frontend_url, t);
+        let header = email_header_html();
+        let disable_hint = notification_disable_hint_html(lang, frontend_url);
 
         format!(
             r##"<!DOCTYPE html>
@@ -943,23 +948,17 @@ impl EmailService {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
 <tr>
 <td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
 
-<!-- Header -->
-<tr>
-<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
-  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
-  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
-</td>
-</tr>
+{header}
 
 <!-- Body -->
 <tr>
-<td style="padding:36px 40px 20px;">
+<td style="padding:28px 0 24px;">
   <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
   <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {upload_desc}
@@ -988,7 +987,7 @@ impl EmailService {
   <!-- CTA Button -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="padding-bottom:8px;">
+      <td align="center">
         <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {upload_cta}
         </a>
@@ -1000,10 +999,10 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:20px 40px 32px;border-top:1px solid #f0f0f0;">
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.6;">
+<td style="padding:24px;background-color:#f4f4f5;">
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {upload_footer}<br>
-    {notification_disable_hint}<br>
+    {disable_hint}<br>
     &copy; ShareAnything
   </p>
 </td>
@@ -1016,7 +1015,7 @@ impl EmailService {
 </body>
 </html>"##,
             html_lang = html_lang,
-            tagline = t.tagline,
+            header = header,
             title = title,
             upload_desc = t.upload_desc,
             history_hint = history_hint,
@@ -1030,7 +1029,7 @@ impl EmailService {
             download_link = download_link,
             upload_cta = t.upload_cta,
             upload_footer = t.upload_footer,
-            notification_disable_hint = t.notification_disable_hint,
+            disable_hint = disable_hint,
         )
     }
 
@@ -1060,6 +1059,9 @@ impl EmailService {
             String::new()
         };
 
+        let header = email_header_html();
+        let disable_hint = notification_disable_hint_html(lang, frontend_url);
+
         format!(
             r##"<!DOCTYPE html>
 <html lang="{html_lang}">
@@ -1067,23 +1069,17 @@ impl EmailService {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
 <tr>
 <td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
 
-<!-- Header -->
-<tr>
-<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
-  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
-  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
-</td>
-</tr>
+{header}
 
 <!-- Body -->
 <tr>
-<td style="padding:36px 40px 20px;">
+<td style="padding:28px 0 24px;">
   <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
   <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {download_desc}
@@ -1109,7 +1105,7 @@ impl EmailService {
   <!-- CTA Button -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="padding-bottom:8px;">
+      <td align="center">
         <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {download_cta}
         </a>
@@ -1121,10 +1117,10 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:20px 40px 32px;border-top:1px solid #f0f0f0;">
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.6;">
+<td style="padding:24px;background-color:#f4f4f5;">
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {download_footer}<br>
-    {notification_disable_hint}<br>
+    {disable_hint}<br>
     &copy; ShareAnything
   </p>
 </td>
@@ -1137,7 +1133,7 @@ impl EmailService {
 </body>
 </html>"##,
             html_lang = html_lang,
-            tagline = t.tagline,
+            header = header,
             title = title,
             download_desc = t.download_desc,
             file_rows = file_rows,
@@ -1147,7 +1143,7 @@ impl EmailService {
             frontend_url = frontend_url,
             download_cta = t.download_cta,
             download_footer = t.download_footer,
-            notification_disable_hint = t.notification_disable_hint,
+            disable_hint = disable_hint,
         )
     }
 
@@ -1178,6 +1174,9 @@ impl EmailService {
             t.downloader_label, downloader_display, client_ip
         );
 
+        let header = email_header_html();
+        let disable_hint = notification_disable_hint_html(lang, frontend_url);
+
         format!(
             r##"<!DOCTYPE html>
 <html lang="{html_lang}">
@@ -1185,23 +1184,17 @@ impl EmailService {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
 <tr>
 <td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
 
-<!-- Header -->
-<tr>
-<td style="background-color:#2563eb;padding:28px 40px 24px;text-align:center;">
-  <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">ShareAnything</h1>
-  <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">{tagline}</p>
-</td>
-</tr>
+{header}
 
 <!-- Body -->
 <tr>
-<td style="padding:36px 40px 20px;">
+<td style="padding:28px 0 24px;">
   <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
   <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
     {downloader_desc}
@@ -1227,7 +1220,7 @@ impl EmailService {
   <!-- CTA Button -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="padding-bottom:8px;">
+      <td align="center">
         <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {alert_cta}
         </a>
@@ -1239,10 +1232,10 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:20px 40px 32px;border-top:1px solid #f0f0f0;">
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.6;">
+<td style="padding:24px;background-color:#f4f4f5;">
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {alert_footer}<br>
-    {notification_disable_hint}<br>
+    {disable_hint}<br>
     &copy; ShareAnything
   </p>
 </td>
@@ -1255,7 +1248,7 @@ impl EmailService {
 </body>
 </html>"##,
             html_lang = html_lang,
-            tagline = t.tagline,
+            header = header,
             title = title,
             downloader_desc = downloader_desc,
             file_rows = file_rows,
@@ -1265,7 +1258,7 @@ impl EmailService {
             download_link = download_link,
             alert_cta = t.alert_cta,
             alert_footer = t.alert_footer,
-            notification_disable_hint = t.notification_disable_hint,
+            disable_hint = disable_hint,
         )
     }
 
