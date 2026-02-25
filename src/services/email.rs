@@ -6,7 +6,7 @@ use lettre::{
 use std::sync::Arc;
 
 use crate::config::SmtpConfig;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 
 pub struct FileNotificationInfo {
     pub file_name: String,
@@ -487,6 +487,24 @@ fn html_lang_attr(lang: &str) -> &str {
     }
 }
 
+fn format_date_localized(dt: &DateTime<Utc>, lang: &str) -> String {
+    let year = dt.format("%Y").to_string();
+    let month = dt.month();
+    let day = dt.day();
+
+    match lang {
+        "en" => {
+            let month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            let month_name = month_names[(month - 1) as usize];
+            format!("{} {}, {}", month_name, day, year)
+        }
+        "ja" => format!("{}年{}月{}日", year, month, day),
+        "zh-CN" => format!("{}年{}月{}日", year, month, day),
+        "zh-TW" => format!("{}年{}月{}日", year, month, day),
+        _ => format!("{}년 {}월 {}일", year, month, day),
+    }
+}
+
 #[derive(Clone)]
 pub struct EmailService {
     transport: Option<AsyncSmtpTransport<Tokio1Executor>>,
@@ -896,7 +914,7 @@ impl EmailService {
         let file_rows = Self::build_file_list_html(files);
 
         let expires_kst = expires_at + chrono::Duration::hours(9);
-        let expires_str = expires_kst.format("%Y-%m-%d %H:%M").to_string();
+        let expires_str = format_date_localized(&expires_kst, lang);
 
         let description_row = if let Some(desc) = description {
             format!(
@@ -961,7 +979,7 @@ impl EmailService {
           <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
           {description_row}
           {password_row}
-          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{expires_label}: <strong style="color:#18181b;">{expires_str} (KST)</strong></td></tr>
+          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{expires_label}: <strong style="color:#18181b;">{expires_str}</strong></td></tr>
         </table>
       </td>
     </tr>
