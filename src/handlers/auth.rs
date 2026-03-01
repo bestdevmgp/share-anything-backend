@@ -1228,6 +1228,7 @@ pub async fn email_send(
         &token,
         &code,
         &client_ip,
+        &body.device_id,
         expires_at,
     )
     .await
@@ -1260,8 +1261,12 @@ pub async fn email_verify(
         return Err(StatusCode::GONE);
     }
 
+    let same_device = body
+        .device_id
+        .as_ref()
+        .map_or(false, |did| !did.is_empty() && did == &session.device_id);
+
     let client_ip = extract_client_ip(&headers);
-    let same_device = session.request_ip == client_ip;
 
     if same_device {
         repository::update_email_auth_session_status(&state.db, &session.id, "completed")

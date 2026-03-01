@@ -554,13 +554,14 @@ pub async fn create_email_auth_session(
     token: &str,
     code: &str,
     ip_address: &str,
+    device_id: &str,
     expires_at: chrono::DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
     sqlx::query(
         r#"
-        INSERT INTO email_auth_sessions (id, email, token, verification_code, status, request_ip, expires_at, created_at)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+        INSERT INTO email_auth_sessions (id, email, token, verification_code, status, request_ip, device_id, expires_at, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
         "#,
     )
     .bind(id)
@@ -568,6 +569,7 @@ pub async fn create_email_auth_session(
     .bind(token)
     .bind(code)
     .bind(ip_address)
+    .bind(device_id)
     .bind(expires_at)
     .bind(now)
     .execute(pool)
