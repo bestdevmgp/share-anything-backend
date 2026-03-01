@@ -30,6 +30,7 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             "naver" => OAuthProvider::Naver,
             "kakao" => OAuthProvider::Kakao,
             "apple" => OAuthProvider::Apple,
+            "email" => OAuthProvider::Email,
             _ => return Err(sqlx::Error::Decode(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid oauth_provider: {}", provider_str)
@@ -63,6 +64,7 @@ where
         "naver" => Ok(OAuthProvider::Naver),
         "kakao" => Ok(OAuthProvider::Kakao),
         "apple" => Ok(OAuthProvider::Apple),
+        "email" => Ok(OAuthProvider::Email),
         _ => Err(serde::de::Error::custom(format!("Invalid oauth_provider: {}", s))),
     }
 }
@@ -74,6 +76,7 @@ pub enum OAuthProvider {
     Naver,
     Kakao,
     Apple,
+    Email,
 }
 
 impl std::fmt::Display for OAuthProvider {
@@ -83,6 +86,7 @@ impl std::fmt::Display for OAuthProvider {
             OAuthProvider::Naver => write!(f, "naver"),
             OAuthProvider::Kakao => write!(f, "kakao"),
             OAuthProvider::Apple => write!(f, "apple"),
+            OAuthProvider::Email => write!(f, "email"),
         }
     }
 }

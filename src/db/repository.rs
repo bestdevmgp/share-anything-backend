@@ -2,6 +2,7 @@ use crate::models::*;
 use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
+use crate::models::email_auth::EmailAuthSession;
 
 pub async fn create_user(
     pool: &MySqlPool,
@@ -544,4 +545,99 @@ pub async fn delete_expired_upload_sessions(
     .await?;
 
     Ok(result.rows_affected())
+}
+
+pub async fn create_email_auth_session(
+    pool: &MySqlPool,
+    id: &str,
+    email: &str,
+    token: &str,
+    code: &str,
+    ip_address: &str,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+    sqlx::query(
+        r#"
+        INSERT INTO email_auth_sessions (id, email, token, code, status, ip_address, expires_at, created_at)
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+        "#,
+    )
+    .bind(id)
+    .bind(email)
+    .bind(token)
+    .bind(code)
+    .bind(ip_address)
+    .bind(expires_at)
+    .bind(now)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn find_email_auth_session_by_id(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<Option<EmailAuthSession>, sqlx::Error> {
+    sqlx::query_as::<_, EmailAuthSession>(
+        r#"SELECT * FROM email_auth_sessions WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_email_auth_session_by_token(
+    pool: &MySqlPool,
+    token: &str,
+) -> Result<Option<EmailAuthSession>, sqlx::Error> {
+    sqlx::query_as::<_, EmailAuthSession>(
+        r#"SELECT * FROM email_auth_sessions WHERE token = ? AND expires_at > UTC_TIMESTAMP()"#,
+    )
+    .bind(token)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn update_email_auth_session_status(
+    pool: &MySqlPool,
+    id: &str,
+    status: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE email_auth_sessions SET status = ? WHERE id = ?"#,
+    )
+    .bind(status)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn find_recent_email_auth_session(
+    pool: &MySqlPool,
+    email: &str,
+) -> Result<Option<EmailAuthSession>, sqlx::Error> {
+    sqlx::query_as::<_, EmailAuthSession>(
+        r#"
+        SELECT * FROM email_auth_sessions
+        WHERE email = ? AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 SECOND)
+        ORDER BY created_at DESC LIMIT 1
+        "#,
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_user_by_email(
+    pool: &MySqlPool,
+    email: &str,
+) -> Result<Option<User>, sqlx::Error> {
+    sqlx::query_as::<_, User>(
+        r#"SELECT * FROM users WHERE email = ? LIMIT 1"#,
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await
 }

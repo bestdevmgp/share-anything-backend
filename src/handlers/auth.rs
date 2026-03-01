@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
     Form, Json,
@@ -17,7 +17,14 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::create_jwt,
-    models::{CreateUserDto, OAuthProvider},
+    models::{
+        CreateUserDto, OAuthProvider,
+        email_auth::{
+            EmailAuthData, EmailAuthUser, EmailSendRequest, EmailSendResponse,
+            EmailStatusResponse, EmailVerifyCodeRequest, EmailVerifyCodeResponse,
+            EmailVerifyRequest, EmailVerifyResponse,
+        },
+    },
     services::discord::DiscordNotifier,
     services::email::EmailService,
 };
@@ -1102,4 +1109,296 @@ pub struct UserResponse {
     pub email: String,
     pub name: String,
     pub profile_image: Option<String>,
+}
+
+// ============================================================================
+// Email Magic Link Auth
+// ============================================================================
+
+fn extract_accept_language(headers: &HeaderMap) -> String {
+    headers
+        .get("accept-language")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(|v| v.split(';').next().unwrap_or("ko").trim())
+        .map(|lang| match lang {
+            l if l.starts_with("en") => "en",
+            l if l.starts_with("ja") => "ja",
+            l if l.starts_with("zh-TW") || l.starts_with("zh-Hant") => "zh-TW",
+            l if l.starts_with("zh") => "zh-CN",
+            _ => "ko",
+        })
+        .unwrap_or("ko")
+        .to_string()
+}
+
+fn is_valid_email(email: &str) -> bool {
+    let parts: Vec<&str> = email.split('@').collect();
+    parts.len() == 2
+        && !parts[0].is_empty()
+        && parts[1].contains('.')
+        && parts[1].len() > 2
+}
+
+async fn find_or_create_email_user(
+    state: &AppState,
+    email: &str,
+    client_ip: &str,
+) -> Result<(crate::models::User, Option<String>), StatusCode> {
+    match repository::find_user_by_email(&state.db, email).await {
+        Ok(Some(user)) => {
+            let existing = if user.oauth_provider != OAuthProvider::Email {
+                Some(user.oauth_provider.to_string())
+            } else {
+                None
+            };
+            Ok((user, existing))
+        }
+        Ok(None) => {
+            let dto = CreateUserDto {
+                oauth_provider: OAuthProvider::Email,
+                oauth_id: email.to_string(),
+                email: email.to_string(),
+                name: email.split('@').next().unwrap_or("User").to_string(),
+                profile_image: None,
+            };
+            let new_user = repository::create_user(&state.db, dto)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to create email user: {:?}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+            state.discord.notify_new_user(&new_user.name, &new_user.email, "Email", client_ip);
+            state.email.send_welcome_email(&new_user.name, &new_user.email);
+            Ok((new_user, None))
+        }
+        Err(e) => {
+            tracing::error!("DB error finding user by email: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+fn build_email_auth_data(
+    user: &crate::models::User,
+    jwt: String,
+    existing_provider: Option<String>,
+) -> EmailAuthData {
+    EmailAuthData {
+        token: jwt,
+        user: EmailAuthUser {
+            id: user.id.clone(),
+            email: user.email.clone(),
+            name: user.name.clone(),
+            profile_image: user.profile_image.clone(),
+        },
+        existing_provider,
+    }
+}
+
+pub async fn email_send(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<EmailSendRequest>,
+) -> Result<Json<EmailSendResponse>, StatusCode> {
+    let email = body.email.trim().to_lowercase();
+    if !is_valid_email(&email) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let client_ip = extract_client_ip(&headers);
+    let lang = extract_accept_language(&headers);
+
+    if let Ok(Some(_)) = repository::find_recent_email_auth_session(&state.db, &email).await {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let token = uuid::Uuid::new_v4().to_string();
+    let code = {
+        let mut rng = rand::thread_rng();
+        format!("{:06}", rand::Rng::gen_range(&mut rng, 0..1_000_000u32))
+    };
+    let expires_at = chrono::Utc::now() + chrono::Duration::minutes(10);
+
+    repository::create_email_auth_session(
+        &state.db,
+        &session_id,
+        &email,
+        &token,
+        &code,
+        &client_ip,
+        expires_at,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to create email auth session: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    state.email.send_magic_link_email(&email, &token, &code, &lang);
+
+    Ok(Json(EmailSendResponse {
+        session_id,
+    }))
+}
+
+pub async fn email_verify(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<EmailVerifyRequest>,
+) -> Result<Json<EmailVerifyResponse>, StatusCode> {
+    let session = repository::find_email_auth_session_by_token(&state.db, &body.token)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.status != "pending" {
+        return Err(StatusCode::GONE);
+    }
+
+    let client_ip = extract_client_ip(&headers);
+    let same_device = session.ip_address == client_ip;
+
+    if same_device {
+        repository::update_email_auth_session_status(&state.db, &session.id, "completed")
+            .await
+            .map_err(|e| {
+                tracing::error!("DB error: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        let (user, existing_provider) =
+            find_or_create_email_user(&state, &session.email, &client_ip).await?;
+
+        let jwt = create_jwt(
+            &user.id,
+            &user.email,
+            &user.name,
+            &state.config.jwt.secret,
+            state.config.jwt.expiration_hours,
+        )
+        .map_err(|e| {
+            tracing::error!("JWT creation failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        Ok(Json(EmailVerifyResponse {
+            same_device: true,
+            auth: Some(build_email_auth_data(&user, jwt, existing_provider)),
+            verification_code: None,
+        }))
+    } else {
+        repository::update_email_auth_session_status(&state.db, &session.id, "verified")
+            .await
+            .map_err(|e| {
+                tracing::error!("DB error: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+        Ok(Json(EmailVerifyResponse {
+            same_device: false,
+            auth: None,
+            verification_code: Some(session.code.clone()),
+        }))
+    }
+}
+
+pub async fn email_verify_code(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<EmailVerifyCodeRequest>,
+) -> Result<Json<EmailVerifyCodeResponse>, StatusCode> {
+    let session = repository::find_email_auth_session_by_id(&state.db, &body.session_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.expires_at < chrono::Utc::now() {
+        return Err(StatusCode::GONE);
+    }
+
+    if session.code != body.code {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    repository::update_email_auth_session_status(&state.db, &session.id, "completed")
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let client_ip = extract_client_ip(&headers);
+    let (user, existing_provider) =
+        find_or_create_email_user(&state, &session.email, &client_ip).await?;
+
+    let jwt = create_jwt(
+        &user.id,
+        &user.email,
+        &user.name,
+        &state.config.jwt.secret,
+        state.config.jwt.expiration_hours,
+    )
+    .map_err(|e| {
+        tracing::error!("JWT creation failed: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(EmailVerifyCodeResponse {
+        token: jwt,
+        user: EmailAuthUser {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            profile_image: user.profile_image,
+        },
+        existing_provider,
+    }))
+}
+
+pub async fn email_status(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<EmailStatusResponse>, StatusCode> {
+    let session = repository::find_email_auth_session_by_id(&state.db, &session_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("DB error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    if session.status == "completed" {
+        let (user, existing_provider) =
+            find_or_create_email_user(&state, &session.email, "polling").await?;
+
+        let jwt = create_jwt(
+            &user.id,
+            &user.email,
+            &user.name,
+            &state.config.jwt.secret,
+            state.config.jwt.expiration_hours,
+        )
+        .map_err(|e| {
+            tracing::error!("JWT creation failed: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        Ok(Json(EmailStatusResponse {
+            status: "completed".to_string(),
+            auth: Some(build_email_auth_data(&user, jwt, existing_provider)),
+        }))
+    } else {
+        Ok(Json(EmailStatusResponse {
+            status: session.status,
+            auth: None,
+        }))
+    }
 }

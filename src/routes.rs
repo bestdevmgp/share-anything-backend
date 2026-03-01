@@ -95,6 +95,10 @@ pub fn create_router(
         .route("/auth/apple", get(handlers::auth::apple_login))
         .route("/auth/apple/callback", post(handlers::auth::apple_callback))
         .route("/auth/callback/apple", get(handlers::auth::apple_callback_handler))
+        .route("/auth/email/send", post(handlers::auth::email_send))
+        .route("/auth/email/verify", post(handlers::auth::email_verify))
+        .route("/auth/email/verify-code", post(handlers::auth::email_verify_code))
+        .route("/auth/email/status/:session_id", get(handlers::auth::email_status))
         .with_state(app_state);
 
     let upload_routes = Router::new()
