@@ -29,6 +29,8 @@ jobs:
           push: true
           tags: pmg3858/share-anything:latest
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.7
