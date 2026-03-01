@@ -1287,7 +1287,7 @@ impl EmailService {
         let to: Mailbox = email.parse()?;
 
         let subject = match lang {
-            "en" => "ShareAnything Login Verification",
+            "en" => "ShareAnything Sign-in Verification",
             "ja" => "ShareAnything ログイン認証",
             "zh-CN" => "ShareAnything 登录验证",
             "zh-TW" => "ShareAnything 登入驗證",
@@ -1315,9 +1315,9 @@ impl EmailService {
 
         let (title, desc, link_label, footer) = match lang {
             "en" => (
-                "Login Verification",
-                "Click the button below to log in.",
-                "Log In",
+                "Sign-in Verification",
+                "Click the button below to sign in.",
+                "Sign In",
                 "This link expires in 10 minutes. If you did not request this, please ignore this email.",
             ),
             "ja" => (
