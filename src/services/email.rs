@@ -1262,17 +1262,16 @@ impl EmailService {
         )
     }
 
-    pub fn send_magic_link_email(self: &Arc<Self>, email: &str, token: &str, code: &str, lang: &str) {
+    pub fn send_magic_link_email(self: &Arc<Self>, email: &str, token: &str, lang: &str) {
         if !self.is_enabled() {
             return;
         }
         let this = Arc::clone(self);
         let email = email.to_string();
         let token = token.to_string();
-        let code = code.to_string();
         let lang = lang.to_string();
         tokio::spawn(async move {
-            if let Err(e) = this.do_send_magic_link_email(&email, &token, &code, &lang).await {
+            if let Err(e) = this.do_send_magic_link_email(&email, &token, &lang).await {
                 tracing::warn!("Magic link email send failed: {}", e);
             }
         });
@@ -1282,7 +1281,6 @@ impl EmailService {
         &self,
         email: &str,
         token: &str,
-        code: &str,
         lang: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
@@ -1296,7 +1294,7 @@ impl EmailService {
             _ => "ShareAnything 로그인 인증",
         };
 
-        let html_body = self.build_magic_link_html(email, token, code, lang);
+        let html_body = self.build_magic_link_html(email, token, lang);
 
         let message = Message::builder()
             .from(from)
@@ -1310,50 +1308,40 @@ impl EmailService {
         Ok(())
     }
 
-    fn build_magic_link_html(&self, email: &str, token: &str, code: &str, lang: &str) -> String {
+    fn build_magic_link_html(&self, email: &str, token: &str, lang: &str) -> String {
         let frontend_url = &self.frontend_url;
         let header = email_header_html();
-        let magic_link = format!("{}/auth/email/callback?token={}", frontend_url, token);
+        let magic_link = format!("{}/auth/email/magic-link#{}", frontend_url, token);
 
-        let (title, desc, code_label, link_label, or_text, footer) = match lang {
+        let (title, desc, link_label, footer) = match lang {
             "en" => (
                 "Login Verification",
-                "Click the button below to log in, or enter the verification code.",
-                "Verification Code",
+                "Click the button below to log in.",
                 "Log In",
-                "Or enter the code directly:",
                 "This link expires in 10 minutes. If you did not request this, please ignore this email.",
             ),
             "ja" => (
                 "ログイン認証",
-                "下のボタンをクリックしてログインするか、認証コードを入力してください。",
-                "認証コード",
+                "下のボタンをクリックしてログインしてください。",
                 "ログイン",
-                "または直接コードを入力:",
                 "このリンクは10分後に期限切れになります。リクエストしていない場合は、このメールを無視してください。",
             ),
             "zh-CN" => (
                 "登录验证",
-                "点击下方按钮登录，或输入验证码。",
-                "验证码",
+                "点击下方按钮登录。",
                 "登录",
-                "或直接输入验证码：",
                 "此链接将在10分钟后过期。如果您未请求此操作，请忽略此邮件。",
             ),
             "zh-TW" => (
                 "登入驗證",
-                "點擊下方按鈕登入，或輸入驗證碼。",
-                "驗證碼",
+                "點擊下方按鈕登入。",
                 "登入",
-                "或直接輸入驗證碼：",
                 "此連結將在10分鐘後過期。如果您未請求此操作，請忽略此郵件。",
             ),
             _ => (
                 "로그인 인증",
-                "아래 버튼을 클릭하여 로그인하거나, 인증 코드를 입력해 주세요.",
-                "인증 코드",
+                "아래 버튼을 클릭하여 로그인하세요.",
                 "로그인",
-                "또는 직접 코드를 입력하세요:",
                 "이 링크는 10분 후 만료됩니다. 본인이 요청하지 않았다면 이 이메일을 무시해 주세요.",
             ),
         };
@@ -1379,18 +1367,9 @@ impl EmailService {
   <p style="margin:0 0 4px;font-size:13px;color:#a1a1aa;">{email}</p>
   <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">{desc}</p>
 
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
   <tr><td style="background-color:#2563eb;border-radius:8px;">
     <a href="{magic_link}" style="display:inline-block;padding:12px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">{link_label}</a>
-  </td></tr>
-  </table>
-
-  <p style="margin:0 0 12px;font-size:13px;color:#a1a1aa;">{or_text}</p>
-
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-  <tr><td style="background-color:#f4f4f5;border-radius:8px;padding:16px 32px;text-align:center;">
-    <p style="margin:0 0 8px;font-size:11px;color:#a1a1aa;text-transform:uppercase;letter-spacing:1px;">{code_label}</p>
-    <span style="font-size:28px;font-weight:700;letter-spacing:6px;color:#18181b;font-family:'Courier New',Courier,monospace;">{code}</span>
   </td></tr>
   </table>
 
@@ -1414,9 +1393,6 @@ impl EmailService {
             desc = desc,
             magic_link = magic_link,
             link_label = link_label,
-            or_text = or_text,
-            code = code,
-            code_label = code_label,
             footer = footer,
         )
     }

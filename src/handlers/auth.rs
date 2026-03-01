@@ -1236,7 +1236,7 @@ pub async fn email_send(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    state.email.send_magic_link_email(&email, &token, &code, &lang);
+    state.email.send_magic_link_email(&email, &token, &lang);
 
     Ok(Json(EmailSendResponse {
         session_id,
