@@ -2,13 +2,8 @@ FROM --platform=linux/amd64 rust:latest AS builder
 
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
-
 COPY . .
-RUN touch src/main.rs
+
 RUN cargo build --release
 
 FROM --platform=linux/amd64 debian:sid-slim
