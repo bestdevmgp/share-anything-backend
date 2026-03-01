@@ -559,7 +559,7 @@ pub async fn create_email_auth_session(
     let now = Utc::now();
     sqlx::query(
         r#"
-        INSERT INTO email_auth_sessions (id, email, token, code, status, ip_address, expires_at, created_at)
+        INSERT INTO email_auth_sessions (id, email, token, verification_code, status, request_ip, expires_at, created_at)
         VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
         "#,
     )

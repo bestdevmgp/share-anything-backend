@@ -7,9 +7,9 @@ pub struct EmailAuthSession {
     pub id: String,
     pub email: String,
     pub token: String,
-    pub code: String,
+    pub verification_code: String,
     pub status: String,
-    pub ip_address: String,
+    pub request_ip: String,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -21,9 +21,9 @@ impl sqlx::FromRow<'_, sqlx::mysql::MySqlRow> for EmailAuthSession {
             id: row.try_get("id")?,
             email: row.try_get("email")?,
             token: row.try_get("token")?,
-            code: row.try_get("code")?,
+            verification_code: row.try_get("verification_code")?,
             status: row.try_get("status")?,
-            ip_address: row.try_get("ip_address")?,
+            request_ip: row.try_get("request_ip")?,
             expires_at: row.try_get("expires_at")?,
             created_at: row.try_get("created_at")?,
         })

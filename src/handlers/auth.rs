@@ -1261,7 +1261,7 @@ pub async fn email_verify(
     }
 
     let client_ip = extract_client_ip(&headers);
-    let same_device = session.ip_address == client_ip;
+    let same_device = session.request_ip == client_ip;
 
     if same_device {
         repository::update_email_auth_session_status(&state.db, &session.id, "completed")
@@ -1302,7 +1302,7 @@ pub async fn email_verify(
         Ok(Json(EmailVerifyResponse {
             same_device: false,
             auth: None,
-            verification_code: Some(session.code.clone()),
+            verification_code: Some(session.verification_code.clone()),
         }))
     }
 }
@@ -1324,7 +1324,7 @@ pub async fn email_verify_code(
         return Err(StatusCode::GONE);
     }
 
-    if session.code != body.code {
+    if session.verification_code != body.code {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
