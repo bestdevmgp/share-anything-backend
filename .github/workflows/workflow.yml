@@ -40,4 +40,5 @@ jobs:
             cd ~/share-anything
             docker pull pmg3858/share-anything:latest
             docker compose down
+            docker system prune -af
             docker compose up -d
