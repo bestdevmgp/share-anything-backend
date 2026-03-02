@@ -601,9 +601,7 @@ impl EmailService {
         let email = email.to_string();
 
         tokio::spawn(async move {
-            if let Err(e) = this.do_send_welcome_email(&name, &email).await {
-                tracing::warn!("Welcome email send failed: {}", e);
-            }
+            let _ = this.do_send_welcome_email(&name, &email).await;
         });
     }
 
@@ -625,7 +623,6 @@ impl EmailService {
             .body(html_body)?;
 
         self.transport.as_ref().unwrap().send(message).await?;
-        tracing::info!("Welcome email sent to {}", email);
         Ok(())
     }
 
@@ -745,12 +742,9 @@ impl EmailService {
         let lang = lang.to_string();
 
         tokio::spawn(async move {
-            if let Err(e) = this
+            let _ = this
                 .do_send_upload_notification(&user_name, &user_email, &share_code, &files, expires_at, password.as_deref(), description.as_deref(), &lang)
-                .await
-            {
-                tracing::warn!("Upload notification email send failed: {}", e);
-            }
+                .await;
         });
     }
 
@@ -780,7 +774,6 @@ impl EmailService {
             .body(html_body)?;
 
         self.transport.as_ref().unwrap().send(message).await?;
-        tracing::info!("Upload notification email sent to {}", user_email);
         Ok(())
     }
 
@@ -809,12 +802,9 @@ impl EmailService {
         let lang = lang.to_string();
 
         tokio::spawn(async move {
-            if let Err(e) = this
+            let _ = this
                 .do_send_download_notification(&user_name, &user_email, &share_code, &files, uploader_name.as_deref(), &lang)
-                .await
-            {
-                tracing::warn!("Download notification email send failed: {}", e);
-            }
+                .await;
         });
     }
 
@@ -842,7 +832,6 @@ impl EmailService {
             .body(html_body)?;
 
         self.transport.as_ref().unwrap().send(message).await?;
-        tracing::info!("Download notification email sent to {}", user_email);
         Ok(())
     }
 
@@ -873,12 +862,9 @@ impl EmailService {
         let lang = lang.to_string();
 
         tokio::spawn(async move {
-            if let Err(e) = this
+            let _ = this
                 .do_send_download_alert_notification(&uploader_name, &uploader_email, downloader_name.as_deref(), &share_code, &files, &client_ip, &lang)
-                .await
-            {
-                tracing::warn!("Download alert notification email send failed: {}", e);
-            }
+                .await;
         });
     }
 
@@ -907,7 +893,6 @@ impl EmailService {
             .body(html_body)?;
 
         self.transport.as_ref().unwrap().send(message).await?;
-        tracing::info!("Download alert notification email sent to {}", uploader_email);
         Ok(())
     }
 
@@ -1296,9 +1281,7 @@ impl EmailService {
         let token = token.to_string();
         let lang = lang.to_string();
         tokio::spawn(async move {
-            if let Err(e) = this.do_send_magic_link_email(&email, &token, &lang).await {
-                tracing::warn!("Magic link email send failed: {}", e);
-            }
+            let _ = this.do_send_magic_link_email(&email, &token, &lang).await;
         });
     }
 
@@ -1329,7 +1312,6 @@ impl EmailService {
             .body(html_body)?;
 
         self.transport.as_ref().unwrap().send(message).await?;
-        tracing::info!("Magic link email sent to {}", email);
         Ok(())
     }
 
