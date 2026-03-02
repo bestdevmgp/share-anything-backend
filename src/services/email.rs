@@ -518,10 +518,10 @@ fn email_header_html(frontend_url: &str) -> String {
 <td style="padding:32px 0 20px;text-align:center;">
   <table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-table;"><tr>
     <td style="vertical-align:middle;">
-      <img src="{frontend_url}/logo192.png" alt="ShareAnything" width="36" height="36" style="display:block;border:0;border-radius:10px;" />
+      <img src="{frontend_url}/logo192.png" alt="ShareAnything" width="40" height="40" style="display:block;border:0;border-radius:10px;" />
     </td>
     <td style="padding-left:12px;vertical-align:middle;">
-      <span style="font-size:20px;font-weight:700;color:#18181b;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">ShareAnything</span>
+      <span style="font-size:26px;font-weight:700;color:#18181b;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">ShareAnything</span>
     </td>
   </tr></table>
 </td>
@@ -674,7 +674,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center">
-        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{frontend_url}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           ShareAnything 시작하기
         </a>
       </td>
@@ -993,7 +993,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center">
-        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{download_link}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {upload_cta}
         </a>
       </td>
@@ -1111,7 +1111,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center">
-        <a href="{frontend_url}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{frontend_url}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {download_cta}
         </a>
       </td>
@@ -1226,7 +1226,7 @@ impl EmailService {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
       <td align="center">
-        <a href="{download_link}" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+        <a href="{download_link}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
           {alert_cta}
         </a>
       </td>
@@ -1374,7 +1374,7 @@ impl EmailService {
 
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
   <tr><td style="background-color:#2563eb;border-radius:8px;">
-    <a href="{magic_link}" style="display:inline-block;padding:12px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">{link_label}</a>
+    <a href="{magic_link}" style="display:inline-block;padding:10px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">{link_label}</a>
   </td></tr>
   </table>
 
