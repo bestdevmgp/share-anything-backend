@@ -510,6 +510,17 @@ fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
     }
 }
 
+/// Common email footer links: GitHub, Website, Email
+fn email_footer_links_html() -> &'static str {
+    r#"<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr>
+    <td style="padding:0 10px;"><a href="https://github.com/bestdevmgp" style="color:#a1a1aa;text-decoration:none;font-size:13px;">GitHub</a></td>
+    <td style="color:#d4d4d8;">·</td>
+    <td style="padding:0 10px;"><a href="https://mingyu.dev" style="color:#a1a1aa;text-decoration:none;font-size:13px;">Website</a></td>
+    <td style="color:#d4d4d8;">·</td>
+    <td style="padding:0 10px;"><a href="mailto:me@mingyu.dev" style="color:#a1a1aa;text-decoration:none;font-size:13px;">Email</a></td>
+  </tr></table>"#
+}
+
 /// Common email header: logo icon + "ShareAnything" + divider line
 fn email_header_html(frontend_url: &str) -> String {
     format!(
@@ -685,7 +696,8 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:24px;background-color:#f4f4f5;margin-top:20px;">
+<td style="padding:24px;background-color:#f4f4f5;margin-top:20px;text-align:center;">
+  {footer_links}
   <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.<br>
     &copy; ShareAnything
@@ -702,6 +714,7 @@ impl EmailService {
             header = header,
             name = name,
             frontend_url = frontend_url,
+            footer_links = email_footer_links_html(),
         )
     }
 
@@ -1004,7 +1017,8 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:24px;background-color:#f4f4f5;">
+<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
+  {footer_links}
   <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {upload_footer}<br>
     {disable_hint}<br>
@@ -1035,6 +1049,7 @@ impl EmailService {
             upload_cta = t.upload_cta,
             upload_footer = t.upload_footer,
             disable_hint = disable_hint,
+            footer_links = email_footer_links_html(),
         )
     }
 
@@ -1122,7 +1137,8 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:24px;background-color:#f4f4f5;">
+<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
+  {footer_links}
   <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {download_footer}<br>
     {disable_hint}<br>
@@ -1149,6 +1165,7 @@ impl EmailService {
             download_cta = t.download_cta,
             download_footer = t.download_footer,
             disable_hint = disable_hint,
+            footer_links = email_footer_links_html(),
         )
     }
 
@@ -1237,7 +1254,8 @@ impl EmailService {
 
 <!-- Footer -->
 <tr>
-<td style="padding:24px;background-color:#f4f4f5;">
+<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
+  {footer_links}
   <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
     {alert_footer}<br>
     {disable_hint}<br>
@@ -1264,6 +1282,7 @@ impl EmailService {
             alert_cta = t.alert_cta,
             alert_footer = t.alert_footer,
             disable_hint = disable_hint,
+            footer_links = email_footer_links_html(),
         )
     }
 
@@ -1383,6 +1402,7 @@ impl EmailService {
 </tr>
 
 <tr><td style="border-top:1px solid #e4e4e7;padding:20px 0;text-align:center;">
+  {footer_links}
   <span style="font-size:12px;color:#a1a1aa;">ShareAnything</span>
 </td></tr>
 
@@ -1399,6 +1419,7 @@ impl EmailService {
             magic_link = magic_link,
             link_label = link_label,
             footer = footer,
+            footer_links = email_footer_links_html(),
         )
     }
 
