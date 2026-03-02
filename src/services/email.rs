@@ -510,15 +510,16 @@ fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
     }
 }
 
-/// Common email footer links: GitHub, Website, Email
-fn email_footer_links_html() -> &'static str {
-    r#"<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr>
-    <td style="padding:0 10px;"><a href="https://github.com/bestdevmgp" style="color:#a1a1aa;text-decoration:none;font-size:13px;">GitHub</a></td>
-    <td style="color:#d4d4d8;">·</td>
-    <td style="padding:0 10px;"><a href="https://mingyu.dev" style="color:#a1a1aa;text-decoration:none;font-size:13px;">Website</a></td>
-    <td style="color:#d4d4d8;">·</td>
-    <td style="padding:0 10px;"><a href="mailto:me@mingyu.dev" style="color:#a1a1aa;text-decoration:none;font-size:13px;">Email</a></td>
-  </tr></table>"#
+/// Common email footer links: GitHub, Website, Email (icon images)
+fn email_footer_links_html(frontend_url: &str) -> String {
+    format!(
+        r#"<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr>
+    <td style="padding:0 8px;"><a href="https://github.com/bestdevmgp"><img src="{frontend_url}/email/icon-github.png" alt="GitHub" width="20" height="20" style="display:block;border:0;" /></a></td>
+    <td style="padding:0 8px;"><a href="https://mingyu.dev"><img src="{frontend_url}/email/icon-website.png" alt="Portfolio" width="20" height="20" style="display:block;border:0;" /></a></td>
+    <td style="padding:0 8px;"><a href="mailto:me@mingyu.dev"><img src="{frontend_url}/email/icon-email.png" alt="Contact" width="20" height="20" style="display:block;border:0;" /></a></td>
+  </tr></table>"#,
+        frontend_url = frontend_url
+    )
 }
 
 /// Common email header: logo icon + "ShareAnything" + divider line
@@ -714,7 +715,7 @@ impl EmailService {
             header = header,
             name = name,
             frontend_url = frontend_url,
-            footer_links = email_footer_links_html(),
+            footer_links = email_footer_links_html(&self.frontend_url),
         )
     }
 
@@ -1049,7 +1050,7 @@ impl EmailService {
             upload_cta = t.upload_cta,
             upload_footer = t.upload_footer,
             disable_hint = disable_hint,
-            footer_links = email_footer_links_html(),
+            footer_links = email_footer_links_html(&self.frontend_url),
         )
     }
 
@@ -1165,7 +1166,7 @@ impl EmailService {
             download_cta = t.download_cta,
             download_footer = t.download_footer,
             disable_hint = disable_hint,
-            footer_links = email_footer_links_html(),
+            footer_links = email_footer_links_html(&self.frontend_url),
         )
     }
 
@@ -1282,7 +1283,7 @@ impl EmailService {
             alert_cta = t.alert_cta,
             alert_footer = t.alert_footer,
             disable_hint = disable_hint,
-            footer_links = email_footer_links_html(),
+            footer_links = email_footer_links_html(&self.frontend_url),
         )
     }
 
@@ -1419,7 +1420,7 @@ impl EmailService {
             magic_link = magic_link,
             link_label = link_label,
             footer = footer,
-            footer_links = email_footer_links_html(),
+            footer_links = email_footer_links_html(&self.frontend_url),
         )
     }
 
