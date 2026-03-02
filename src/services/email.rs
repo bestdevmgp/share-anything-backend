@@ -511,19 +511,24 @@ fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
 }
 
 /// Common email header: logo icon + "ShareAnything" + divider line
-fn email_header_html() -> &'static str {
-    r#"<!-- Logo -->
+fn email_header_html(frontend_url: &str) -> String {
+    format!(
+        r#"<!-- Logo -->
 <tr>
-<td style="padding:32px 0 20px;">
-  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-    <td style="width:36px;height:36px;background-color:#2563eb;border-radius:10px;text-align:center;vertical-align:middle;font-size:18px;font-weight:700;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">S</td>
+<td style="padding:32px 0 20px;text-align:center;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-table;"><tr>
+    <td style="vertical-align:middle;">
+      <img src="{frontend_url}/logo192.png" alt="ShareAnything" width="36" height="36" style="display:block;border:0;border-radius:10px;" />
+    </td>
     <td style="padding-left:12px;vertical-align:middle;">
       <span style="font-size:20px;font-weight:700;color:#18181b;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">ShareAnything</span>
     </td>
   </tr></table>
 </td>
 </tr>
-<tr><td style="border-bottom:1px solid #e4e4e7;"></td></tr>"#
+<tr><td style="border-bottom:1px solid #e4e4e7;"></td></tr>"#,
+        frontend_url = frontend_url
+    )
 }
 
 #[derive(Clone)]
@@ -614,7 +619,7 @@ impl EmailService {
 
     fn build_welcome_html(&self, name: &str) -> String {
         let frontend_url = &self.frontend_url;
-        let header = email_header_html();
+        let header = email_header_html(&self.frontend_url);
 
         format!(
             r##"<!DOCTYPE html>
@@ -938,7 +943,7 @@ impl EmailService {
         };
 
         let history_hint = upload_history_hint_html(lang, frontend_url, t);
-        let header = email_header_html();
+        let header = email_header_html(&self.frontend_url);
         let disable_hint = notification_disable_hint_html(lang, frontend_url);
 
         format!(
@@ -1059,7 +1064,7 @@ impl EmailService {
             String::new()
         };
 
-        let header = email_header_html();
+        let header = email_header_html(&self.frontend_url);
         let disable_hint = notification_disable_hint_html(lang, frontend_url);
 
         format!(
@@ -1174,7 +1179,7 @@ impl EmailService {
             t.downloader_label, downloader_display, client_ip
         );
 
-        let header = email_header_html();
+        let header = email_header_html(&self.frontend_url);
         let disable_hint = notification_disable_hint_html(lang, frontend_url);
 
         format!(
@@ -1310,7 +1315,7 @@ impl EmailService {
 
     fn build_magic_link_html(&self, email: &str, token: &str, lang: &str) -> String {
         let frontend_url = &self.frontend_url;
-        let header = email_header_html();
+        let header = email_header_html(&self.frontend_url);
         let magic_link = format!("{}/auth/email/magic-link#{}", frontend_url, token);
 
         let (title, desc, link_label, footer) = match lang {
@@ -1362,12 +1367,12 @@ impl EmailService {
 {header}
 
 <tr>
-<td style="padding:28px 0 24px;">
+<td style="padding:28px 0 24px;text-align:center;">
   <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
   <p style="margin:0 0 4px;font-size:13px;color:#a1a1aa;">{email}</p>
   <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">{desc}</p>
 
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
   <tr><td style="background-color:#2563eb;border-radius:8px;">
     <a href="{magic_link}" style="display:inline-block;padding:12px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">{link_label}</a>
   </td></tr>
