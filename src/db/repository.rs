@@ -231,7 +231,7 @@ pub async fn find_file_shares_by_user(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE user_id = ? AND is_quick_access = false
+        WHERE user_id = ? AND is_quick_access = 0
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
         "#,
@@ -250,7 +250,7 @@ pub async fn find_quick_access_files_by_user(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE user_id = ? AND is_quick_access = true AND expires_at > UTC_TIMESTAMP()
+        WHERE user_id = ? AND is_quick_access = 1 AND expires_at > UTC_TIMESTAMP()
         ORDER BY created_at DESC
         "#,
     )
@@ -282,7 +282,7 @@ pub async fn delete_all_user_file_shares(
     let files = sqlx::query_as::<_, (String,)>(
         r#"
         SELECT storage_key FROM file_shares
-        WHERE user_id = ? AND is_quick_access = false
+        WHERE user_id = ? AND is_quick_access = 0
         "#,
     )
     .bind(user_id)
@@ -293,7 +293,7 @@ pub async fn delete_all_user_file_shares(
 
     sqlx::query(
         r#"
-        DELETE FROM file_shares WHERE user_id = ? AND is_quick_access = false
+        DELETE FROM file_shares WHERE user_id = ? AND is_quick_access = 0
         "#,
     )
     .bind(user_id)
