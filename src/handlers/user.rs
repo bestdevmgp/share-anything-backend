@@ -226,11 +226,13 @@ pub async fn delete_file_share(
         return Err(forbidden("파일 접근 권한이 없습니다."));
     }
 
-    state
-        .storage
-        .delete_file(&file_share.storage_key)
-        .await
-        .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
+    if !file_share.storage_key.is_empty() {
+        state
+            .storage
+            .delete_file(&file_share.storage_key)
+            .await
+            .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
+    }
 
     repository::delete_file_share(&state.db, &file_id)
         .await
