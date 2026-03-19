@@ -192,6 +192,7 @@ fn format_expires_at(dt: DateTime<Utc>) -> String {
 
 fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
     match s {
+        "5m" | "five_minutes" => Some(ExpirationPeriod::FiveMinutes),
         "30m" | "thirty_minutes" => Some(ExpirationPeriod::ThirtyMinutes),
         "1h" | "one_hour" => Some(ExpirationPeriod::OneHour),
         "3h" | "three_hours" => Some(ExpirationPeriod::ThreeHours),
@@ -304,7 +305,7 @@ pub async fn cli_upload(
             return Err(unauthorized("만료 시간 설정은 API 키가 필요합니다"));
         }
         parse_cli_expiration(&exp_str)
-            .ok_or_else(|| bad_request("유효하지 않은 만료 시간입니다. 사용 가능: 30m, 1h, 3h, 6h, 12h, 24h"))?
+            .ok_or_else(|| bad_request("유효하지 않은 만료 시간입니다. 사용 가능: 5m, 30m, 1h, 3h, 6h, 12h, 24h"))?
     } else {
         ExpirationPeriod::ThirtyMinutes
     };
