@@ -1,4 +1,5 @@
 use crate::models::*;
+use crate::models::api_key::ApiKey;
 use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
@@ -642,4 +643,113 @@ pub async fn find_user_by_email(
     .bind(email)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn create_api_key(
+    pool: &MySqlPool,
+    id: &str,
+    user_id: &str,
+    key_hash: &str,
+    key_prefix: &str,
+    name: &str,
+    expires_at: Option<chrono::DateTime<Utc>>,
+) -> Result<ApiKey, sqlx::Error> {
+    let now = Utc::now();
+
+    sqlx::query(
+        r#"
+        INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(key_hash)
+    .bind(key_prefix)
+    .bind(name)
+    .bind(expires_at)
+    .bind(now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT * FROM api_keys WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn find_api_key_by_hash(
+    pool: &MySqlPool,
+    key_hash: &str,
+) -> Result<Option<ApiKey>, sqlx::Error> {
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL"#,
+    )
+    .bind(key_hash)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_api_keys_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<ApiKey>, sqlx::Error> {
+    sqlx::query_as::<_, ApiKey>(
+        r#"
+        SELECT * FROM api_keys
+        WHERE user_id = ? AND revoked_at IS NULL
+        ORDER BY created_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn revoke_api_key(
+    pool: &MySqlPool,
+    id: &str,
+    user_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE api_keys SET revoked_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn update_api_key_last_used(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE api_keys SET last_used_at = UTC_TIMESTAMP() WHERE id = ?"#,
+    )
+    .bind(id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_api_key(
+    pool: &MySqlPool,
+    id: &str,
+    user_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
 }

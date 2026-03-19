@@ -8,4 +8,6 @@ pub mod presigned;
 pub mod turn;
 pub mod og;
 pub mod quick_access;
+pub mod api_key;
+pub mod cli;
 

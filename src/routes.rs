@@ -15,7 +15,8 @@ use crate::{
     docs::ApiDoc,
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
-    middleware::rate_limiter::RateLimiter,
+    middleware::api_key_auth::{cli_auth, CliAuthState},
+    middleware::rate_limiter::{RateLimiter, CliRateLimiter},
     services::{StorageService, discord::DiscordNotifier, email::EmailService, signaling::SignalingState},
 };
 
@@ -173,7 +174,7 @@ pub fn create_router(
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
         .route("/user/uploads/:file_id", delete(handlers::user::delete_file_share))
         .route("/user/settings", get(handlers::user::get_notification_settings).put(handlers::user::update_notification_settings))
-        .layer(middleware::from_fn_with_state(auth_state, require_auth))
+        .layer(middleware::from_fn_with_state(auth_state.clone(), require_auth))
         .with_state(user_state);
 
     let ws_routes = Router::new()
@@ -203,6 +204,64 @@ pub fn create_router(
         .route("/og/:code/image", get(handlers::og::get_og_image))
         .with_state(og_state);
 
+    let api_key_state = handlers::api_key::ApiKeyState {
+        config: config.clone(),
+        db: db.clone(),
+    };
+
+    let api_key_routes = Router::new()
+        .route("/user/api-keys", post(handlers::api_key::create_api_key).get(handlers::api_key::list_api_keys))
+        .route("/user/api-keys/:key_id", delete(handlers::api_key::delete_api_key))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            require_auth,
+        ))
+        .with_state(api_key_state);
+
+    let cli_state = handlers::cli::CliState {
+        config: config.clone(),
+        db: db.clone(),
+        storage: storage.clone(),
+        email: email.clone(),
+    };
+
+    let cli_auth_state = CliAuthState {
+        db: db.clone(),
+    };
+
+    let cli_rate_limiter = CliRateLimiter::new();
+
+    let cli_routes = Router::new()
+        .route("/cli/upload", post(handlers::cli::cli_upload))
+        .route("/cli/upload/multipart/init", post(handlers::cli::cli_multipart_init))
+        .route("/cli/upload/multipart/presign-parts", post(handlers::cli::cli_presign_parts))
+        .route("/cli/upload/multipart/complete", post(handlers::cli::cli_complete_multipart))
+        .route("/cli/download/:code", get(handlers::cli::cli_download))
+        .route("/cli/download/:code/info", get(handlers::cli::cli_download_info))
+        .route("/cli/files/:code", get(handlers::cli::cli_file_list))
+        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
+        .layer(middleware::from_fn_with_state(
+            cli_rate_limiter.clone(),
+            crate::middleware::rate_limiter::cli_rate_limit_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            cli_auth_state.clone(),
+            cli_auth,
+        ))
+        .with_state(cli_state.clone());
+
+    let cli_auth_routes = Router::new()
+        .route("/cli/user/uploads", get(handlers::cli::cli_upload_history))
+        .layer(middleware::from_fn_with_state(
+            cli_rate_limiter,
+            crate::middleware::rate_limiter::cli_rate_limit_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            cli_auth_state,
+            cli_auth,
+        ))
+        .with_state(cli_state);
+
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")
@@ -218,6 +277,9 @@ pub fn create_router(
         .merge(download_routes)
         .merge(user_routes)
         .merge(quick_access_routes)
+        .merge(api_key_routes)
+        .merge(cli_routes)
+        .merge(cli_auth_routes)
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)

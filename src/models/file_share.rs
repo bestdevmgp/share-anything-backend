@@ -146,7 +146,7 @@ pub struct FileListResponse {
     pub uploader_online: Option<bool>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct FileInfoInGroup {
     pub id: String,
     pub file_name: String,
