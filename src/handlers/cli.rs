@@ -2,7 +2,7 @@ use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::Response,
+    response::{IntoResponse, Response},
     Json,
 };
 use chrono::{DateTime, Utc};
@@ -16,7 +16,7 @@ use crate::{
     middleware::api_key_auth::ApiKeyUser,
     models::{
         bad_request, internal_error, not_found, unauthorized, ErrorResponse,
-        ExpirationPeriod, FileInfoInGroup, CreateDownloadLogDto,
+        ExpirationPeriod, CreateDownloadLogDto,
     },
     services::{StorageService, email::EmailService},
     utils::{encode_content_disposition, generate_share_code, generate_storage_key, parse_device_platform},
@@ -35,18 +35,9 @@ pub struct CliState {
 #[derive(Debug, Serialize)]
 pub struct CliUploadResponse {
     pub share_code: String,
-    pub files: Vec<CliFileInfo>,
-    pub download_url: String,
+    pub files: Vec<String>,
     pub curl_command: String,
-    pub expires_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct CliFileInfo {
-    pub id: String,
-    pub file_name: String,
-    pub file_size: i64,
-    pub file_type: String,
+    pub expires_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,25 +46,23 @@ pub struct CliFileInfoResponse {
     pub files: Vec<CliFileDetail>,
     pub has_password: bool,
     pub is_one_time: bool,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CliFileDetail {
-    pub id: String,
     pub file_name: String,
     pub file_size: i64,
-    pub file_type: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CliFileListResponse {
     pub share_code: String,
-    pub files: Vec<FileInfoInGroup>,
+    pub files: Vec<CliFileDetail>,
     pub total_count: usize,
     pub has_password: bool,
     pub is_one_time: bool,
-    pub expires_at: DateTime<Utc>,
+    pub expires_at: String,
 }
 
 // --- Multipart init types ---
@@ -179,7 +168,27 @@ const CLI_GUEST_MAX_FILE_SIZE: i64 = 100 * 1024 * 1024; // 100MB
 const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024; // 3GB
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
 
+// --- Pretty JSON response ---
+
+pub struct PrettyJson<T>(T);
+
+impl<T: Serialize> IntoResponse for PrettyJson<T> {
+    fn into_response(self) -> Response {
+        match serde_json::to_string_pretty(&self.0) {
+            Ok(body) => Response::builder()
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
+}
+
 // --- Helper ---
+
+fn format_expires_at(dt: DateTime<Utc>) -> String {
+    dt.format("%Y-%m-%d %H:%M").to_string()
+}
 
 fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
     match s {
@@ -199,7 +208,7 @@ pub async fn cli_upload(
     State(state): State<CliState>,
     api_key_user: Option<axum::extract::Extension<ApiKeyUser>>,
     mut multipart: Multipart,
-) -> Result<Json<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let api_key_user = api_key_user.map(|ext| ext.0.clone());
 
     struct FileData {
@@ -330,7 +339,7 @@ pub async fn cli_upload(
 
     let share_group_id = Uuid::new_v4().to_string();
     let user_id = api_key_user.as_ref().map(|u| u.user_id.clone());
-    let mut uploaded_files: Vec<CliFileInfo> = Vec::new();
+    let mut uploaded_files: Vec<String> = Vec::new();
 
     for file_data in files {
         let file_size = file_data.data.len() as i64;
@@ -365,23 +374,17 @@ pub async fn cli_upload(
         .await
         .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
 
-        uploaded_files.push(CliFileInfo {
-            id: file_share.id,
-            file_name: file_share.file_name,
-            file_size: file_share.file_size,
-            file_type: file_share.file_type,
-        });
+        uploaded_files.push(file_share.file_name);
     }
 
     let download_url = format!("{}/cli/download/{}", state.config.server.base_url, share_code);
     let curl_command = format!("curl -OJ {}", download_url);
 
-    Ok(Json(CliUploadResponse {
+    Ok(PrettyJson(CliUploadResponse {
         share_code,
         files: uploaded_files,
-        download_url,
         curl_command,
-        expires_at,
+        expires_at: format_expires_at(expires_at),
     }))
 }
 
@@ -546,7 +549,7 @@ pub async fn cli_presign_parts(
 pub async fn cli_complete_multipart(
     State(state): State<CliState>,
     Json(request): Json<CliCompleteMultipartRequest>,
-) -> Result<Json<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("업로드 세션 조회 실패"))?
@@ -565,7 +568,7 @@ pub async fn cli_complete_multipart(
     let expires_at = Utc::now() + expiration_period.to_duration();
 
     let share_group_id = Uuid::new_v4().to_string();
-    let mut uploaded_files: Vec<CliFileInfo> = Vec::new();
+    let mut uploaded_files: Vec<String> = Vec::new();
 
     for file_info in &request.files {
         if file_info.upload_id != "direct" && !file_info.parts.is_empty() {
@@ -601,12 +604,7 @@ pub async fn cli_complete_multipart(
         .await
         .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
 
-        uploaded_files.push(CliFileInfo {
-            id: file_share.id,
-            file_name: file_share.file_name,
-            file_size: file_share.file_size,
-            file_type: file_share.file_type,
-        });
+        uploaded_files.push(file_share.file_name);
     }
 
     repository::complete_upload_session(&state.db, &request.upload_session_id)
@@ -619,12 +617,11 @@ pub async fn cli_complete_multipart(
     );
     let curl_command = format!("curl -OJ {}", download_url);
 
-    Ok(Json(CliUploadResponse {
+    Ok(PrettyJson(CliUploadResponse {
         share_code: session.share_code,
         files: uploaded_files,
-        download_url,
         curl_command,
-        expires_at,
+        expires_at: format_expires_at(expires_at),
     }))
 }
 
@@ -738,7 +735,7 @@ pub async fn cli_download(
 pub async fn cli_download_info(
     State(state): State<CliState>,
     Path(code): Path<String>,
-) -> Result<Json<CliFileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliFileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -752,26 +749,24 @@ pub async fn cli_download_info(
     let files: Vec<CliFileDetail> = file_shares
         .iter()
         .map(|f| CliFileDetail {
-            id: f.id.clone(),
             file_name: f.file_name.clone(),
             file_size: f.file_size,
-            file_type: f.file_type.clone(),
         })
         .collect();
 
-    Ok(Json(CliFileInfoResponse {
+    Ok(PrettyJson(CliFileInfoResponse {
         share_code: code,
         files,
         has_password: first.password_hash.is_some(),
         is_one_time: first.is_one_time,
-        expires_at: first.expires_at,
+        expires_at: format_expires_at(first.expires_at),
     }))
 }
 
 pub async fn cli_file_list(
     State(state): State<CliState>,
     Path(code): Path<String>,
-) -> Result<Json<CliFileListResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliFileListResponse>, (StatusCode, Json<ErrorResponse>)> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?;
@@ -782,23 +777,23 @@ pub async fn cli_file_list(
 
     let first = &file_shares[0];
 
-    let files: Vec<FileInfoInGroup> = file_shares
+    let files: Vec<CliFileDetail> = file_shares
         .iter()
-        .map(|f| FileInfoInGroup {
-            id: f.id.clone(),
+        .map(|f| CliFileDetail {
             file_name: f.file_name.clone(),
             file_size: f.file_size,
-            file_type: f.file_type.clone(),
         })
         .collect();
 
-    Ok(Json(CliFileListResponse {
+    let total_count = files.len();
+
+    Ok(PrettyJson(CliFileListResponse {
         share_code: code,
-        files: files.clone(),
-        total_count: files.len(),
+        files,
+        total_count,
         has_password: first.password_hash.is_some(),
         is_one_time: first.is_one_time,
-        expires_at: first.expires_at,
+        expires_at: format_expires_at(first.expires_at),
     }))
 }
 
@@ -806,7 +801,7 @@ pub async fn cli_upload_history(
     State(state): State<CliState>,
     api_key_user: axum::extract::Extension<ApiKeyUser>,
     Query(query): Query<CliUploadHistoryQuery>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     let limit = query.limit.unwrap_or(20).min(100);
     let offset = query.offset.unwrap_or(0);
 
@@ -818,23 +813,17 @@ pub async fn cli_upload_history(
         .iter()
         .map(|f| {
             serde_json::json!({
-                "id": f.id,
                 "share_code": f.share_code,
                 "file_name": f.file_name,
                 "file_size": f.file_size,
-                "file_type": f.file_type,
-                "has_password": f.password_hash.is_some(),
-                "is_one_time": f.is_one_time,
-                "expires_at": f.expires_at,
-                "created_at": f.created_at,
+                "expires_at": format_expires_at(f.expires_at),
+                "created_at": f.created_at.format("%Y-%m-%d %H:%M").to_string(),
             })
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
+    Ok(PrettyJson(serde_json::json!({
         "uploads": uploads,
         "count": uploads.len(),
-        "limit": limit,
-        "offset": offset,
     })))
 }
