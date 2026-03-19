@@ -827,3 +827,14 @@ pub async fn cli_upload_history(
         "count": uploads.len(),
     })))
 }
+
+pub async fn cli_install_script() -> Response {
+    Response::builder()
+        .status(StatusCode::MOVED_PERMANENTLY)
+        .header(
+            header::LOCATION,
+            "https://raw.githubusercontent.com/bestdevmgp/share-anything-cli/main/install.sh",
+        )
+        .body(Body::empty())
+        .unwrap()
+}

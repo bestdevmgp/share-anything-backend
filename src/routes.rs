@@ -262,6 +262,9 @@ pub fn create_router(
         ))
         .with_state(cli_state);
 
+    let install_route = Router::new()
+        .route("/install", get(handlers::cli::cli_install_script));
+
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")
@@ -269,6 +272,7 @@ pub fn create_router(
 
     Router::new()
         .merge(health_route)
+        .merge(install_route)
         .merge(swagger_ui)
         .merge(auth_routes)
         .merge(upload_routes)
