@@ -205,13 +205,12 @@ pub fn create_router(
         .with_state(og_state);
 
     let personal_token_state = handlers::personal_token::PersonalTokenState {
-        config: config.clone(),
         db: db.clone(),
     };
 
     let personal_token_routes = Router::new()
         .route("/user/personal-tokens", post(handlers::personal_token::create_personal_token).get(handlers::personal_token::list_personal_tokens))
-        .route("/user/personal-tokens/:key_id", delete(handlers::personal_token::delete_personal_token))
+        .route("/user/personal-tokens/:token_id", delete(handlers::personal_token::delete_personal_token))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             require_auth,
@@ -222,7 +221,6 @@ pub fn create_router(
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
-        email: email.clone(),
     };
 
     let cli_auth_state = CliAuthState {

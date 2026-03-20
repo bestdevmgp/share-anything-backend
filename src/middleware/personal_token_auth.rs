@@ -35,9 +35,9 @@ pub async fn cli_auth(
 
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
-        let key_hash = hex::encode(hasher.finalize());
+        let token_hash = hex::encode(hasher.finalize());
 
-        let token_record = repository::find_personal_token_by_hash(&state.db, &key_hash)
+        let token_record = repository::find_personal_token_by_hash(&state.db, &token_hash)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
             .ok_or(StatusCode::UNAUTHORIZED)?;

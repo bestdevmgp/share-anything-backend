@@ -187,28 +187,6 @@ pub async fn find_file_shares_by_code(
     .await
 }
 
-pub async fn find_file_shares_by_ids(
-    pool: &MySqlPool,
-    ids: &[String],
-) -> Result<Vec<FileShare>, sqlx::Error> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let placeholders = vec!["?"; ids.len()].join(",");
-    let query_str = format!(
-        "SELECT * FROM file_shares WHERE id IN ({}) AND expires_at > UTC_TIMESTAMP()",
-        placeholders
-    );
-
-    let mut query = sqlx::query_as::<_, FileShare>(&query_str);
-    for id in ids {
-        query = query.bind(id);
-    }
-
-    query.fetch_all(pool).await
-}
-
 pub async fn find_file_share_by_id(
     pool: &MySqlPool,
     id: &str,
@@ -452,6 +430,7 @@ pub async fn complete_p2p_transfer(
 }
 
 // Upload Session functions for presigned upload
+#[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 pub struct UploadSession {
     pub id: String,
@@ -532,20 +511,6 @@ pub async fn complete_upload_session(
     .await?;
 
     Ok(())
-}
-
-pub async fn delete_expired_upload_sessions(
-    pool: &MySqlPool,
-) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        r#"
-        DELETE FROM upload_sessions WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 HOUR)
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(result.rows_affected())
 }
 
 pub async fn create_email_auth_session(
@@ -649,8 +614,8 @@ pub async fn create_personal_token(
     pool: &MySqlPool,
     id: &str,
     user_id: &str,
-    key_hash: &str,
-    key_prefix: &str,
+    token_hash: &str,
+    token_prefix: &str,
     name: &str,
     expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<PersonalToken, sqlx::Error> {
@@ -658,14 +623,14 @@ pub async fn create_personal_token(
 
     sqlx::query(
         r#"
-        INSERT INTO personal_tokens (id, user_id, key_hash, key_prefix, name, expires_at, created_at)
+        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(id)
     .bind(user_id)
-    .bind(key_hash)
-    .bind(key_prefix)
+    .bind(token_hash)
+    .bind(token_prefix)
     .bind(name)
     .bind(expires_at)
     .bind(now)
@@ -682,12 +647,12 @@ pub async fn create_personal_token(
 
 pub async fn find_personal_token_by_hash(
     pool: &MySqlPool,
-    key_hash: &str,
+    token_hash: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT * FROM personal_tokens WHERE key_hash = ? AND revoked_at IS NULL"#,
+        r#"SELECT * FROM personal_tokens WHERE token_hash = ? AND revoked_at IS NULL"#,
     )
-    .bind(key_hash)
+    .bind(token_hash)
     .fetch_optional(pool)
     .await
 }
@@ -750,18 +715,3 @@ pub async fn update_personal_token_last_used(
     Ok(())
 }
 
-pub async fn delete_personal_token(
-    pool: &MySqlPool,
-    id: &str,
-    user_id: &str,
-) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        r#"DELETE FROM personal_tokens WHERE id = ? AND user_id = ?"#,
-    )
-    .bind(id)
-    .bind(user_id)
-    .execute(pool)
-    .await?;
-
-    Ok(result.rows_affected())
-}

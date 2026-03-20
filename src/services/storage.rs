@@ -154,10 +154,6 @@ impl StorageService {
         Ok(presigned_request.uri().to_string())
     }
 
-    pub fn get_bucket_name(&self) -> &str {
-        &self.bucket_name
-    }
-
     pub async fn key_exists(&self, key: &str) -> bool {
         self.client
             .head_object()
@@ -247,19 +243,4 @@ impl StorageService {
         Ok(())
     }
 
-    pub async fn abort_multipart_upload(
-        &self,
-        key: &str,
-        upload_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.client
-            .abort_multipart_upload()
-            .bucket(&self.bucket_name)
-            .key(key)
-            .upload_id(upload_id)
-            .send()
-            .await?;
-
-        Ok(())
-    }
 }

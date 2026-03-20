@@ -32,13 +32,6 @@ impl SignalingState {
         }
     }
 
-    pub fn register_uploader(&self, share_code: String, peer_id: String) {
-        self.uploaders.insert(share_code, UploaderInfo {
-            peer_id,
-            device_info: None,
-        });
-    }
-
     pub fn register_uploader_with_device(&self, share_code: String, peer_id: String, device_info: Option<String>) {
         self.uploaders.insert(share_code, UploaderInfo {
             peer_id,

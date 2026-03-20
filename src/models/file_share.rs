@@ -25,17 +25,6 @@ pub struct FileShare {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CreateFileShareDto {
-    pub user_id: Option<String>,
-    pub file_name: String,
-    pub file_size: i64,
-    pub file_type: String,
-    pub description: Option<String>,
-    pub password: Option<String>,
-    pub expiration: ExpirationPeriod,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpirationPeriod {

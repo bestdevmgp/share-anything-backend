@@ -18,7 +18,7 @@ use crate::{
         bad_request, internal_error, not_found, unauthorized, ErrorResponse,
         ExpirationPeriod, CreateDownloadLogDto,
     },
-    services::{StorageService, email::EmailService},
+    services::StorageService,
     utils::{encode_content_disposition, generate_share_code, generate_storage_key, parse_device_platform},
 };
 
@@ -27,7 +27,6 @@ pub struct CliState {
     pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
-    pub email: Arc<EmailService>,
 }
 
 // --- Response types ---

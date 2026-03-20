@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct EmailAuthSession {
     pub id: String,
