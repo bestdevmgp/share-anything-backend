@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     user_id CHAR(36) NOT NULL,
     key_hash VARCHAR(255) NOT NULL,
     key_prefix CHAR(8) NOT NULL,
-    name VARCHAR(255) NOT NULL DEFAULT 'CLI Key',
+    name VARCHAR(255) NOT NULL DEFAULT 'CLI Token',
     last_used_at DATETIME,
     expires_at DATETIME,
     revoked_at DATETIME,

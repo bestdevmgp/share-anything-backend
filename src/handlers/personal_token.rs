@@ -39,7 +39,7 @@ pub async fn create_personal_token(
     Json(request): Json<CreatePersonalTokenRequest>,
 ) -> Result<Json<CreatePersonalTokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     let user_id = &claims.sub;
-    let name = request.name.unwrap_or_else(|| "CLI Key".to_string());
+    let name = request.name.unwrap_or_else(|| "CLI Token".to_string());
 
     if name.len() > 255 {
         return Err(bad_request("키 이름은 255자 이하여야 합니다"));
