@@ -251,11 +251,11 @@ pub async fn cli_rate_limit_middleware(
     let path = request.uri().path().to_string();
     let is_upload = path.contains("/upload") || path.contains("/multipart");
 
-    let api_key_user = request
+    let token_user = request
         .extensions()
-        .get::<crate::middleware::api_key_auth::ApiKeyUser>();
+        .get::<crate::middleware::personal_token_auth::PersonalTokenUser>();
 
-    let (key, is_authenticated) = if let Some(user) = api_key_user {
+    let (key, is_authenticated) = if let Some(user) = token_user {
         (user.user_id.clone(), true)
     } else {
         (ip, false)

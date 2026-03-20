@@ -1,5 +1,5 @@
 use crate::models::*;
-use crate::models::api_key::ApiKey;
+use crate::models::personal_token::PersonalToken;
 use chrono::Utc;
 use sqlx::MySqlPool;
 use uuid::Uuid;
@@ -645,7 +645,7 @@ pub async fn find_user_by_email(
     .await
 }
 
-pub async fn create_api_key(
+pub async fn create_personal_token(
     pool: &MySqlPool,
     id: &str,
     user_id: &str,
@@ -653,12 +653,12 @@ pub async fn create_api_key(
     key_prefix: &str,
     name: &str,
     expires_at: Option<chrono::DateTime<Utc>>,
-) -> Result<ApiKey, sqlx::Error> {
+) -> Result<PersonalToken, sqlx::Error> {
     let now = Utc::now();
 
     sqlx::query(
         r#"
-        INSERT INTO api_keys (id, user_id, key_hash, key_prefix, name, expires_at, created_at)
+        INSERT INTO personal_tokens (id, user_id, key_hash, key_prefix, name, expires_at, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         "#,
     )
@@ -672,33 +672,45 @@ pub async fn create_api_key(
     .execute(pool)
     .await?;
 
-    sqlx::query_as::<_, ApiKey>(
-        r#"SELECT * FROM api_keys WHERE id = ?"#,
+    sqlx::query_as::<_, PersonalToken>(
+        r#"SELECT * FROM personal_tokens WHERE id = ?"#,
     )
     .bind(id)
     .fetch_one(pool)
     .await
 }
 
-pub async fn find_api_key_by_hash(
+pub async fn find_personal_token_by_hash(
     pool: &MySqlPool,
     key_hash: &str,
-) -> Result<Option<ApiKey>, sqlx::Error> {
-    sqlx::query_as::<_, ApiKey>(
-        r#"SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL"#,
+) -> Result<Option<PersonalToken>, sqlx::Error> {
+    sqlx::query_as::<_, PersonalToken>(
+        r#"SELECT * FROM personal_tokens WHERE key_hash = ? AND revoked_at IS NULL"#,
     )
     .bind(key_hash)
     .fetch_optional(pool)
     .await
 }
 
-pub async fn find_api_keys_by_user(
+pub async fn find_personal_token_by_id(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<Option<PersonalToken>, sqlx::Error> {
+    sqlx::query_as::<_, PersonalToken>(
+        r#"SELECT * FROM personal_tokens WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_personal_tokens_by_user(
     pool: &MySqlPool,
     user_id: &str,
-) -> Result<Vec<ApiKey>, sqlx::Error> {
-    sqlx::query_as::<_, ApiKey>(
+) -> Result<Vec<PersonalToken>, sqlx::Error> {
+    sqlx::query_as::<_, PersonalToken>(
         r#"
-        SELECT * FROM api_keys
+        SELECT * FROM personal_tokens
         WHERE user_id = ? AND revoked_at IS NULL
         ORDER BY created_at DESC
         "#,
@@ -708,13 +720,13 @@ pub async fn find_api_keys_by_user(
     .await
 }
 
-pub async fn revoke_api_key(
+pub async fn revoke_personal_token(
     pool: &MySqlPool,
     id: &str,
     user_id: &str,
 ) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
-        r#"UPDATE api_keys SET revoked_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?"#,
+        r#"UPDATE personal_tokens SET revoked_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?"#,
     )
     .bind(id)
     .bind(user_id)
@@ -724,12 +736,12 @@ pub async fn revoke_api_key(
     Ok(result.rows_affected())
 }
 
-pub async fn update_api_key_last_used(
+pub async fn update_personal_token_last_used(
     pool: &MySqlPool,
     id: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        r#"UPDATE api_keys SET last_used_at = UTC_TIMESTAMP() WHERE id = ?"#,
+        r#"UPDATE personal_tokens SET last_used_at = UTC_TIMESTAMP() WHERE id = ?"#,
     )
     .bind(id)
     .execute(pool)
@@ -738,13 +750,13 @@ pub async fn update_api_key_last_used(
     Ok(())
 }
 
-pub async fn delete_api_key(
+pub async fn delete_personal_token(
     pool: &MySqlPool,
     id: &str,
     user_id: &str,
 ) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
-        r#"DELETE FROM api_keys WHERE id = ? AND user_id = ?"#,
+        r#"DELETE FROM personal_tokens WHERE id = ? AND user_id = ?"#,
     )
     .bind(id)
     .bind(user_id)

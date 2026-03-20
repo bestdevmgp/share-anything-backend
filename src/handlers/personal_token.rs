@@ -13,18 +13,18 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        api_key::{ApiKeyResponse, CreateApiKeyRequest, CreateApiKeyResponse},
+        personal_token::{PersonalTokenResponse, CreatePersonalTokenRequest, CreatePersonalTokenResponse},
         bad_request, internal_error, not_found, ErrorResponse,
     },
 };
 
 #[derive(Clone)]
-pub struct ApiKeyState {
+pub struct PersonalTokenState {
     pub config: Arc<Config>,
     pub db: DbPool,
 }
 
-fn generate_api_key() -> String {
+fn generate_personal_token() -> String {
     let mut rng = rand::thread_rng();
     let chars: Vec<char> = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
         .chars()
@@ -33,11 +33,11 @@ fn generate_api_key() -> String {
     format!("sa_{}", random_part)
 }
 
-pub async fn create_api_key(
-    State(state): State<ApiKeyState>,
+pub async fn create_personal_token(
+    State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
-    Json(request): Json<CreateApiKeyRequest>,
-) -> Result<Json<CreateApiKeyResponse>, (StatusCode, Json<ErrorResponse>)> {
+    Json(request): Json<CreatePersonalTokenRequest>,
+) -> Result<Json<CreatePersonalTokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     let user_id = &claims.sub;
     let name = request.name.unwrap_or_else(|| "CLI Key".to_string());
 
@@ -45,11 +45,11 @@ pub async fn create_api_key(
         return Err(bad_request("키 이름은 255자 이하여야 합니다"));
     }
 
-    let raw_key = generate_api_key();
-    let key_prefix = &raw_key[..8];
+    let raw_token = generate_personal_token();
+    let key_prefix = &raw_token[..8];
 
     let mut hasher = Sha256::new();
-    hasher.update(raw_key.as_bytes());
+    hasher.update(raw_token.as_bytes());
     let key_hash = hex::encode(hasher.finalize());
 
     let expires_at = request.expires_in_days.map(|days| {
@@ -58,7 +58,7 @@ pub async fn create_api_key(
 
     let id = Uuid::new_v4().to_string();
 
-    let api_key = repository::create_api_key(
+    let personal_token = repository::create_personal_token(
         &state.db,
         &id,
         user_id,
@@ -68,29 +68,29 @@ pub async fn create_api_key(
         expires_at,
     )
     .await
-    .map_err(|e| internal_error(format!("API 키 생성 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Personal Token 생성 실패: {}", e)))?;
 
-    Ok(Json(CreateApiKeyResponse {
-        id: api_key.id,
-        api_key: raw_key,
-        key_prefix: api_key.key_prefix,
-        name: api_key.name,
-        expires_at: api_key.expires_at,
-        created_at: api_key.created_at,
+    Ok(Json(CreatePersonalTokenResponse {
+        id: personal_token.id,
+        personal_token: raw_token,
+        key_prefix: personal_token.key_prefix,
+        name: personal_token.name,
+        expires_at: personal_token.expires_at,
+        created_at: personal_token.created_at,
     }))
 }
 
-pub async fn list_api_keys(
-    State(state): State<ApiKeyState>,
+pub async fn list_personal_tokens(
+    State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
-) -> Result<Json<Vec<ApiKeyResponse>>, (StatusCode, Json<ErrorResponse>)> {
-    let keys = repository::find_api_keys_by_user(&state.db, &claims.sub)
+) -> Result<Json<Vec<PersonalTokenResponse>>, (StatusCode, Json<ErrorResponse>)> {
+    let keys = repository::find_personal_tokens_by_user(&state.db, &claims.sub)
         .await
-        .map_err(|e| internal_error(format!("API 키 목록 조회 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Personal Token 목록 조회 실패: {}", e)))?;
 
-    let response: Vec<ApiKeyResponse> = keys
+    let response: Vec<PersonalTokenResponse> = keys
         .into_iter()
-        .map(|k| ApiKeyResponse {
+        .map(|k| PersonalTokenResponse {
             id: k.id,
             key_prefix: k.key_prefix,
             name: k.name,
@@ -103,17 +103,17 @@ pub async fn list_api_keys(
     Ok(Json(response))
 }
 
-pub async fn delete_api_key(
-    State(state): State<ApiKeyState>,
+pub async fn delete_personal_token(
+    State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
     Path(key_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
-    let rows = repository::revoke_api_key(&state.db, &key_id, &claims.sub)
+    let rows = repository::revoke_personal_token(&state.db, &key_id, &claims.sub)
         .await
-        .map_err(|e| internal_error(format!("API 키 폐기 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Personal Token 폐기 실패: {}", e)))?;
 
     if rows == 0 {
-        return Err(not_found("API 키를 찾을 수 없습니다"));
+        return Err(not_found("Personal Token을 찾을 수 없습니다"));
     }
 
     Ok(StatusCode::NO_CONTENT)

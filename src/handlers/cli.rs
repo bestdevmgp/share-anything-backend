@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     db::{repository, DbPool},
-    middleware::api_key_auth::ApiKeyUser,
+    middleware::personal_token_auth::PersonalTokenUser,
     models::{
         bad_request, internal_error, not_found, unauthorized, ErrorResponse,
         ExpirationPeriod, CreateDownloadLogDto,
@@ -207,10 +207,10 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
 
 pub async fn cli_upload(
     State(state): State<CliState>,
-    api_key_user: Option<axum::extract::Extension<ApiKeyUser>>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     mut multipart: Multipart,
 ) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let api_key_user = api_key_user.map(|ext| ext.0.clone());
+    let token_user = token_user.map(|ext| ext.0.clone());
 
     struct FileData {
         name: String,
@@ -284,7 +284,7 @@ pub async fn cli_upload(
         return Err(bad_request("파일이 업로드되지 않았습니다"));
     }
 
-    let max_size = if api_key_user.is_some() {
+    let max_size = if token_user.is_some() {
         CLI_AUTH_MAX_FILE_SIZE
     } else {
         CLI_GUEST_MAX_FILE_SIZE
@@ -301,7 +301,7 @@ pub async fn cli_upload(
 
     // Expiration
     let expiration = if let Some(exp_str) = expiration_str {
-        if api_key_user.is_none() {
+        if token_user.is_none() {
             return Err(unauthorized("만료 시간 설정은 API 키가 필요합니다"));
         }
         parse_cli_expiration(&exp_str)
@@ -312,7 +312,7 @@ pub async fn cli_upload(
 
     // Password
     let password_hash = if let Some(pw) = password {
-        if api_key_user.is_none() {
+        if token_user.is_none() {
             return Err(unauthorized("비밀번호 설정은 API 키가 필요합니다"));
         }
         Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("비밀번호 해싱 실패"))?)
@@ -322,7 +322,7 @@ pub async fn cli_upload(
 
     // One-time
     let is_one_time = is_one_time.unwrap_or(false);
-    if is_one_time && api_key_user.is_none() {
+    if is_one_time && token_user.is_none() {
         return Err(unauthorized("1회 다운로드 설정은 API 키가 필요합니다"));
     }
 
@@ -339,7 +339,7 @@ pub async fn cli_upload(
     };
 
     let share_group_id = Uuid::new_v4().to_string();
-    let user_id = api_key_user.as_ref().map(|u| u.user_id.clone());
+    let user_id = token_user.as_ref().map(|u| u.user_id.clone());
     let mut uploaded_files: Vec<String> = Vec::new();
 
     for file_data in files {
@@ -391,16 +391,16 @@ pub async fn cli_upload(
 
 pub async fn cli_multipart_init(
     State(state): State<CliState>,
-    api_key_user: Option<axum::extract::Extension<ApiKeyUser>>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Json(request): Json<CliMultipartInitRequest>,
 ) -> Result<Json<CliMultipartInitResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let api_key_user = api_key_user.map(|ext| ext.0.clone());
+    let token_user = token_user.map(|ext| ext.0.clone());
 
     if request.files.is_empty() {
         return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
     }
 
-    let max_size = if api_key_user.is_some() {
+    let max_size = if token_user.is_some() {
         CLI_AUTH_MAX_FILE_SIZE
     } else {
         CLI_GUEST_MAX_FILE_SIZE
@@ -416,7 +416,7 @@ pub async fn cli_multipart_init(
     }
 
     let expiration = if let Some(exp_str) = &request.expiration {
-        if api_key_user.is_none() {
+        if token_user.is_none() {
             return Err(unauthorized("만료 시간 설정은 API 키가 필요합니다"));
         }
         parse_cli_expiration(exp_str)
@@ -425,12 +425,12 @@ pub async fn cli_multipart_init(
         ExpirationPeriod::ThirtyMinutes
     };
 
-    if request.password.is_some() && api_key_user.is_none() {
+    if request.password.is_some() && token_user.is_none() {
         return Err(unauthorized("비밀번호 설정은 API 키가 필요합니다"));
     }
 
     let is_one_time = request.is_one_time.unwrap_or(false);
-    if is_one_time && api_key_user.is_none() {
+    if is_one_time && token_user.is_none() {
         return Err(unauthorized("1회 다운로드 설정은 API 키가 필요합니다"));
     }
 
@@ -488,7 +488,7 @@ pub async fn cli_multipart_init(
         &state.db,
         &upload_session_id,
         &share_code,
-        api_key_user.as_ref().map(|u| u.user_id.as_str()),
+        token_user.as_ref().map(|u| u.user_id.as_str()),
         request.description.as_deref(),
         password_hash.as_deref(),
         is_one_time,
@@ -800,13 +800,13 @@ pub async fn cli_file_list(
 
 pub async fn cli_upload_history(
     State(state): State<CliState>,
-    api_key_user: axum::extract::Extension<ApiKeyUser>,
+    token_user: axum::extract::Extension<PersonalTokenUser>,
     Query(query): Query<CliUploadHistoryQuery>,
 ) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     let limit = query.limit.unwrap_or(20).min(100);
     let offset = query.offset.unwrap_or(0);
 
-    let file_shares = repository::find_file_shares_by_user(&state.db, &api_key_user.user_id, limit, offset)
+    let file_shares = repository::find_file_shares_by_user(&state.db, &token_user.user_id, limit, offset)
         .await
         .map_err(|e| internal_error(format!("업로드 이력 조회 실패: {}", e)))?;
 
@@ -826,6 +826,30 @@ pub async fn cli_upload_history(
     Ok(PrettyJson(serde_json::json!({
         "uploads": uploads,
         "count": uploads.len(),
+    })))
+}
+
+pub async fn cli_me(
+    State(state): State<CliState>,
+    token_user: axum::extract::Extension<PersonalTokenUser>,
+) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let user = repository::find_user_by_id(&state.db, &token_user.user_id)
+        .await
+        .map_err(|e| internal_error(format!("사용자 조회 실패: {}", e)))?
+        .ok_or_else(|| not_found("사용자를 찾을 수 없습니다"))?;
+
+    let token = repository::find_personal_token_by_id(&state.db, &token_user.personal_token_id)
+        .await
+        .map_err(|e| internal_error(format!("토큰 조회 실패: {}", e)))?;
+
+    let last_used_at = token
+        .and_then(|t| t.last_used_at)
+        .map(|dt| dt.format("%Y-%m-%d %H:%M UTC").to_string());
+
+    Ok(PrettyJson(serde_json::json!({
+        "name": user.name,
+        "email": user.email,
+        "last_used_at": last_used_at,
     })))
 }
 

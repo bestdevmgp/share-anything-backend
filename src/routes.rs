@@ -15,7 +15,7 @@ use crate::{
     docs::ApiDoc,
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
-    middleware::api_key_auth::{cli_auth, CliAuthState},
+    middleware::personal_token_auth::{cli_auth, CliAuthState},
     middleware::rate_limiter::{RateLimiter, CliRateLimiter},
     services::{StorageService, discord::DiscordNotifier, email::EmailService, signaling::SignalingState},
 };
@@ -204,19 +204,19 @@ pub fn create_router(
         .route("/og/:code/image", get(handlers::og::get_og_image))
         .with_state(og_state);
 
-    let api_key_state = handlers::api_key::ApiKeyState {
+    let personal_token_state = handlers::personal_token::PersonalTokenState {
         config: config.clone(),
         db: db.clone(),
     };
 
-    let api_key_routes = Router::new()
-        .route("/user/api-keys", post(handlers::api_key::create_api_key).get(handlers::api_key::list_api_keys))
-        .route("/user/api-keys/:key_id", delete(handlers::api_key::delete_api_key))
+    let personal_token_routes = Router::new()
+        .route("/user/personal-tokens", post(handlers::personal_token::create_personal_token).get(handlers::personal_token::list_personal_tokens))
+        .route("/user/personal-tokens/:key_id", delete(handlers::personal_token::delete_personal_token))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             require_auth,
         ))
-        .with_state(api_key_state);
+        .with_state(personal_token_state);
 
     let cli_state = handlers::cli::CliState {
         config: config.clone(),
@@ -251,6 +251,7 @@ pub fn create_router(
         .with_state(cli_state.clone());
 
     let cli_auth_routes = Router::new()
+        .route("/cli/me", get(handlers::cli::cli_me))
         .route("/cli/user/uploads", get(handlers::cli::cli_upload_history))
         .layer(middleware::from_fn_with_state(
             cli_rate_limiter,
@@ -281,7 +282,7 @@ pub fn create_router(
         .merge(download_routes)
         .merge(user_routes)
         .merge(quick_access_routes)
-        .merge(api_key_routes)
+        .merge(personal_token_routes)
         .merge(cli_routes)
         .merge(cli_auth_routes)
         .merge(ws_routes)

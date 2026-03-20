@@ -1,0 +1,1 @@
+RENAME TABLE api_keys TO personal_tokens;

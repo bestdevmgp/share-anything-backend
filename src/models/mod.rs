@@ -4,7 +4,7 @@ pub mod download_log;
 pub mod email_auth;
 pub mod error;
 pub mod signaling;
-pub mod api_key;
+pub mod personal_token;
 
 pub use user::*;
 pub use file_share::*;

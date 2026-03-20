@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct ApiKey {
+pub struct PersonalToken {
     pub id: String,
     pub user_id: String,
     pub key_hash: String,
@@ -16,7 +16,7 @@ pub struct ApiKey {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ApiKeyResponse {
+pub struct PersonalTokenResponse {
     pub id: String,
     pub key_prefix: String,
     pub name: String,
@@ -26,9 +26,9 @@ pub struct ApiKeyResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CreateApiKeyResponse {
+pub struct CreatePersonalTokenResponse {
     pub id: String,
-    pub api_key: String,
+    pub personal_token: String,
     pub key_prefix: String,
     pub name: String,
     pub expires_at: Option<DateTime<Utc>>,
@@ -36,7 +36,7 @@ pub struct CreateApiKeyResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateApiKeyRequest {
+pub struct CreatePersonalTokenRequest {
     pub name: Option<String>,
     pub expires_in_days: Option<i64>,
 }
