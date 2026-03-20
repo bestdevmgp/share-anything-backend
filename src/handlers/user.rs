@@ -223,7 +223,7 @@ pub async fn delete_file_share(
         .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
-        return Err(forbidden("파일 접근 권한이 없습니다."));
+        return Err(forbidden("파일 접근 권한이 없습니다"));
     }
 
     if !file_share.storage_key.is_empty() {

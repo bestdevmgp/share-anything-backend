@@ -48,7 +48,7 @@ impl RateLimiter {
     pub fn check_rate_limit(&self, ip: &str) -> Result<(), String> {
         if let Some(blocked_until) = self.blocked_ips.get(ip) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                return Err("비정상적인 활동으로 인해 사용자의 IP가 일시적으로 차단되었습니다. 나중에 다시 시도해 주세요.".to_string());
+                return Err("비정상적인 활동으로 인해 사용자의 IP가 일시적으로 차단되었습니다. 나중에 다시 시도해 주세요".to_string());
             } else {
                 self.blocked_ips.remove(ip);
             }
@@ -78,7 +78,7 @@ impl RateLimiter {
             });
 
         if !should_allow {
-            return Err("Rate limit exceeded. You can make up to 50 requests per minute.".to_string());
+            return Err("Rate limit exceeded. You can make up to 50 requests per minute".to_string());
         }
 
         Ok(())
@@ -175,7 +175,7 @@ impl CliRateLimiter {
     ) -> Result<(), String> {
         if let Some(blocked_until) = self.blocked_ips.get(key) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                return Err("Too many requests. Please try again later.".to_string());
+                return Err("Too many requests. Please try again later".to_string());
             } else {
                 self.blocked_ips.remove(key);
             }
@@ -211,7 +211,7 @@ impl CliRateLimiter {
 
         if !should_allow {
             return Err(format!(
-                "Rate limit exceeded. Maximum {} requests per hour.",
+                "Rate limit exceeded. Maximum {} requests per hour",
                 max_requests
             ));
         }

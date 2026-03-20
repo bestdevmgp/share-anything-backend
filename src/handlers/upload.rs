@@ -155,11 +155,11 @@ pub async fn upload_file(
         let limit_mb = max_total_size / 1024 / 1024;
         let current_mb = total_size / 1024 / 1024;
         return Err(bad_request(format!(
-            "파일 크기 제한을 초과하였습니다. (업로드: {}MB, 제한: {}MB). {}",
+            "파일 크기 제한을 초과하였습니다. (업로드: {}MB, 제한: {}MB) {}",
             current_mb,
             limit_mb,
             if user_claims.is_none() {
-                "파일 크기 제한을 초과하였습니다. 로그인하여 더 큰 파일을 업로드할 수 있습니다."
+                "로그인하여 더 큰 파일을 업로드할 수 있습니다"
             } else {
                 ""
             }
@@ -176,7 +176,7 @@ pub async fn upload_file(
 
     let expiration = if let Some(exp) = metadata.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
+            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다"));
         }
         exp
     } else {

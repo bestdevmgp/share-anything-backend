@@ -35,25 +35,25 @@ pub async fn init_quick_access_upload(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다."))?
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
         .clone();
 
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
-        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다."))?;
+        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다"))?;
 
     let req: QuickAccessUploadRequest = serde_json::from_slice(&body_bytes)
-        .map_err(|_| internal_error("잘못된 요청 형식입니다."))?;
+        .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
 
     if req.files.is_empty() {
-        return Err(internal_error("최소 1개 이상의 파일 정보가 필요합니다."));
+        return Err(internal_error("최소 1개 이상의 파일 정보가 필요합니다"));
     }
 
     let max_total_size: i64 = 3 * 1024 * 1024 * 1024;
     let total_size: i64 = req.files.iter().map(|f| f.file_size).sum();
 
     if total_size > max_total_size {
-        return Err(internal_error("파일 크기 제한을 초과하였습니다."));
+        return Err(internal_error("파일 크기 제한을 초과하였습니다"));
     }
 
     let share_code = loop {
@@ -175,14 +175,14 @@ pub async fn delete_quick_access_file(
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없습니다."))?;
+        .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
         return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
     }
 
     if !file_share.is_quick_access {
-        return Err(forbidden("Quick Access 파일이 아닙니다."));
+        return Err(forbidden("Quick Access 파일이 아닙니다"));
     }
 
     if !file_share.storage_key.is_empty() {
@@ -208,7 +208,7 @@ pub async fn preview_quick_access_file(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다."))?;
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
@@ -216,15 +216,15 @@ pub async fn preview_quick_access_file(
         .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
-        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다."));
+        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
     }
 
     if !file_share.is_quick_access {
-        return Err(forbidden("Quick Access 파일이 아닙니다."));
+        return Err(forbidden("Quick Access 파일이 아닙니다"));
     }
 
     if file_share.expires_at < Utc::now() {
-        return Err(not_found("파일이 만료되었습니다."));
+        return Err(not_found("파일이 만료되었습니다"));
     }
 
     let preview_url = state
@@ -255,24 +255,24 @@ pub async fn download_quick_access_file(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다."))?
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
         .clone();
 
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없습니다."))?;
+        .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
-        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다."));
+        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
     }
 
     if !file_share.is_quick_access {
-        return Err(forbidden("Quick Access 파일이 아닙니다."));
+        return Err(forbidden("Quick Access 파일이 아닙니다"));
     }
 
     if file_share.expires_at < Utc::now() {
-        return Err(not_found("파일이 만료되었습니다."));
+        return Err(not_found("파일이 만료되었습니다"));
     }
 
     let download_url = state

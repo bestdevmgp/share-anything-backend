@@ -72,7 +72,7 @@ pub async fn request_presigned_upload(
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
+            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다"));
         }
         exp
     } else {
@@ -321,7 +321,7 @@ pub async fn init_multipart_upload(
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다."));
+            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다"));
         }
         exp
     } else {

@@ -94,7 +94,7 @@ pub async fn get_file_list(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
     let first_file = &file_shares[0];
@@ -170,7 +170,7 @@ pub async fn get_file_info(
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
 
     let uploader_name = if let Some(user_id) = &file_share.user_id {
         repository::find_user_by_id(&state.db, user_id)
@@ -240,7 +240,7 @@ pub async fn download_single_file(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
     let file_share = file_shares
@@ -250,7 +250,7 @@ pub async fn download_single_file(
 
     if file_share.transfer_type == "p2p" {
         return Err(bad_request(
-            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요.",
+            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
         ));
     }
 
@@ -427,7 +427,7 @@ pub async fn preview_file(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
     let file_share = file_shares
@@ -500,7 +500,7 @@ pub async fn download_file(
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
@@ -675,7 +675,7 @@ pub async fn download_multiple_files(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if all_files.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
     let files_to_download: Vec<_> = all_files
@@ -864,7 +864,7 @@ pub async fn verify_password(
     let file_share = repository::find_file_share_by_code(&state.db, &req.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다."))?;
+        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let is_valid = bcrypt::verify(&req.password, password_hash)
@@ -917,7 +917,7 @@ pub async fn get_download_url(
         .map_err(|_| internal_error("파일 조회 실패"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다."));
+        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
     let file_share = file_shares
@@ -927,7 +927,7 @@ pub async fn get_download_url(
 
     if file_share.transfer_type == "p2p" {
         return Err(bad_request(
-            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요.",
+            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
         ));
     }
 
