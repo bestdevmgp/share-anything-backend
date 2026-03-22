@@ -143,7 +143,7 @@ pub async fn complete_session(
         user_id,
         &token_hash,
         token_prefix,
-        "CLI Login Token",
+        "CLI Token",
         None,
     )
     .await
