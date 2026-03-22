@@ -8,4 +8,4 @@ CREATE TABLE IF NOT EXISTS cli_auth_sessions (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME,
     INDEX idx_cli_auth_sessions_expires (expires_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -740,7 +740,7 @@ pub async fn find_cli_auth_session(
         r#"
         SELECT s.status, s.personal_token_value, u.name, s.expires_at
         FROM cli_auth_sessions s
-        LEFT JOIN users u ON s.user_id = u.id
+        LEFT JOIN users u ON s.user_id COLLATE utf8mb4_unicode_ci = u.id
         WHERE s.id = ?
         "#,
     )
