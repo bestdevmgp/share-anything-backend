@@ -217,6 +217,28 @@ pub fn create_router(
         ))
         .with_state(personal_token_state);
 
+    let cli_device_auth_state = handlers::cli_auth::CliAuthHandlerState {
+        db: db.clone(),
+        config: config.clone(),
+    };
+
+    let cli_device_auth_routes = Router::new()
+        .route("/cli/auth/session", post(handlers::cli_auth::create_session))
+        .route("/cli/auth/session/:session_id/status", get(handlers::cli_auth::check_status))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
+        .with_state(cli_device_auth_state.clone());
+
+    let cli_device_auth_complete_routes = Router::new()
+        .route("/cli/auth/session/:session_id/complete", post(handlers::cli_auth::complete_session))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            require_auth,
+        ))
+        .with_state(cli_device_auth_state);
+
     let cli_state = handlers::cli::CliState {
         config: config.clone(),
         db: db.clone(),
@@ -283,6 +305,8 @@ pub fn create_router(
         .merge(personal_token_routes)
         .merge(cli_routes)
         .merge(cli_auth_routes)
+        .merge(cli_device_auth_routes)
+        .merge(cli_device_auth_complete_routes)
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)

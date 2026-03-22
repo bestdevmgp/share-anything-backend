@@ -5,6 +5,7 @@ pub mod email_auth;
 pub mod error;
 pub mod signaling;
 pub mod personal_token;
+pub mod cli_auth;
 
 pub use user::*;
 pub use file_share::*;

@@ -715,3 +715,89 @@ pub async fn update_personal_token_last_used(
     Ok(())
 }
 
+pub async fn create_cli_auth_session(
+    pool: &MySqlPool,
+    id: &str,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO cli_auth_sessions (id, status, expires_at) VALUES (?, 'pending', ?)"#,
+    )
+    .bind(id)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn find_cli_auth_session(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<Option<(String, Option<String>, Option<String>, chrono::DateTime<Utc>)>, sqlx::Error> {
+    // Returns (status, personal_token_value, user_name, expires_at)
+    sqlx::query_as::<_, (String, Option<String>, Option<String>, chrono::DateTime<Utc>)>(
+        r#"
+        SELECT s.status, s.personal_token_value, u.name, s.expires_at
+        FROM cli_auth_sessions s
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE s.id = ?
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn complete_cli_auth_session(
+    pool: &MySqlPool,
+    session_id: &str,
+    user_id: &str,
+    personal_token_id: &str,
+    personal_token_value: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE cli_auth_sessions
+        SET status = 'completed', user_id = ?, personal_token_id = ?, personal_token_value = ?, completed_at = UTC_TIMESTAMP()
+        WHERE id = ? AND status = 'pending'
+        "#,
+    )
+    .bind(user_id)
+    .bind(personal_token_id)
+    .bind(personal_token_value)
+    .bind(session_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn clear_cli_auth_session_token(
+    pool: &MySqlPool,
+    session_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE cli_auth_sessions SET personal_token_value = NULL WHERE id = ? AND personal_token_value IS NOT NULL"#,
+    )
+    .bind(session_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn delete_expired_cli_auth_sessions(
+    pool: &MySqlPool,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"DELETE FROM cli_auth_sessions
+           WHERE (expires_at < UTC_TIMESTAMP() AND status != 'completed')
+              OR (status = 'completed' AND completed_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR))"#,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
