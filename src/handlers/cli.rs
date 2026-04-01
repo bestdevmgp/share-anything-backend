@@ -226,7 +226,7 @@ pub async fn cli_upload(
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|_| bad_request("멀티파트 데이터 파싱 실패"))?
+        .map_err(|_| bad_request("Failed to parse multipart data"))?
     {
         let name = field.name().unwrap_or("").to_string();
 
@@ -234,7 +234,7 @@ pub async fn cli_upload(
             "file" => {
                 let file_name = field
                     .file_name()
-                    .ok_or_else(|| bad_request("파일 이름이 없습니다"))?
+                    .ok_or_else(|| bad_request("File name is missing"))?
                     .to_string();
                 let content_type = field
                     .content_type()
@@ -243,7 +243,7 @@ pub async fn cli_upload(
                 let data = field
                     .bytes()
                     .await
-                    .map_err(|_| bad_request("파일 데이터를 읽을 수 없습니다"))?;
+                    .map_err(|_| bad_request("Failed to read file data"))?;
 
                 files.push(FileData {
                     name: file_name,
@@ -252,25 +252,25 @@ pub async fn cli_upload(
                 });
             }
             "description" => {
-                let text = field.text().await.map_err(|_| bad_request("description 필드를 읽을 수 없습니다"))?;
+                let text = field.text().await.map_err(|_| bad_request("Failed to read description field"))?;
                 if !text.is_empty() {
                     description = Some(text);
                 }
             }
             "password" => {
-                let text = field.text().await.map_err(|_| bad_request("password 필드를 읽을 수 없습니다"))?;
+                let text = field.text().await.map_err(|_| bad_request("Failed to read password field"))?;
                 if !text.is_empty() {
                     password = Some(text);
                 }
             }
             "expiration" => {
-                let text = field.text().await.map_err(|_| bad_request("expiration 필드를 읽을 수 없습니다"))?;
+                let text = field.text().await.map_err(|_| bad_request("Failed to read expiration field"))?;
                 if !text.is_empty() {
                     expiration_str = Some(text);
                 }
             }
             "is_one_time" => {
-                let text = field.text().await.map_err(|_| bad_request("is_one_time 필드를 읽을 수 없습니다"))?;
+                let text = field.text().await.map_err(|_| bad_request("Failed to read is_one_time field"))?;
                 if !text.is_empty() {
                     is_one_time = text.parse::<bool>().ok();
                 }
@@ -280,7 +280,7 @@ pub async fn cli_upload(
     }
 
     if files.is_empty() {
-        return Err(bad_request("파일이 업로드되지 않았습니다"));
+        return Err(bad_request("No files were uploaded"));
     }
 
     let max_size = if token_user.is_some() {
@@ -292,7 +292,7 @@ pub async fn cli_upload(
     let total_size: i64 = files.iter().map(|f| f.data.len() as i64).sum();
     if total_size > max_size {
         return Err(bad_request(format!(
-            "파일 크기 제한 초과 ({}MB / {}MB)",
+            "File size limit exceeded ({}MB / {}MB)",
             total_size / 1024 / 1024,
             max_size / 1024 / 1024
         )));
@@ -301,10 +301,10 @@ pub async fn cli_upload(
     // Expiration
     let expiration = if let Some(exp_str) = expiration_str {
         if token_user.is_none() {
-            return Err(unauthorized("만료 시간 설정은 API 키가 필요합니다"));
+            return Err(unauthorized("Personal token required to set expiration"));
         }
         parse_cli_expiration(&exp_str)
-            .ok_or_else(|| bad_request("유효하지 않은 만료 시간입니다. 사용 가능: 5m, 30m, 1h, 3h, 6h, 12h, 24h"))?
+            .ok_or_else(|| bad_request("Invalid expiration. Available: 5m, 30m, 1h, 3h, 6h, 12h, 24h"))?
     } else {
         ExpirationPeriod::ThirtyMinutes
     };
@@ -312,9 +312,9 @@ pub async fn cli_upload(
     // Password
     let password_hash = if let Some(pw) = password {
         if token_user.is_none() {
-            return Err(unauthorized("비밀번호 설정은 API 키가 필요합니다"));
+            return Err(unauthorized("Personal token required to set password"));
         }
-        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("비밀번호 해싱 실패"))?)
+        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
     } else {
         None
     };
@@ -322,7 +322,7 @@ pub async fn cli_upload(
     // One-time
     let is_one_time = is_one_time.unwrap_or(false);
     if is_one_time && token_user.is_none() {
-        return Err(unauthorized("1회 다운로드 설정은 API 키가 필요합니다"));
+        return Err(unauthorized("Personal token required to set one-time download"));
     }
 
     let expires_at = Utc::now() + expiration.to_duration();
@@ -331,7 +331,7 @@ pub async fn cli_upload(
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
             .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
+            .map_err(|_| internal_error("Failed to check share code"))?
         {
             break code;
         }
@@ -353,7 +353,7 @@ pub async fn cli_upload(
             .storage
             .upload_file(&storage_key, file_data.data, &file_data.content_type)
             .await
-            .map_err(|e| internal_error(format!("스토리지 업로드 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
 
         let file_share = repository::create_file_share(
             &state.db,
@@ -372,7 +372,7 @@ pub async fn cli_upload(
             expires_at,
         )
         .await
-        .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
 
         uploaded_files.push(file_share.file_name);
     }
@@ -396,7 +396,7 @@ pub async fn cli_multipart_init(
     let token_user = token_user.map(|ext| ext.0.clone());
 
     if request.files.is_empty() {
-        return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
+        return Err(bad_request("At least one file is required"));
     }
 
     let max_size = if token_user.is_some() {
@@ -408,7 +408,7 @@ pub async fn cli_multipart_init(
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
     if total_size > max_size {
         return Err(bad_request(format!(
-            "파일 크기 제한 초과 ({}MB / {}MB)",
+            "File size limit exceeded ({}MB / {}MB)",
             total_size / 1024 / 1024,
             max_size / 1024 / 1024
         )));
@@ -416,28 +416,28 @@ pub async fn cli_multipart_init(
 
     let expiration = if let Some(exp_str) = &request.expiration {
         if token_user.is_none() {
-            return Err(unauthorized("만료 시간 설정은 API 키가 필요합니다"));
+            return Err(unauthorized("Personal token required to set expiration"));
         }
         parse_cli_expiration(exp_str)
-            .ok_or_else(|| bad_request("유효하지 않은 만료 시간입니다"))?
+            .ok_or_else(|| bad_request("Invalid expiration"))?
     } else {
         ExpirationPeriod::ThirtyMinutes
     };
 
     if request.password.is_some() && token_user.is_none() {
-        return Err(unauthorized("비밀번호 설정은 API 키가 필요합니다"));
+        return Err(unauthorized("Personal token required to set password"));
     }
 
     let is_one_time = request.is_one_time.unwrap_or(false);
     if is_one_time && token_user.is_none() {
-        return Err(unauthorized("1회 다운로드 설정은 API 키가 필요합니다"));
+        return Err(unauthorized("Personal token required to set one-time download"));
     }
 
     let share_code = loop {
         let code = generate_share_code();
         if !repository::check_code_exists(&state.db, &code)
             .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
+            .map_err(|_| internal_error("Failed to check share code"))?
         {
             break code;
         }
@@ -461,7 +461,7 @@ pub async fn cli_multipart_init(
                 .storage
                 .create_multipart_upload(&storage_key, &file_info.content_type)
                 .await
-                .map_err(|e| internal_error(format!("멀티파트 업로드 생성 실패: {}", e)))?
+                .map_err(|e| internal_error(format!("Failed to create multipart upload: {}", e)))?
         } else {
             String::new()
         };
@@ -475,7 +475,7 @@ pub async fn cli_multipart_init(
     }
 
     let password_hash = if let Some(pw) = &request.password {
-        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("비밀번호 해싱 실패"))?)
+        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
     } else {
         None
     };
@@ -496,7 +496,7 @@ pub async fn cli_multipart_init(
         session_expires_at,
     )
     .await
-    .map_err(|e| internal_error(format!("업로드 세션 생성 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to create upload session: {}", e)))?;
 
     Ok(Json(CliMultipartInitResponse {
         upload_session_id,
@@ -512,11 +512,11 @@ pub async fn cli_presign_parts(
 ) -> Result<Json<CliPresignPartsResponse>, (StatusCode, Json<ErrorResponse>)> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
-        .map_err(|_| internal_error("업로드 세션 조회 실패"))?
-        .ok_or_else(|| bad_request("유효하지 않은 업로드 세션입니다"))?;
+        .map_err(|_| internal_error("Failed to get upload session"))?
+        .ok_or_else(|| bad_request("Invalid upload session"))?;
 
     if session.completed {
-        return Err(bad_request("이미 완료된 업로드 세션입니다"));
+        return Err(bad_request("Upload session already completed"));
     }
 
     let mut urls: Vec<CliPartUrl> = Vec::new();
@@ -531,7 +531,7 @@ pub async fn cli_presign_parts(
                 PRESIGNED_URL_EXPIRY_SECS,
             )
             .await
-            .map_err(|_| internal_error("파트 Presigned URL 생성 실패"))?;
+            .map_err(|_| internal_error("Failed to generate presigned URL"))?;
 
         urls.push(CliPartUrl {
             part_number: *part_number,
@@ -552,15 +552,15 @@ pub async fn cli_complete_multipart(
 ) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
-        .map_err(|_| internal_error("업로드 세션 조회 실패"))?
-        .ok_or_else(|| bad_request("유효하지 않은 업로드 세션입니다"))?;
+        .map_err(|_| internal_error("Failed to get upload session"))?
+        .ok_or_else(|| bad_request("Invalid upload session"))?;
 
     if session.share_code != request.share_code {
-        return Err(bad_request("공유 코드가 일치하지 않습니다"));
+        return Err(bad_request("Share code mismatch"));
     }
 
     if session.completed {
-        return Err(bad_request("이미 완료된 업로드 세션입니다"));
+        return Err(bad_request("Upload session already completed"));
     }
 
     let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
@@ -582,7 +582,7 @@ pub async fn cli_complete_multipart(
                 .storage
                 .complete_multipart_upload(&file_info.storage_key, &file_info.upload_id, parts)
                 .await
-                .map_err(|e| internal_error(format!("멀티파트 업로드 완료 실패: {}", e)))?;
+                .map_err(|e| internal_error(format!("Failed to complete multipart upload: {}", e)))?;
         }
 
         let file_share = repository::create_file_share(
@@ -602,14 +602,14 @@ pub async fn cli_complete_multipart(
             expires_at,
         )
         .await
-        .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
 
         uploaded_files.push(file_share.file_name);
     }
 
     repository::complete_upload_session(&state.db, &request.upload_session_id)
         .await
-        .map_err(|_| internal_error("업로드 세션 완료 처리 실패"))?;
+        .map_err(|_| internal_error("Failed to complete upload session"))?;
 
     let download_url = format!(
         "{}/cli/download/{}",
@@ -633,23 +633,23 @@ pub async fn cli_download(
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to query files"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let file_share = if let Some(file_id) = &query.file_id {
         file_shares
             .iter()
             .find(|f| f.id == *file_id)
-            .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?
+            .ok_or_else(|| not_found("File not found"))?
     } else {
         &file_shares[0]
     };
 
     if file_share.transfer_type == "p2p" {
-        return Err(bad_request("P2P 파일은 CLI 다운로드를 지원하지 않습니다"));
+        return Err(bad_request("P2P files cannot be downloaded via CLI"));
     }
 
     // Password check
@@ -662,13 +662,13 @@ pub async fn cli_download(
                     .get("X-File-Password")
                     .and_then(|v| v.to_str().ok())
             })
-            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. ?password=<pw> 또는 X-File-Password 헤더를 사용하세요"))?;
+            .ok_or_else(|| unauthorized("Password required. Use ?password=&lt;pw&gt; or X-File-Password header"))?;
 
         let is_valid = bcrypt::verify(password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Failed to verify password"))?;
 
         if !is_valid {
-            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+            return Err(unauthorized("Incorrect password"));
         }
     }
 
@@ -705,7 +705,7 @@ pub async fn cli_download(
         .storage
         .download_file(&file_share.storage_key)
         .await
-        .map_err(|e| internal_error(format!("파일 다운로드 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("File download failed: {}", e)))?;
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
@@ -738,10 +738,10 @@ pub async fn cli_download_info(
 ) -> Result<PrettyJson<CliFileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to query files"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let first = &file_shares[0];
@@ -769,10 +769,10 @@ pub async fn cli_file_list(
 ) -> Result<PrettyJson<CliFileListResponse>, (StatusCode, Json<ErrorResponse>)> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to query files"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let first = &file_shares[0];
@@ -807,7 +807,7 @@ pub async fn cli_upload_history(
 
     let file_shares = repository::find_file_shares_by_user(&state.db, &token_user.user_id, limit, offset)
         .await
-        .map_err(|e| internal_error(format!("업로드 이력 조회 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to fetch upload history: {}", e)))?;
 
     let uploads: Vec<serde_json::Value> = file_shares
         .iter()
@@ -834,12 +834,12 @@ pub async fn cli_me(
 ) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     let user = repository::find_user_by_id(&state.db, &token_user.user_id)
         .await
-        .map_err(|e| internal_error(format!("사용자 조회 실패: {}", e)))?
-        .ok_or_else(|| not_found("사용자를 찾을 수 없습니다"))?;
+        .map_err(|e| internal_error(format!("Failed to fetch user: {}", e)))?
+        .ok_or_else(|| not_found("User not found"))?;
 
     let token = repository::find_personal_token_by_id(&state.db, &token_user.personal_token_id)
         .await
-        .map_err(|e| internal_error(format!("토큰 조회 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to fetch token: {}", e)))?;
 
     let last_used_at = token
         .and_then(|t| t.last_used_at)
