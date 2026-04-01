@@ -160,6 +160,9 @@ async fn handle_message(
                 );
             }
         }
+        SignalingMessage::Ping {} => {
+            state.send_to_peer(peer_id, SignalingMessage::Pong {})?;
+        }
         _ => {}
     }
 

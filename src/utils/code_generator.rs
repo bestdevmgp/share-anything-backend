@@ -7,6 +7,17 @@ pub fn generate_share_code() -> String {
 }
 
 pub fn parse_device_platform(user_agent: &str) -> String {
+    if user_agent.starts_with("share-cli/") {
+        let os_info = user_agent
+            .find('(')
+            .and_then(|start| user_agent.find(')').map(|end| user_agent[start + 1..end].trim()));
+
+        return match os_info {
+            Some(info) if !info.is_empty() => format!("{} (CLI)", info),
+            _ => "Unknown (CLI)".to_string(),
+        };
+    }
+
     match woothee::parser::Parser::new().parse(user_agent) {
         Some(result) => {
             let os = if result.os.is_empty() { "Unknown" } else { result.os };

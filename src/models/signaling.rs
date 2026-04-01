@@ -68,6 +68,8 @@ pub enum SignalingMessage {
     UploaderCancelled {
         share_code: String,
     },
+    Ping {},
+    Pong {},
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
