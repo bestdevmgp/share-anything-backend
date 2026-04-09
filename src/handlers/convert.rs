@@ -63,7 +63,12 @@ pub async fn convert_hwp_to_pdf(
 
     let client = reqwest::Client::new();
 
-    // Step 1: Create job with upload + convert + export tasks
+    let input_format = if file_name.to_lowercase().ends_with(".hwpx") {
+        "hwpx"
+    } else {
+        "hwp"
+    };
+
     let job_res = client
         .post("https://api.cloudconvert.com/v2/jobs")
         .bearer_auth(&api_key)
@@ -75,6 +80,7 @@ pub async fn convert_hwp_to_pdf(
                 "convert": {
                     "operation": "convert",
                     "input": "upload",
+                    "input_format": input_format,
                     "output_format": "pdf"
                 },
                 "export": {
@@ -117,7 +123,6 @@ pub async fn convert_hwp_to_pdf(
         }
     };
 
-    // Step 2: Find upload task and its upload URL
     let upload_task = job_body["data"]["tasks"]
         .as_array()
         .and_then(|tasks| tasks.iter().find(|t| t["name"] == "upload"))
@@ -144,7 +149,6 @@ pub async fn convert_hwp_to_pdf(
         }
     };
 
-    // Step 3: Upload the file
     let mut form = reqwest::multipart::Form::new();
     for (key, value) in &upload_params {
         if let Some(v) = value.as_str() {
@@ -166,13 +170,13 @@ pub async fn convert_hwp_to_pdf(
             .into_response();
     }
 
-    // Step 4: Poll job status until finished
     let job_id = job_body["data"]["id"].as_str().unwrap_or("");
     let job_url = format!("https://api.cloudconvert.com/v2/jobs/{}", job_id);
 
     let mut pdf_url: Option<String> = None;
-    for _ in 0..60 {
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    for i in 0..60 {
+        let delay = if i < 10 { 1 } else { 2 };
+        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
 
         let status_res = client
             .get(&job_url)
@@ -214,7 +218,6 @@ pub async fn convert_hwp_to_pdf(
         }
     };
 
-    // Step 5: Download the converted PDF and return it
     match client.get(&pdf_url).send().await {
         Ok(res) if res.status().is_success() => {
             let bytes = res.bytes().await.unwrap_or_default();
