@@ -193,6 +193,15 @@ pub fn create_router(
         .route("/turn/credentials", get(handlers::turn::get_turn_credentials))
         .with_state(turn_state);
 
+    let convert_state = handlers::convert::ConvertState {
+        config: config.clone(),
+    };
+
+    let convert_routes = Router::new()
+        .route("/convert/hwp-to-pdf", post(handlers::convert::convert_hwp_to_pdf))
+        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
+        .with_state(convert_state);
+
     let og_state = handlers::og::OgState {
         config: config.clone(),
         db: db.clone(),
@@ -310,6 +319,7 @@ pub fn create_router(
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)
+        .merge(convert_routes)
         .merge(og_routes)
         .layer(axum::middleware::from_fn(
             crate::middleware::discord_error::discord_error_middleware,

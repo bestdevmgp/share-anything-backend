@@ -13,6 +13,7 @@ pub struct Config {
     pub cloudflare_turn: CloudflareTurnConfig,
     pub discord: DiscordConfig,
     pub smtp: SmtpConfig,
+    pub cloudconvert: CloudConvertConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -97,6 +98,11 @@ pub struct TurnstileConfig {
 pub struct CloudflareTurnConfig {
     pub key_id: String,
     pub api_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CloudConvertConfig {
+    pub api_key: Option<String>,
 }
 
 impl Config {
@@ -194,6 +200,9 @@ impl Config {
             },
             discord: DiscordConfig {
                 webhook_url: env::var("DISCORD_WEBHOOK_URL").ok(),
+            },
+            cloudconvert: CloudConvertConfig {
+                api_key: env::var("CLOUDCONVERT_API_KEY").ok(),
             },
             smtp: SmtpConfig {
                 host: env::var("SMTP_HOST").ok(),
