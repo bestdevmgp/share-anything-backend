@@ -63,12 +63,6 @@ pub async fn convert_hwp_to_pdf(
 
     let client = reqwest::Client::new();
 
-    let input_format = if file_name.to_lowercase().ends_with(".hwpx") {
-        "hwpx"
-    } else {
-        "hwp"
-    };
-
     let job_res = client
         .post("https://api.cloudconvert.com/v2/jobs")
         .bearer_auth(&api_key)
@@ -80,7 +74,6 @@ pub async fn convert_hwp_to_pdf(
                 "convert": {
                     "operation": "convert",
                     "input": "upload",
-                    "input_format": input_format,
                     "output_format": "pdf"
                 },
                 "export": {
@@ -174,9 +167,9 @@ pub async fn convert_hwp_to_pdf(
     let job_url = format!("https://api.cloudconvert.com/v2/jobs/{}", job_id);
 
     let mut pdf_url: Option<String> = None;
-    for i in 0..60 {
-        let delay = if i < 10 { 1 } else { 2 };
-        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+    for i in 0u64..60 {
+        let delay_ms = if i < 5 { 500 } else if i < 15 { 1000 } else { 2000 };
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
 
         let status_res = client
             .get(&job_url)
