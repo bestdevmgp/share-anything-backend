@@ -198,8 +198,8 @@ pub fn create_router(
     };
 
     let convert_routes = Router::new()
-        .route("/convert/hwp-to-pdf", post(handlers::convert::convert_hwp_to_pdf))
-        .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
+        .route("/convert/create-job", post(handlers::convert::create_convert_job))
+        .route("/convert/status/:job_id", get(handlers::convert::get_convert_status))
         .with_state(convert_state);
 
     let og_state = handlers::og::OgState {

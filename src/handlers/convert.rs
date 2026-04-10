@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -14,9 +14,8 @@ pub struct ConvertState {
     pub config: Arc<Config>,
 }
 
-pub async fn convert_hwp_to_pdf(
+pub async fn create_convert_job(
     State(state): State<ConvertState>,
-    mut multipart: Multipart,
 ) -> impl IntoResponse {
     let api_key = match &state.config.cloudconvert.api_key {
         Some(key) if !key.is_empty() => key.clone(),
@@ -24,38 +23,6 @@ pub async fn convert_hwp_to_pdf(
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({ "error": "CloudConvert API key not configured" })),
-            )
-                .into_response();
-        }
-    };
-
-    let mut file_data: Option<Vec<u8>> = None;
-    let mut file_name = String::from("document.hwp");
-
-    while let Ok(Some(field)) = multipart.next_field().await {
-        if field.name() == Some("file") {
-            if let Some(name) = field.file_name() {
-                file_name = name.to_string();
-            }
-            match field.bytes().await {
-                Ok(bytes) => file_data = Some(bytes.to_vec()),
-                Err(_) => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(json!({ "error": "Failed to read file" })),
-                    )
-                        .into_response();
-                }
-            }
-        }
-    }
-
-    let data = match file_data {
-        Some(d) => d,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "No file provided" })),
             )
                 .into_response();
         }
@@ -89,145 +56,79 @@ pub async fn convert_hwp_to_pdf(
         Ok(res) if res.status().is_success() => match res.json().await {
             Ok(v) => v,
             Err(_) => {
-                return (
-                    StatusCode::BAD_GATEWAY,
-                    Json(json!({ "error": "Failed to parse CloudConvert response" })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_GATEWAY, Json(json!({ "error": "Failed to parse response" }))).into_response();
             }
         },
-        Ok(res) => {
-            let status = res.status();
-            let body = res.text().await.unwrap_or_default();
-            tracing::error!("CloudConvert job creation failed: {} {}", status, body);
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": format!("CloudConvert error: {}", status) })),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            tracing::error!("CloudConvert request failed: {}", e);
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": "CloudConvert request failed" })),
-            )
-                .into_response();
+        _ => {
+            return (StatusCode::BAD_GATEWAY, Json(json!({ "error": "CloudConvert job creation failed" }))).into_response();
         }
     };
 
     let upload_task = job_body["data"]["tasks"]
         .as_array()
-        .and_then(|tasks| tasks.iter().find(|t| t["name"] == "upload"))
-        .cloned();
+        .and_then(|tasks| tasks.iter().find(|t| t["name"] == "upload"));
 
     let upload_url = upload_task
-        .as_ref()
-        .and_then(|t| t["result"]["form"]["url"].as_str())
-        .map(|s| s.to_string());
-
+        .and_then(|t| t["result"]["form"]["url"].as_str());
     let upload_params = upload_task
-        .as_ref()
-        .and_then(|t| t["result"]["form"]["parameters"].as_object())
-        .cloned();
+        .and_then(|t| t["result"]["form"]["parameters"].as_object());
+    let job_id = job_body["data"]["id"].as_str().unwrap_or("");
 
-    let (upload_url, upload_params) = match (upload_url, upload_params) {
-        (Some(url), Some(params)) => (url, params),
+    match (upload_url, upload_params) {
+        (Some(url), Some(params)) => {
+            (StatusCode::OK, Json(json!({
+                "jobId": job_id,
+                "uploadUrl": url,
+                "uploadParams": params,
+            }))).into_response()
+        }
         _ => {
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": "CloudConvert upload URL not found" })),
-            )
-                .into_response();
+            (StatusCode::BAD_GATEWAY, Json(json!({ "error": "Upload URL not found" }))).into_response()
+        }
+    }
+}
+
+pub async fn get_convert_status(
+    State(state): State<ConvertState>,
+    Path(job_id): Path<String>,
+) -> impl IntoResponse {
+    let api_key = match &state.config.cloudconvert.api_key {
+        Some(key) if !key.is_empty() => key.clone(),
+        _ => {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({ "error": "Not configured" }))).into_response();
         }
     };
 
-    let mut form = reqwest::multipart::Form::new();
-    for (key, value) in &upload_params {
-        if let Some(v) = value.as_str() {
-            form = form.text(key.clone(), v.to_string());
-        }
-    }
-    let part = reqwest::multipart::Part::bytes(data)
-        .file_name(file_name)
-        .mime_str("application/octet-stream")
-        .unwrap();
-    form = form.part("file", part);
-
-    if let Err(e) = client.post(&upload_url).multipart(form).send().await {
-        tracing::error!("CloudConvert upload failed: {}", e);
-        return (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": "File upload to CloudConvert failed" })),
-        )
-            .into_response();
-    }
-
-    let job_id = job_body["data"]["id"].as_str().unwrap_or("");
+    let client = reqwest::Client::new();
     let job_url = format!("https://api.cloudconvert.com/v2/jobs/{}", job_id);
 
-    let mut pdf_url: Option<String> = None;
-    for i in 0u64..60 {
-        let delay_ms = if i < 5 { 500 } else if i < 15 { 1000 } else { 2000 };
-        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-
-        let status_res = client
-            .get(&job_url)
-            .bearer_auth(&api_key)
-            .send()
-            .await;
-
-        if let Ok(res) = status_res {
-            if let Ok(body) = res.json::<serde_json::Value>().await {
-                let status = body["data"]["status"].as_str().unwrap_or("");
-                if status == "finished" {
-                    pdf_url = body["data"]["tasks"]
-                        .as_array()
-                        .and_then(|tasks| tasks.iter().find(|t| t["name"] == "export"))
-                        .and_then(|t| t["result"]["files"].as_array())
-                        .and_then(|files| files.first())
-                        .and_then(|f| f["url"].as_str())
-                        .map(|s| s.to_string());
-                    break;
-                } else if status == "error" {
-                    return (
-                        StatusCode::BAD_GATEWAY,
-                        Json(json!({ "error": "CloudConvert conversion failed" })),
-                    )
-                        .into_response();
-                }
-            }
-        }
-    }
-
-    let pdf_url = match pdf_url {
-        Some(url) => url,
-        None => {
-            return (
-                StatusCode::GATEWAY_TIMEOUT,
-                Json(json!({ "error": "Conversion timed out" })),
-            )
-                .into_response();
+    let res = match client.get(&job_url).bearer_auth(&api_key).send().await {
+        Ok(r) => r,
+        Err(_) => {
+            return (StatusCode::BAD_GATEWAY, Json(json!({ "error": "Request failed" }))).into_response();
         }
     };
 
-    match client.get(&pdf_url).send().await {
-        Ok(res) if res.status().is_success() => {
-            let bytes = res.bytes().await.unwrap_or_default();
-            (
-                StatusCode::OK,
-                [
-                    ("content-type", "application/pdf"),
-                    ("cache-control", "private, max-age=3600"),
-                ],
-                bytes,
-            )
-                .into_response()
+    let body: serde_json::Value = match res.json().await {
+        Ok(v) => v,
+        Err(_) => {
+            return (StatusCode::BAD_GATEWAY, Json(json!({ "error": "Parse failed" }))).into_response();
         }
-        _ => (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": "Failed to download converted PDF" })),
-        )
-            .into_response(),
+    };
+
+    let status = body["data"]["status"].as_str().unwrap_or("unknown");
+
+    if status == "finished" {
+        let pdf_url = body["data"]["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|t| t["name"] == "export"))
+            .and_then(|t| t["result"]["files"].as_array())
+            .and_then(|files| files.first())
+            .and_then(|f| f["url"].as_str())
+            .unwrap_or("");
+
+        return (StatusCode::OK, Json(json!({ "status": "finished", "pdfUrl": pdf_url }))).into_response();
     }
+
+    (StatusCode::OK, Json(json!({ "status": status }))).into_response()
 }
