@@ -63,7 +63,6 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME}
-      - CLOUDCONVERT_API_KEY=${CLOUDCONVERT_API_KEY}
       - RUST_LOG=info,share_anything=debug
     ports:
       - "8080:8080"
