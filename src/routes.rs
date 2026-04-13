@@ -258,6 +258,7 @@ pub fn create_router(
         .route("/cli/upload/multipart/complete", post(handlers::cli::cli_complete_multipart))
         .route("/cli/download/:code", get(handlers::cli::cli_download))
         .route("/cli/download/:code/info", get(handlers::cli::cli_download_info))
+        .route("/cli/p2p/create", post(handlers::cli::cli_p2p_create))
         .route("/cli/files/:code", get(handlers::cli::cli_file_list))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(

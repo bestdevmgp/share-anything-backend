@@ -46,6 +46,7 @@ pub struct CliFileInfoResponse {
     pub has_password: bool,
     pub is_one_time: bool,
     pub expires_at: String,
+    pub transfer_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -61,6 +62,29 @@ pub struct CliFileListResponse {
     pub total_count: usize,
     pub has_password: bool,
     pub is_one_time: bool,
+    pub expires_at: String,
+}
+
+// --- P2P types ---
+
+#[derive(Debug, Deserialize)]
+pub struct CliP2PFileInfo {
+    pub name: String,
+    pub size: i64,
+    #[serde(rename = "type")]
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CliP2PCreateRequest {
+    pub files: Vec<CliP2PFileInfo>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CliP2PCreateResponse {
+    pub share_code: String,
+    pub files: Vec<String>,
     pub expires_at: String,
 }
 
@@ -384,6 +408,68 @@ pub async fn cli_upload(
         share_code,
         files: uploaded_files,
         curl_command,
+        expires_at: format_expires_at(expires_at),
+    }))
+}
+
+pub async fn cli_p2p_create(
+    State(state): State<CliState>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    Json(request): Json<CliP2PCreateRequest>,
+) -> Result<PrettyJson<CliP2PCreateResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let token_user = token_user.map(|ext| ext.0.clone());
+
+    if request.files.is_empty() {
+        return Err(bad_request("At least one file is required"));
+    }
+
+    let password_hash = if let Some(pw) = &request.password {
+        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
+    } else {
+        None
+    };
+
+    let share_code = loop {
+        let code = generate_share_code();
+        if !repository::check_code_exists(&state.db, &code)
+            .await
+            .map_err(|_| internal_error("Failed to check share code"))?
+        {
+            break code;
+        }
+    };
+
+    let expires_at = Utc::now() + chrono::Duration::hours(24);
+    let share_group_id = Uuid::new_v4().to_string();
+    let user_id = token_user.as_ref().map(|u| u.user_id.clone());
+    let mut file_names: Vec<String> = Vec::new();
+
+    for file_info in &request.files {
+        let file_share = repository::create_file_share(
+            &state.db,
+            Some(share_group_id.clone()),
+            user_id.clone(),
+            share_code.clone(),
+            file_info.name.clone(),
+            file_info.size,
+            file_info.content_type.clone(),
+            "p2p".to_string(),
+            String::new(),
+            None,
+            password_hash.clone(),
+            true,
+            false,
+            expires_at,
+        )
+        .await
+        .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
+
+        file_names.push(file_share.file_name);
+    }
+
+    Ok(PrettyJson(CliP2PCreateResponse {
+        share_code,
+        files: file_names,
         expires_at: format_expires_at(expires_at),
     }))
 }
@@ -760,6 +846,7 @@ pub async fn cli_download_info(
         has_password: first.password_hash.is_some(),
         is_one_time: first.is_one_time,
         expires_at: format_expires_at(first.expires_at),
+        transfer_type: first.transfer_type.clone(),
     }))
 }
 
