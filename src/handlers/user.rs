@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{unauthorized, forbidden, not_found, internal_error, ErrorResponse, DownloadLogResponse, FileShareResponse, FileShareWithStats},
+    models::{unauthorized, forbidden, not_found, internal_error, bad_request, ErrorResponse, DownloadLogResponse, FileShareResponse, FileShareWithStats},
     services::{generate_qr_code, StorageService},
 };
 
@@ -292,6 +292,65 @@ pub struct UpdateNotificationSettingsRequest {
     pub notify_download: bool,
     pub notify_download_alert: bool,
     pub notify_language: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateNameRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UpdateNameResponse {
+    pub name: String,
+}
+
+pub async fn update_name(
+    State(state): State<UserState>,
+    request: Request,
+) -> Result<Json<UpdateNameResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
+        .clone();
+
+    let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
+        .await
+        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다"))?;
+
+    let req: UpdateNameRequest = serde_json::from_slice(&body_bytes)
+        .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
+
+    let name = req.name.trim().to_string();
+    if name.is_empty() || name.len() > 50 {
+        return Err(bad_request("이름은 1~50자 이내로 입력해주세요"));
+    }
+
+    repository::update_user_name(&state.db, &user_claims.sub, &name)
+        .await
+        .map_err(|e| internal_error(format!("이름 변경 실패: {}", e)))?;
+
+    Ok(Json(UpdateNameResponse { name }))
+}
+
+pub async fn delete_account(
+    State(state): State<UserState>,
+    request: Request,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+
+    repository::revoke_all_personal_tokens(&state.db, &user_claims.sub)
+        .await
+        .map_err(|e| internal_error(format!("토큰 폐기 실패: {}", e)))?;
+
+    repository::soft_delete_user(&state.db, &user_claims.sub)
+        .await
+        .map_err(|e| internal_error(format!("계정 삭제 실패: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Get user notification settings (requires authentication)

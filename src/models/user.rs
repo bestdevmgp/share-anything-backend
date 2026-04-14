@@ -3,6 +3,26 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+pub enum UserStatus {
+    #[serde(rename = "active")]
+    Active,
+    #[serde(rename = "deactivated")]
+    Deactivated,
+    #[serde(rename = "deleted")]
+    Deleted,
+}
+
+impl std::fmt::Display for UserStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserStatus::Active => write!(f, "active"),
+            UserStatus::Deactivated => write!(f, "deactivated"),
+            UserStatus::Deleted => write!(f, "deleted"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: String,
@@ -12,6 +32,7 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub profile_image: Option<String>,
+    pub status: UserStatus,
     pub notify_upload: bool,
     pub notify_download: bool,
     pub notify_download_alert: bool,
@@ -37,6 +58,14 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             )))),
         };
 
+        let status_str: String = row.try_get("status")?;
+        let status = match status_str.as_str() {
+            "active" => UserStatus::Active,
+            "deactivated" => UserStatus::Deactivated,
+            "deleted" => UserStatus::Deleted,
+            _ => UserStatus::Active,
+        };
+
         Ok(User {
             id: row.try_get("id")?,
             oauth_provider,
@@ -44,6 +73,7 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             email: row.try_get("email")?,
             name: row.try_get("name")?,
             profile_image: row.try_get("profile_image")?,
+            status,
             notify_upload: row.try_get("notify_upload")?,
             notify_download: row.try_get("notify_download")?,
             notify_download_alert: row.try_get("notify_download_alert")?,

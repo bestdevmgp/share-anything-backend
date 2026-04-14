@@ -1,7 +1,7 @@
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
-    routing::{get, post, delete},
+    routing::{get, post, put, delete},
     Router,
 };
 use std::sync::Arc;
@@ -174,6 +174,8 @@ pub fn create_router(
         .route("/user/uploads/:file_id/downloads", get(handlers::user::get_download_logs))
         .route("/user/uploads/:file_id", delete(handlers::user::delete_file_share))
         .route("/user/settings", get(handlers::user::get_notification_settings).put(handlers::user::update_notification_settings))
+        .route("/user/name", put(handlers::user::update_name))
+        .route("/user/account", delete(handlers::user::delete_account))
         .layer(middleware::from_fn_with_state(auth_state.clone(), require_auth))
         .with_state(user_state);
 

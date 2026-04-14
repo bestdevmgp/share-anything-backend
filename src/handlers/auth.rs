@@ -19,6 +19,7 @@ use crate::{
     middleware::auth::create_jwt,
     models::{
         CreateUserDto, OAuthProvider,
+        user::UserStatus,
         email_auth::{
             EmailAuthData, EmailAuthUser, EmailSendRequest, EmailSendResponse,
             EmailStatusResponse, EmailVerifyCodeRequest, EmailVerifyCodeResponse,
@@ -180,7 +181,12 @@ pub async fn google_callback_handler(
     )
     .await
     {
-        Ok(Some(user)) => user,
+        Ok(Some(user)) => {
+            if user.status != UserStatus::Active {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            user
+        }
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Google,
@@ -443,7 +449,12 @@ pub async fn naver_callback_handler(
     )
     .await
     {
-        Ok(Some(user)) => user,
+        Ok(Some(user)) => {
+            if user.status != UserStatus::Active {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            user
+        }
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Naver,
@@ -701,7 +712,12 @@ pub async fn kakao_callback_handler(
     )
     .await
     {
-        Ok(Some(user)) => user,
+        Ok(Some(user)) => {
+            if user.status != UserStatus::Active {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            user
+        }
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Kakao,
@@ -990,7 +1006,12 @@ pub async fn apple_callback_handler(
     )
     .await
     {
-        Ok(Some(user)) => user,
+        Ok(Some(user)) => {
+            if user.status != UserStatus::Active {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            user
+        }
         Ok(None) => {
             let dto = CreateUserDto {
                 oauth_provider: OAuthProvider::Apple,
@@ -1147,6 +1168,9 @@ async fn find_or_create_email_user(
 ) -> Result<(crate::models::User, Option<String>), StatusCode> {
     match repository::find_user_by_email(&state.db, email).await {
         Ok(Some(user)) => {
+            if user.status != UserStatus::Active {
+                return Err(StatusCode::FORBIDDEN);
+            }
             let existing = if user.oauth_provider != OAuthProvider::Email {
                 Some(user.oauth_provider.to_string())
             } else {

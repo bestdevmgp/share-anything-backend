@@ -82,6 +82,50 @@ pub async fn get_user_notification_settings(
     Ok(result)
 }
 
+pub async fn update_user_name(
+    pool: &MySqlPool,
+    user_id: &str,
+    name: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE users SET name = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?"#,
+    )
+    .bind(name)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn soft_delete_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE users SET status = 'deleted', updated_at = UTC_TIMESTAMP() WHERE id = ?"#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn revoke_all_personal_tokens(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE personal_tokens SET revoked_at = UTC_TIMESTAMP() WHERE user_id = ? AND revoked_at IS NULL"#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn update_user_notification_settings(
     pool: &MySqlPool,
     user_id: &str,
