@@ -163,6 +163,7 @@ pub fn create_router(
         .route("/user/quick-access/:file_id", delete(handlers::quick_access::delete_quick_access_file))
         .route("/user/quick-access/preview/:file_id", get(handlers::quick_access::preview_quick_access_file))
         .route("/user/quick-access/download/:file_id", get(handlers::quick_access::download_quick_access_file))
+        .route("/user/quick-access/share/:file_id", post(handlers::quick_access::share_quick_access_file))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             require_auth,

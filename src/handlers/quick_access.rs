@@ -247,6 +247,73 @@ pub async fn preview_quick_access_file(
     })))
 }
 
+pub async fn share_quick_access_file(
+    State(state): State<QuickAccessState>,
+    Path(file_id): Path<String>,
+    request: Request,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let user_claims = request
+        .extensions()
+        .get::<Claims>()
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
+        .clone();
+
+    let file_share = repository::find_file_share_by_id(&state.db, &file_id)
+        .await
+        .map_err(|_| internal_error("파일 조회 실패"))?
+        .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
+
+    if file_share.user_id.as_ref() != Some(&user_claims.sub) {
+        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
+    }
+
+    if !file_share.is_quick_access {
+        return Err(forbidden("Quick Access 파일이 아닙니다"));
+    }
+
+    if file_share.expires_at < Utc::now() {
+        return Err(not_found("파일이 만료되었습니다"));
+    }
+
+    let share_code = loop {
+        let code = generate_share_code();
+        if !repository::check_code_exists(&state.db, &code)
+            .await
+            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
+        {
+            break code;
+        }
+    };
+
+    let expires_at = Utc::now() + chrono::Duration::minutes(30);
+
+    repository::create_file_share(
+        &state.db,
+        None,
+        Some(user_claims.sub),
+        share_code.clone(),
+        file_share.file_name.clone(),
+        file_share.file_size,
+        file_share.file_type.clone(),
+        "server".to_string(),
+        file_share.storage_key.clone(),
+        None,
+        None,
+        false,
+        false,
+        expires_at,
+    )
+    .await
+    .map_err(|e| {
+        error!(error = %e, "Failed to create shared file");
+        internal_error("공유 세션 생성 실패")
+    })?;
+
+    Ok(Json(serde_json::json!({
+        "share_code": share_code
+    })))
+}
+
 pub async fn download_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
