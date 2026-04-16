@@ -112,6 +112,32 @@ pub async fn soft_delete_user(
     Ok(())
 }
 
+pub async fn reactivate_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE users SET status = 'active', updated_at = UTC_TIMESTAMP() WHERE id = ?"#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn hard_delete_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(r#"DELETE FROM users WHERE id = ?"#)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
 pub async fn revoke_all_personal_tokens(
     pool: &MySqlPool,
     user_id: &str,
