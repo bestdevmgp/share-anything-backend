@@ -229,16 +229,24 @@ pub async fn find_file_share_by_code(
     pool: &MySqlPool,
     share_code: &str,
 ) -> Result<Option<FileShare>, sqlx::Error> {
-    sqlx::query_as::<_, FileShare>(
+    let rows = sqlx::query_as::<_, FileShare>(
         r#"
-        SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
-        LIMIT 1
+        (SELECT fs.* FROM file_shares fs
+         INNER JOIN public_share_grants g ON g.file_share_id = fs.id
+         WHERE g.share_code = ? AND g.expires_at > UTC_TIMESTAMP()
+         LIMIT 1)
+        UNION ALL
+        (SELECT fs.* FROM file_shares fs
+         WHERE fs.share_code = ? AND fs.expires_at > UTC_TIMESTAMP()
+         LIMIT 1)
         "#,
     )
     .bind(share_code)
-    .fetch_optional(pool)
-    .await
+    .bind(share_code)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().next())
 }
 
 pub async fn find_file_shares_by_code(
@@ -247,11 +255,16 @@ pub async fn find_file_shares_by_code(
 ) -> Result<Vec<FileShare>, sqlx::Error> {
     sqlx::query_as::<_, FileShare>(
         r#"
-        SELECT * FROM file_shares
-        WHERE share_code = ? AND expires_at > UTC_TIMESTAMP()
+        (SELECT fs.* FROM file_shares fs
+         INNER JOIN public_share_grants g ON g.file_share_id = fs.id
+         WHERE g.share_code = ? AND g.expires_at > UTC_TIMESTAMP())
+        UNION ALL
+        (SELECT fs.* FROM file_shares fs
+         WHERE fs.share_code = ? AND fs.expires_at > UTC_TIMESTAMP())
         ORDER BY created_at ASC
         "#,
     )
+    .bind(share_code)
     .bind(share_code)
     .fetch_all(pool)
     .await
@@ -352,13 +365,21 @@ pub async fn delete_all_user_file_shares(
     Ok(storage_keys)
 }
 
+// Deletes file_shares whose own window expired AND which are NOT kept alive by any active
+// public_share_grant. This preserves the R2 object until the grant's own window closes, so
+// recipients of a late-issued share ticket are guaranteed their full grant duration.
 pub async fn delete_expired_file_shares(
     pool: &MySqlPool,
 ) -> Result<Vec<String>, sqlx::Error> {
     let expired_files = sqlx::query_as::<_, (String,)>(
         r#"
-        SELECT storage_key FROM file_shares
-        WHERE expires_at <= UTC_TIMESTAMP()
+        SELECT fs.storage_key FROM file_shares fs
+        WHERE fs.expires_at <= UTC_TIMESTAMP()
+          AND NOT EXISTS (
+              SELECT 1 FROM public_share_grants g
+              WHERE g.file_share_id = fs.id
+                AND g.expires_at > UTC_TIMESTAMP()
+          )
         "#,
     )
     .fetch_all(pool)
@@ -368,7 +389,13 @@ pub async fn delete_expired_file_shares(
 
     sqlx::query(
         r#"
-        DELETE FROM file_shares WHERE expires_at <= UTC_TIMESTAMP()
+        DELETE FROM file_shares
+        WHERE expires_at <= UTC_TIMESTAMP()
+          AND NOT EXISTS (
+              SELECT 1 FROM public_share_grants g
+              WHERE g.file_share_id = file_shares.id
+                AND g.expires_at > UTC_TIMESTAMP()
+          )
         "#,
     )
     .execute(pool)
@@ -377,15 +404,57 @@ pub async fn delete_expired_file_shares(
     Ok(storage_keys)
 }
 
+// ---------- public_share_grants ----------
+
+pub async fn create_public_share_grant(
+    pool: &MySqlPool,
+    share_code: &str,
+    file_share_id: &str,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO public_share_grants (share_code, file_share_id, expires_at, created_at)
+        VALUES (?, ?, ?, UTC_TIMESTAMP())
+        "#,
+    )
+    .bind(share_code)
+    .bind(file_share_id)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_expired_public_share_grants(
+    pool: &MySqlPool,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM public_share_grants WHERE expires_at <= UTC_TIMESTAMP()
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+// Checks code availability across both namespaces so a newly generated code cannot collide
+// with either an existing file_shares row or an active/stale public_share_grants row.
 pub async fn check_code_exists(
     pool: &MySqlPool,
     share_code: &str,
 ) -> Result<bool, sqlx::Error> {
     let result = sqlx::query_as::<_, (i64,)>(
         r#"
-        SELECT COUNT(*) FROM file_shares WHERE share_code = ?
+        SELECT
+          (SELECT COUNT(*) FROM file_shares WHERE share_code = ?)
+          + (SELECT COUNT(*) FROM public_share_grants WHERE share_code = ?)
         "#,
     )
+    .bind(share_code)
     .bind(share_code)
     .fetch_one(pool)
     .await?;

@@ -10,6 +10,10 @@ pub async fn start_cleanup_task(pool: DbPool, storage: StorageService) {
     loop {
         interval.tick().await;
 
+        if let Err(e) = repository::delete_expired_public_share_grants(&pool).await {
+            error!("Failed to delete expired public share grants: {}", e);
+        }
+
         match repository::delete_expired_file_shares(&pool).await {
             Ok(storage_keys) => {
                 if !storage_keys.is_empty() {

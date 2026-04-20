@@ -285,27 +285,17 @@ pub async fn share_quick_access_file(
         }
     };
 
-    let expires_at = Utc::now() + chrono::Duration::minutes(30);
+    let grant_expires_at = Utc::now() + chrono::Duration::minutes(30);
 
-    repository::create_file_share(
+    repository::create_public_share_grant(
         &state.db,
-        None,
-        Some(user_claims.sub),
-        share_code.clone(),
-        file_share.file_name.clone(),
-        file_share.file_size,
-        file_share.file_type.clone(),
-        "server".to_string(),
-        file_share.storage_key.clone(),
-        None,
-        None,
-        false,
-        false,
-        expires_at,
+        &share_code,
+        &file_share.id,
+        grant_expires_at,
     )
     .await
     .map_err(|e| {
-        error!(error = %e, "Failed to create shared file");
+        error!(error = %e, "Failed to create public share grant");
         internal_error("공유 세션 생성 실패")
     })?;
 
