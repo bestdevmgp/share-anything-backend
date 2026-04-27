@@ -26,8 +26,9 @@ use crate::{
             EmailVerifyRequest, EmailVerifyResponse,
         },
         OAuthLoginQuery, GoogleCallbackQuery, NaverCallbackQuery, KakaoCallbackQuery,
-        AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse, UserResponse,
+        AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse,
     },
+    services::auth::{AuthService, OAuthUserInfo},
     services::discord::DiscordNotifier,
     services::email::EmailService,
 };
@@ -38,6 +39,7 @@ pub struct AppState {
     pub db: DbPool,
     pub discord: Arc<DiscordNotifier>,
     pub email: Arc<EmailService>,
+    pub auth: Arc<AuthService>,
 }
 
 const REACTIVATION_WINDOW_DAYS: i64 = 14;
@@ -181,110 +183,22 @@ pub async fn google_callback_handler(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let mut reactivated = false;
-    let mut is_new_user = false;
-    let user = match repository::find_user_by_oauth(
-        &state.db,
-        &OAuthProvider::Google,
-        &user_info.id,
-    )
-    .await
-    {
-        Ok(Some(mut user)) => {
-            if user.status == UserStatus::Deleted {
-                match check_deleted_user(&user) {
-                    DeletedUserAction::Reactivate => {
-                        repository::reactivate_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to reactivate user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        user.status = UserStatus::Active;
-                        reactivated = true;
-                        user
-                    }
-                    DeletedUserAction::HardDeleteAndRecreate => {
-                        repository::hard_delete_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to hard delete user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        let dto = CreateUserDto {
-                            oauth_provider: OAuthProvider::Google,
-                            oauth_id: user_info.id.clone(),
-                            email: user_info.email.clone(),
-                            name: user_info.name.clone(),
-                            profile_image: user_info.picture.clone(),
-                        };
-                        let new_user = repository::create_user(&state.db, dto)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to create user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        state.discord.notify_new_user(&new_user.name, &new_user.email, "Google", &client_ip);
-                        state.email.send_welcome_email(&new_user.name, &new_user.email);
-                        new_user
-                    }
-                }
-            } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN.into());
-            } else {
-                user
-            }
-        }
-        Ok(None) => {
-            let dto = CreateUserDto {
-                oauth_provider: OAuthProvider::Google,
-                oauth_id: user_info.id.clone(),
-                email: user_info.email.clone(),
-                name: user_info.name.clone(),
-                profile_image: user_info.picture.clone(),
-            };
+    let outcome = state
+        .auth
+        .upsert_oauth_user(
+            OAuthUserInfo {
+                provider: OAuthProvider::Google,
+                oauth_id: user_info.id,
+                email: user_info.email,
+                name: user_info.name,
+                profile_image: user_info.picture,
+            },
+            &client_ip,
+        )
+        .await?;
 
-            let new_user = repository::create_user(&state.db, dto)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to create user: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-            state.discord.notify_new_user(&new_user.name, &new_user.email, "Google", &client_ip);
-            state.email.send_welcome_email(&new_user.name, &new_user.email);
-            is_new_user = true;
-            new_user
-        }
-        Err(e) => {
-            tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
-        }
-    };
-
-    let jwt = create_jwt(
-        &user.id,
-        &user.email,
-        &user.name,
-        &state.config.jwt.secret,
-        state.config.jwt.expiration_hours,
-    )
-    .map_err(|e| {
-        tracing::error!("JWT creation failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(AuthResponse {
-        token: jwt,
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile_image: user.profile_image,
-        },
-        reactivated: if reactivated { Some(true) } else { None },
-        is_new_user: if is_new_user { Some(true) } else { None },
-    }))
+    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
 fn create_google_oauth_client(config: &Config) -> BasicClient {
@@ -487,110 +401,22 @@ pub async fn naver_callback_handler(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let mut reactivated = false;
-    let mut is_new_user = false;
-    let user = match repository::find_user_by_oauth(
-        &state.db,
-        &OAuthProvider::Naver,
-        &user_info.response.id,
-    )
-    .await
-    {
-        Ok(Some(mut user)) => {
-            if user.status == UserStatus::Deleted {
-                match check_deleted_user(&user) {
-                    DeletedUserAction::Reactivate => {
-                        repository::reactivate_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to reactivate user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        user.status = UserStatus::Active;
-                        reactivated = true;
-                        user
-                    }
-                    DeletedUserAction::HardDeleteAndRecreate => {
-                        repository::hard_delete_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to hard delete user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        let dto = CreateUserDto {
-                            oauth_provider: OAuthProvider::Naver,
-                            oauth_id: user_info.response.id.clone(),
-                            email: user_info.response.email.clone(),
-                            name: user_info.response.name.clone(),
-                            profile_image: user_info.response.profile_image.clone(),
-                        };
-                        let new_user = repository::create_user(&state.db, dto)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to create user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        state.discord.notify_new_user(&new_user.name, &new_user.email, "Naver", &client_ip);
-                        state.email.send_welcome_email(&new_user.name, &new_user.email);
-                        new_user
-                    }
-                }
-            } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN.into());
-            } else {
-                user
-            }
-        }
-        Ok(None) => {
-            let dto = CreateUserDto {
-                oauth_provider: OAuthProvider::Naver,
-                oauth_id: user_info.response.id.clone(),
-                email: user_info.response.email.clone(),
-                name: user_info.response.name.clone(),
-                profile_image: user_info.response.profile_image.clone(),
-            };
+    let outcome = state
+        .auth
+        .upsert_oauth_user(
+            OAuthUserInfo {
+                provider: OAuthProvider::Naver,
+                oauth_id: user_info.response.id,
+                email: user_info.response.email,
+                name: user_info.response.name,
+                profile_image: user_info.response.profile_image,
+            },
+            &client_ip,
+        )
+        .await?;
 
-            let new_user = repository::create_user(&state.db, dto)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to create user: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-            state.discord.notify_new_user(&new_user.name, &new_user.email, "Naver", &client_ip);
-            state.email.send_welcome_email(&new_user.name, &new_user.email);
-            is_new_user = true;
-            new_user
-        }
-        Err(e) => {
-            tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
-        }
-    };
-
-    let jwt = create_jwt(
-        &user.id,
-        &user.email,
-        &user.name,
-        &state.config.jwt.secret,
-        state.config.jwt.expiration_hours,
-    )
-    .map_err(|e| {
-        tracing::error!("JWT creation failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(AuthResponse {
-        token: jwt,
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile_image: user.profile_image,
-        },
-        reactivated: if reactivated { Some(true) } else { None },
-        is_new_user: if is_new_user { Some(true) } else { None },
-    }))
+    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
 fn create_naver_oauth_client(config: &Config) -> BasicClient {
@@ -784,114 +610,23 @@ pub async fn kakao_callback_handler(
         nickname: None,
         profile_image_url: None,
     });
-    let email = account.email.unwrap_or_default();
-    let name = profile.nickname.unwrap_or_else(|| "Kakao User".to_string());
-    let profile_image = profile.profile_image_url;
 
-    let mut reactivated = false;
-    let mut is_new_user = false;
-    let user = match repository::find_user_by_oauth(
-        &state.db,
-        &OAuthProvider::Kakao,
-        &kakao_user_id,
-    )
-    .await
-    {
-        Ok(Some(mut user)) => {
-            if user.status == UserStatus::Deleted {
-                match check_deleted_user(&user) {
-                    DeletedUserAction::Reactivate => {
-                        repository::reactivate_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to reactivate user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        user.status = UserStatus::Active;
-                        reactivated = true;
-                        user
-                    }
-                    DeletedUserAction::HardDeleteAndRecreate => {
-                        repository::hard_delete_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to hard delete user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        let dto = CreateUserDto {
-                            oauth_provider: OAuthProvider::Kakao,
-                            oauth_id: kakao_user_id,
-                            email,
-                            name,
-                            profile_image,
-                        };
-                        let new_user = repository::create_user(&state.db, dto)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to create user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        state.discord.notify_new_user(&new_user.name, &new_user.email, "Kakao", &client_ip);
-                        state.email.send_welcome_email(&new_user.name, &new_user.email);
-                        new_user
-                    }
-                }
-            } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN.into());
-            } else {
-                user
-            }
-        }
-        Ok(None) => {
-            let dto = CreateUserDto {
-                oauth_provider: OAuthProvider::Kakao,
+    let outcome = state
+        .auth
+        .upsert_oauth_user(
+            OAuthUserInfo {
+                provider: OAuthProvider::Kakao,
                 oauth_id: kakao_user_id,
-                email,
-                name,
-                profile_image,
-            };
+                email: account.email.unwrap_or_default(),
+                name: profile.nickname.unwrap_or_else(|| "Kakao User".to_string()),
+                profile_image: profile.profile_image_url,
+            },
+            &client_ip,
+        )
+        .await?;
 
-            let new_user = repository::create_user(&state.db, dto)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to create user: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-            state.discord.notify_new_user(&new_user.name, &new_user.email, "Kakao", &client_ip);
-            state.email.send_welcome_email(&new_user.name, &new_user.email);
-            is_new_user = true;
-            new_user
-        }
-        Err(e) => {
-            tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
-        }
-    };
-
-    let jwt = create_jwt(
-        &user.id,
-        &user.email,
-        &user.name,
-        &state.config.jwt.secret,
-        state.config.jwt.expiration_hours,
-    )
-    .map_err(|e| {
-        tracing::error!("JWT creation failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(AuthResponse {
-        token: jwt,
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile_image: user.profile_image,
-        },
-        reactivated: if reactivated { Some(true) } else { None },
-        is_new_user: if is_new_user { Some(true) } else { None },
-    }))
+    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
 fn create_kakao_oauth_client(config: &Config) -> BasicClient {
@@ -1110,110 +845,22 @@ pub async fn apple_callback_handler(
         })
         .unwrap_or_else(|| "Apple User".to_string());
 
-    let mut reactivated = false;
-    let mut is_new_user = false;
-    let user = match repository::find_user_by_oauth(
-        &state.db,
-        &OAuthProvider::Apple,
-        &apple_user_id,
-    )
-    .await
-    {
-        Ok(Some(mut user)) => {
-            if user.status == UserStatus::Deleted {
-                match check_deleted_user(&user) {
-                    DeletedUserAction::Reactivate => {
-                        repository::reactivate_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to reactivate user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        user.status = UserStatus::Active;
-                        reactivated = true;
-                        user
-                    }
-                    DeletedUserAction::HardDeleteAndRecreate => {
-                        repository::hard_delete_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to hard delete user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        let dto = CreateUserDto {
-                            oauth_provider: OAuthProvider::Apple,
-                            oauth_id: apple_user_id,
-                            email,
-                            name,
-                            profile_image: None,
-                        };
-                        let new_user = repository::create_user(&state.db, dto)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to create user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        state.discord.notify_new_user(&new_user.name, &new_user.email, "Apple", &client_ip);
-                        state.email.send_welcome_email(&new_user.name, &new_user.email);
-                        new_user
-                    }
-                }
-            } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN.into());
-            } else {
-                user
-            }
-        }
-        Ok(None) => {
-            let dto = CreateUserDto {
-                oauth_provider: OAuthProvider::Apple,
+    let outcome = state
+        .auth
+        .upsert_oauth_user(
+            OAuthUserInfo {
+                provider: OAuthProvider::Apple,
                 oauth_id: apple_user_id,
                 email,
                 name,
                 profile_image: None,
-            };
+            },
+            &client_ip,
+        )
+        .await?;
 
-            let new_user = repository::create_user(&state.db, dto)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to create user: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-
-            state.discord.notify_new_user(&new_user.name, &new_user.email, "Apple", &client_ip);
-            state.email.send_welcome_email(&new_user.name, &new_user.email);
-            is_new_user = true;
-            new_user
-        }
-        Err(e) => {
-            tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
-        }
-    };
-
-    let jwt = create_jwt(
-        &user.id,
-        &user.email,
-        &user.name,
-        &state.config.jwt.secret,
-        state.config.jwt.expiration_hours,
-    )
-    .map_err(|e| {
-        tracing::error!("JWT creation failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(AuthResponse {
-        token: jwt,
-        user: UserResponse {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile_image: user.profile_image,
-        },
-        reactivated: if reactivated { Some(true) } else { None },
-        is_new_user: if is_new_user { Some(true) } else { None },
-    }))
+    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
 fn create_apple_oauth_client(config: &Config) -> BasicClient {

@@ -18,7 +18,7 @@ use crate::{
     middleware::personal_token_auth::{cli_auth, CliAuthState},
     middleware::rate_limiter::{RateLimiter, CliRateLimiter},
     services::{
-        notification::NotificationService, StorageService,
+        auth::AuthService, notification::NotificationService, StorageService,
         discord::DiscordNotifier, email::EmailService, signaling::SignalingState,
     },
 };
@@ -35,12 +35,19 @@ pub fn create_router(
     };
 
     let notifications = NotificationService::new(db.clone(), email.clone());
+    let auth_service = AuthService::new(
+        db.clone(),
+        config.clone(),
+        discord.clone(),
+        email.clone(),
+    );
 
     let app_state = handlers::auth::AppState {
         config: config.clone(),
         db: db.clone(),
         discord: discord.clone(),
         email: email.clone(),
+        auth: auth_service.clone(),
     };
 
     let signaling_state = SignalingState::new();
