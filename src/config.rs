@@ -13,6 +13,7 @@ pub struct Config {
     pub cloudflare_turn: CloudflareTurnConfig,
     pub discord: DiscordConfig,
     pub smtp: SmtpConfig,
+    pub ipinfo_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -205,6 +206,7 @@ impl Config {
                 from_email: env::var("SMTP_FROM_EMAIL").ok(),
                 from_name: env::var("SMTP_FROM_NAME").ok(),
             },
+            ipinfo_token: env::var("IPINFO_TOKEN").ok(),
         };
 
         validate_url("BASE_URL", &config.server.base_url)?;

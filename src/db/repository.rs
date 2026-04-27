@@ -1,5 +1,6 @@
 use crate::models::*;
 use crate::models::personal_token::PersonalToken;
+use crate::models::session::{BlockedDevice, CreateSessionDto, Session};
 use chrono::Utc;
 use sqlx::{FromRow, MySqlPool};
 use uuid::Uuid;
@@ -1098,3 +1099,162 @@ pub async fn delete_expired_cli_auth_sessions(
     Ok(result.rows_affected())
 }
 
+pub async fn create_session(pool: &MySqlPool, dto: CreateSessionDto) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO sessions
+        (jti, user_id, device_label, user_agent, user_agent_hash, ip_address, location, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(&dto.jti)
+    .bind(&dto.user_id)
+    .bind(&dto.device_label)
+    .bind(&dto.user_agent)
+    .bind(&dto.user_agent_hash)
+    .bind(&dto.ip_address)
+    .bind(&dto.location)
+    .bind(dto.expires_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn find_session(pool: &MySqlPool, jti: &str) -> Result<Option<Session>, sqlx::Error> {
+    sqlx::query_as::<_, Session>(
+        "SELECT * FROM sessions WHERE jti = ? AND expires_at > UTC_TIMESTAMP()",
+    )
+    .bind(jti)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_sessions_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<Session>, sqlx::Error> {
+    sqlx::query_as::<_, Session>(
+        r#"
+        SELECT * FROM sessions
+        WHERE user_id = ? AND expires_at > UTC_TIMESTAMP()
+        ORDER BY last_seen_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn delete_session(
+    pool: &MySqlPool,
+    user_id: &str,
+    jti: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM sessions WHERE jti = ? AND user_id = ?")
+        .bind(jti)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn delete_other_sessions(
+    pool: &MySqlPool,
+    user_id: &str,
+    keep_jti: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM sessions WHERE user_id = ? AND jti <> ?")
+        .bind(user_id)
+        .bind(keep_jti)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn touch_session_last_seen(pool: &MySqlPool, jti: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE sessions SET last_seen_at = UTC_TIMESTAMP() WHERE jti = ?")
+        .bind(jti)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_expired_sessions(pool: &MySqlPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP()")
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn is_device_blocked(
+    pool: &MySqlPool,
+    user_id: &str,
+    user_agent_hash: &str,
+    ip_address: &str,
+) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query_as::<_, (i64,)>(
+        r#"
+        SELECT COUNT(*) FROM blocked_devices
+        WHERE user_id = ? AND user_agent_hash = ? AND ip_address = ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(user_agent_hash)
+    .bind(ip_address)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0 > 0)
+}
+
+pub async fn add_blocked_device(
+    pool: &MySqlPool,
+    user_id: &str,
+    user_agent_hash: &str,
+    user_agent: Option<&str>,
+    ip_address: &str,
+    device_label: Option<&str>,
+) -> Result<String, sqlx::Error> {
+    let id = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO blocked_devices
+        (id, user_id, user_agent_hash, user_agent, ip_address, device_label)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE blocked_at = CURRENT_TIMESTAMP
+        "#,
+    )
+    .bind(&id)
+    .bind(user_id)
+    .bind(user_agent_hash)
+    .bind(user_agent)
+    .bind(ip_address)
+    .bind(device_label)
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+pub async fn find_blocked_devices_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<BlockedDevice>, sqlx::Error> {
+    sqlx::query_as::<_, BlockedDevice>(
+        "SELECT * FROM blocked_devices WHERE user_id = ? ORDER BY blocked_at DESC",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn delete_blocked_device(
+    pool: &MySqlPool,
+    user_id: &str,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM blocked_devices WHERE id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}

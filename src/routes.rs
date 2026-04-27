@@ -18,7 +18,8 @@ use crate::{
     middleware::personal_token_auth::{cli_auth, CliAuthState},
     middleware::rate_limiter::{RateLimiter, CliRateLimiter},
     services::{
-        auth::AuthService, notification::NotificationService, StorageService,
+        auth::AuthService, geolocation::GeolocationService,
+        notification::NotificationService, StorageService,
         discord::DiscordNotifier, email::EmailService, signaling::SignalingState,
     },
 };
@@ -32,14 +33,17 @@ pub fn create_router(
 ) -> Router {
     let auth_state = AuthState {
         config: config.clone(),
+        db: db.clone(),
     };
 
     let notifications = NotificationService::new(db.clone(), email.clone());
+    let geolocation = GeolocationService::new(config.ipinfo_token.clone());
     let auth_service = AuthService::new(
         db.clone(),
         config.clone(),
         discord.clone(),
         email.clone(),
+        geolocation.clone(),
     );
 
     let app_state = handlers::auth::AppState {
@@ -191,6 +195,32 @@ pub fn create_router(
         .layer(middleware::from_fn_with_state(auth_state.clone(), require_auth))
         .with_state(user_state);
 
+    let sessions_state = handlers::sessions::SessionsState { db: db.clone() };
+    let sessions_routes = Router::new()
+        .route(
+            "/user/sessions",
+            get(handlers::sessions::list_sessions)
+                .delete(handlers::sessions::terminate_other_sessions),
+        )
+        .route(
+            "/user/sessions/:jti",
+            delete(handlers::sessions::terminate_session),
+        )
+        .route(
+            "/user/sessions/:jti/block",
+            post(handlers::sessions::block_session),
+        )
+        .route(
+            "/user/blocked-devices",
+            get(handlers::sessions::list_blocked_devices),
+        )
+        .route(
+            "/user/blocked-devices/:id",
+            delete(handlers::sessions::unblock_device),
+        )
+        .layer(middleware::from_fn_with_state(auth_state.clone(), require_auth))
+        .with_state(sessions_state);
+
     let ws_routes = Router::new()
         .route("/ws/signaling", get(handlers::signaling::websocket_handler))
         .with_state((signaling_state.clone(), db.clone()));
@@ -316,6 +346,7 @@ pub fn create_router(
         .merge(presigned_routes)
         .merge(download_routes)
         .merge(user_routes)
+        .merge(sessions_routes)
         .merge(quick_access_routes)
         .merge(personal_token_routes)
         .merge(cli_routes)

@@ -12,6 +12,7 @@ pub mod upload;
 pub mod turn;
 pub mod cli;
 pub mod auth;
+pub mod session;
 
 pub use user::*;
 pub use file_share::*;

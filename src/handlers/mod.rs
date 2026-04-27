@@ -11,4 +11,5 @@ pub mod quick_access;
 pub mod personal_token;
 pub mod cli;
 pub mod cli_auth;
+pub mod sessions;
 

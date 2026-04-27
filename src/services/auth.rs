@@ -1,15 +1,21 @@
+use axum::http::HeaderMap;
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::create_jwt,
     models::{
-        forbidden, internal_error, user::UserStatus, AppError, AuthResponse, CreateUserDto,
-        OAuthProvider, User, UserResponse,
+        forbidden, internal_error, session::CreateSessionDto, user::UserStatus, AppError,
+        AuthResponse, CreateUserDto, OAuthProvider, User, UserResponse,
     },
-    services::{discord::DiscordNotifier, email::EmailService},
+    services::{
+        discord::DiscordNotifier, email::EmailService, geolocation::GeolocationService,
+    },
+    utils::extract_client_ip,
 };
 
 const REACTIVATION_WINDOW_DAYS: i64 = 14;
@@ -33,6 +39,7 @@ pub struct AuthService {
     config: Arc<Config>,
     discord: Arc<DiscordNotifier>,
     email: Arc<EmailService>,
+    geolocation: Arc<GeolocationService>,
 }
 
 impl AuthService {
@@ -41,12 +48,14 @@ impl AuthService {
         config: Arc<Config>,
         discord: Arc<DiscordNotifier>,
         email: Arc<EmailService>,
+        geolocation: Arc<GeolocationService>,
     ) -> Arc<Self> {
         Arc::new(Self {
             db,
             config,
             discord,
             email,
+            geolocation,
         })
     }
 
@@ -177,11 +186,47 @@ impl AuthService {
         Ok(new_user)
     }
 
-    pub fn issue_jwt(&self, user: &User) -> Result<String, AppError> {
+    pub async fn create_session_token(
+        &self,
+        user: &User,
+        headers: &HeaderMap,
+    ) -> Result<String, AppError> {
+        let ip = extract_client_ip(headers);
+        let user_agent = extract_user_agent(headers);
+        let user_agent_hash = hash_ua(&user_agent);
+
+        if repository::is_device_blocked(&self.db, &user.id, &user_agent_hash, &ip).await? {
+            return Err(forbidden(
+                "이 기기는 차단되어 있어 로그인할 수 없습니다",
+            ));
+        }
+
+        let jti = Uuid::new_v4().to_string();
+        let device_label = parse_device_label(&user_agent);
+        let location = self.geolocation.lookup(&ip).await;
+        let expires_at =
+            Utc::now() + chrono::Duration::hours(self.config.jwt.expiration_hours);
+
+        repository::create_session(
+            &self.db,
+            CreateSessionDto {
+                jti: jti.clone(),
+                user_id: user.id.clone(),
+                device_label,
+                user_agent,
+                user_agent_hash,
+                ip_address: ip,
+                location,
+                expires_at,
+            },
+        )
+        .await?;
+
         create_jwt(
             &user.id,
             &user.email,
             &user.name,
+            &jti,
             &self.config.jwt.secret,
             self.config.jwt.expiration_hours,
         )
@@ -237,5 +282,33 @@ fn display_name(provider: &OAuthProvider) -> &'static str {
         OAuthProvider::Kakao => "Kakao",
         OAuthProvider::Apple => "Apple",
         OAuthProvider::Email => "Email",
+    }
+}
+
+fn extract_user_agent(headers: &HeaderMap) -> String {
+    headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+fn hash_ua(ua: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(ua.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn parse_device_label(ua: &str) -> Option<String> {
+    if ua == "unknown" || ua.is_empty() {
+        return None;
+    }
+    match woothee::parser::Parser::new().parse(ua) {
+        Some(result) => {
+            let os = if result.os.is_empty() { "Unknown" } else { result.os };
+            let browser = if result.name.is_empty() { "Unknown" } else { result.name };
+            Some(format!("{} on {}", browser, os))
+        }
+        None => Some(ua.chars().take(120).collect()),
     }
 }

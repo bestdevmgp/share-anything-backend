@@ -132,7 +132,7 @@ pub async fn google_callback_handler(
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::google::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
-    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
@@ -227,7 +227,7 @@ pub async fn naver_callback_handler(
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::naver::fetch_user_info(&state.config, &query.code, &query.state).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
-    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
@@ -323,7 +323,7 @@ pub async fn kakao_callback_handler(
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::kakao::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
-    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
@@ -429,7 +429,7 @@ pub async fn apple_callback_handler(
     )
     .await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
-    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
 
@@ -573,7 +573,7 @@ pub async fn email_verify(
             .auth
             .upsert_email_user(&session.email, &client_ip, &welcome_lang)
             .await?;
-        let jwt = state.auth.issue_jwt(&outcome.user)?;
+        let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
 
         Ok(Json(EmailVerifyResponse {
             same_device: true,
@@ -620,7 +620,7 @@ pub async fn email_verify_code(
         .auth
         .upsert_email_user(&session.email, &client_ip, &welcome_lang)
         .await?;
-    let jwt = state.auth.issue_jwt(&outcome.user)?;
+    let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
 
     Ok(Json(EmailVerifyCodeResponse {
         token: jwt,
@@ -636,6 +636,7 @@ pub async fn email_verify_code(
 
 pub async fn email_status(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(session_id): Path<String>,
 ) -> Result<Json<EmailStatusResponse>, AppError> {
     let session = repository::find_email_auth_session_by_id(&state.db, &session_id)
@@ -651,7 +652,7 @@ pub async fn email_status(
             .auth
             .upsert_email_user(&session.email, "polling", "en")
             .await?;
-        let jwt = state.auth.issue_jwt(&outcome.user)?;
+        let jwt = state.auth.create_session_token(&outcome.user, &headers).await?;
 
         Ok(Json(EmailStatusResponse {
             status: "completed".to_string(),

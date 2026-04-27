@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod geolocation;
 pub mod oauth;
 pub mod storage;
 pub mod qr;
