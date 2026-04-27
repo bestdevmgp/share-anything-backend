@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let email = Arc::new(services::email::EmailService::new(
         &config.smtp,
         &config.server.frontend_url,
+        &config.server.base_url,
     ));
     if email.is_enabled() {
         tracing::info!("Email notifications enabled");

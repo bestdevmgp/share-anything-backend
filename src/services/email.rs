@@ -812,10 +812,11 @@ pub struct EmailService {
     from_email: String,
     from_name: String,
     frontend_url: String,
+    base_url: String,
 }
 
 impl EmailService {
-    pub fn new(config: &SmtpConfig, frontend_url: &str) -> Self {
+    pub fn new(config: &SmtpConfig, frontend_url: &str, base_url: &str) -> Self {
         let mut from_email = None;
         let mut from_name = None;
 
@@ -843,6 +844,7 @@ impl EmailService {
             from_email: from_email.unwrap_or_default(),
             from_name: from_name.unwrap_or_default(),
             frontend_url: frontend_url.to_string(),
+            base_url: base_url.to_string(),
         }
     }
 
@@ -1271,9 +1273,9 @@ impl EmailService {
         trust_token: &str,
         lang: &str,
     ) -> String {
-        let trust_link = format!("{}/auth/device/trust?token={}", &self.frontend_url, trust_token);
+        let trust_link = format!("{}/auth/device/trust?token={}", &self.base_url, trust_token);
         let terminate_link =
-            format!("{}/auth/device/terminate?token={}", &self.frontend_url, trust_token);
+            format!("{}/auth/device/terminate?token={}", &self.base_url, trust_token);
         let logged_in_kst = logged_in_at + chrono::Duration::hours(9);
         let date_str = format_date_localized(&logged_in_kst, lang);
         let time_str = logged_in_kst.format("%H:%M").to_string();

@@ -1179,6 +1179,23 @@ pub async fn touch_session_last_seen(pool: &MySqlPool, jti: &str) -> Result<(), 
     Ok(())
 }
 
+pub async fn delete_sessions_by_device(
+    pool: &MySqlPool,
+    user_id: &str,
+    user_agent_hash: &str,
+    ip_address: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        "DELETE FROM sessions WHERE user_id = ? AND user_agent_hash = ? AND ip_address = ?",
+    )
+    .bind(user_id)
+    .bind(user_agent_hash)
+    .bind(ip_address)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn delete_expired_sessions(pool: &MySqlPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP()")
         .execute(pool)

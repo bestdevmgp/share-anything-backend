@@ -199,6 +199,8 @@ impl AuthService {
         let is_trusted =
             repository::is_device_trusted(&self.db, &user.id, &user_agent_hash, &ip).await?;
 
+        repository::delete_sessions_by_device(&self.db, &user.id, &user_agent_hash, &ip).await?;
+
         let jti = Uuid::new_v4().to_string();
         let device_label = parse_device_label(&user_agent);
         let location = self.geolocation.lookup(&ip).await;
