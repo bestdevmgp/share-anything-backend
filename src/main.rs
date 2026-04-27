@@ -65,7 +65,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Server listening on {}", addr);
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
+    tracing::info!("Server shut down gracefully");
     Ok(())
+}
+
+/// SIGINT(Ctrl-C) 또는 SIGTERM을 받을 때까지 대기. 컨테이너 종료 시 in-flight 요청을
+/// 정상 처리하고 서버가 깨끗이 내려가도록 한다.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::error!(error = ?e, "Failed to install Ctrl-C handler");
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                tracing::error!(error = ?e, "Failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("SIGINT received, starting graceful shutdown"),
+        _ = terminate => tracing::info!("SIGTERM received, starting graceful shutdown"),
+    }
 }
