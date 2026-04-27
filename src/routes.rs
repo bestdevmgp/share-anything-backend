@@ -17,7 +17,10 @@ use crate::{
     middleware::auth::{optional_auth, require_auth, AuthState},
     middleware::personal_token_auth::{cli_auth, CliAuthState},
     middleware::rate_limiter::{RateLimiter, CliRateLimiter},
-    services::{StorageService, discord::DiscordNotifier, email::EmailService, signaling::SignalingState},
+    services::{
+        notification::NotificationService, StorageService,
+        discord::DiscordNotifier, email::EmailService, signaling::SignalingState,
+    },
 };
 
 pub fn create_router(
@@ -30,6 +33,8 @@ pub fn create_router(
     let auth_state = AuthState {
         config: config.clone(),
     };
+
+    let notifications = NotificationService::new(db.clone(), email.clone());
 
     let app_state = handlers::auth::AppState {
         config: config.clone(),
@@ -44,14 +49,14 @@ pub fn create_router(
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
-        email: email.clone(),
+        notifications: notifications.clone(),
     };
 
     let presigned_state = handlers::presigned::PresignedState {
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
-        email: email.clone(),
+        notifications: notifications.clone(),
     };
 
     let download_state = handlers::download::DownloadState {
@@ -59,7 +64,7 @@ pub fn create_router(
         db: db.clone(),
         storage: storage.clone(),
         signaling: signaling_state.clone(),
-        email: email.clone(),
+        notifications: notifications.clone(),
     };
 
     let user_state = handlers::user::UserState {

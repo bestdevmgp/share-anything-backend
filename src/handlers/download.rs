@@ -16,7 +16,7 @@ use crate::{
         CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest,
         DownloadQuery, VerifyPasswordRequest, DownloadUrlResponse, FileInfoResponse,
     },
-    services::{StorageService, signaling::SignalingState, email::{EmailService, FileNotificationInfo}},
+    services::{NotificationService, StorageService, signaling::SignalingState, email::FileNotificationInfo},
     utils::{encode_content_disposition, parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
 use std::io::{Write as _, Cursor};
@@ -28,7 +28,7 @@ pub struct DownloadState {
     pub db: DbPool,
     pub storage: StorageService,
     pub signaling: SignalingState,
-    pub email: Arc<EmailService>,
+    pub notifications: Arc<NotificationService>,
 }
 
 #[utoipa::path(
@@ -259,59 +259,20 @@ pub async fn download_single_file(
     )
     .await;
 
-    // Send download notification email (fire-and-forget)
-    if let Some(ref claims) = user_claims {
-        if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
-            if user.notify_download {
-                let uploader_name = if let Some(ref uid) = file_share.user_id {
-                    repository::find_user_by_id(&state.db, uid).await.ok().flatten().map(|u| u.name)
-                } else {
-                    None
-                };
-                state.email.send_download_notification(
-                    &user.name,
-                    &user.email,
-                    code,
-                    vec![FileNotificationInfo {
-                        file_name: file_share.file_name.clone(),
-                        file_size: file_share.file_size,
-                        file_type: file_share.file_type.clone(),
-                    }],
-                    uploader_name.as_deref(),
-                    &user.notify_language,
-                );
-            }
-        }
-    }
-
-    // Send download alert to uploader (fire-and-forget)
-    if let Some(ref uploader_id) = file_share.user_id {
-        let is_self_download = user_claims.as_ref().map(|c| c.sub.as_str()) == Some(uploader_id.as_str());
-        if !is_self_download {
-            if let Ok(Some(uploader)) = repository::find_user_by_id(&state.db, uploader_id).await {
-                if uploader.notify_download_alert {
-                    let downloader_name = if let Some(ref claims) = user_claims {
-                        repository::find_user_by_id(&state.db, &claims.sub).await.ok().flatten().map(|u| u.name)
-                    } else {
-                        None
-                    };
-                    state.email.send_download_alert_notification(
-                        &uploader.name,
-                        &uploader.email,
-                        downloader_name.as_deref(),
-                        code,
-                        vec![FileNotificationInfo {
-                            file_name: file_share.file_name.clone(),
-                            file_size: file_share.file_size,
-                            file_type: file_share.file_type.clone(),
-                        }],
-                        &ip_address_for_alert,
-                        &uploader.notify_language,
-                    );
-                }
-            }
-        }
-    }
+    state
+        .notifications
+        .notify_download(
+            code,
+            vec![FileNotificationInfo {
+                file_name: file_share.file_name.clone(),
+                file_size: file_share.file_size,
+                file_type: file_share.file_type.clone(),
+            }],
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            file_share.user_id.as_deref(),
+            &ip_address_for_alert,
+        )
+        .await;
 
     let file_data = state
         .storage
@@ -507,59 +468,20 @@ pub async fn download_file(
     )
     .await;
 
-    // Send download notification email (fire-and-forget)
-    if let Some(ref claims) = user_claims {
-        if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
-            if user.notify_download {
-                let uploader_name = if let Some(ref uid) = file_share.user_id {
-                    repository::find_user_by_id(&state.db, uid).await.ok().flatten().map(|u| u.name)
-                } else {
-                    None
-                };
-                state.email.send_download_notification(
-                    &user.name,
-                    &user.email,
-                    &query.code,
-                    vec![FileNotificationInfo {
-                        file_name: file_share.file_name.clone(),
-                        file_size: file_share.file_size,
-                        file_type: file_share.file_type.clone(),
-                    }],
-                    uploader_name.as_deref(),
-                    &user.notify_language,
-                );
-            }
-        }
-    }
-
-    // Send download alert to uploader (fire-and-forget)
-    if let Some(ref uploader_id) = file_share.user_id {
-        let is_self_download = user_claims.as_ref().map(|c| c.sub.as_str()) == Some(uploader_id.as_str());
-        if !is_self_download {
-            if let Ok(Some(uploader)) = repository::find_user_by_id(&state.db, uploader_id).await {
-                if uploader.notify_download_alert {
-                    let downloader_name = if let Some(ref claims) = user_claims {
-                        repository::find_user_by_id(&state.db, &claims.sub).await.ok().flatten().map(|u| u.name)
-                    } else {
-                        None
-                    };
-                    state.email.send_download_alert_notification(
-                        &uploader.name,
-                        &uploader.email,
-                        downloader_name.as_deref(),
-                        &query.code,
-                        vec![FileNotificationInfo {
-                            file_name: file_share.file_name.clone(),
-                            file_size: file_share.file_size,
-                            file_type: file_share.file_type.clone(),
-                        }],
-                        &ip_address_for_alert,
-                        &uploader.notify_language,
-                    );
-                }
-            }
-        }
-    }
+    state
+        .notifications
+        .notify_download(
+            &query.code,
+            vec![FileNotificationInfo {
+                file_name: file_share.file_name.clone(),
+                file_size: file_share.file_size,
+                file_type: file_share.file_type.clone(),
+            }],
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            file_share.user_id.as_deref(),
+            &ip_address_for_alert,
+        )
+        .await;
 
     let file_data = state
         .storage
@@ -720,67 +642,24 @@ pub async fn download_multiple_files(
 
     let zip_data = buffer.into_inner();
 
-    // Send download notification email (fire-and-forget)
-    if let Some(ref claims) = user_claims {
-        if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
-            if user.notify_download {
-                let notification_files: Vec<FileNotificationInfo> = files_to_download
-                    .iter()
-                    .map(|f| FileNotificationInfo {
-                        file_name: f.file_name.clone(),
-                        file_size: f.file_size,
-                        file_type: f.file_type.clone(),
-                    })
-                    .collect();
-                let uploader_name = if let Some(ref uid) = files_to_download[0].user_id {
-                    repository::find_user_by_id(&state.db, uid).await.ok().flatten().map(|u| u.name)
-                } else {
-                    None
-                };
-                state.email.send_download_notification(
-                    &user.name,
-                    &user.email,
-                    &req.code,
-                    notification_files,
-                    uploader_name.as_deref(),
-                    &user.notify_language,
-                );
-            }
-        }
-    }
-
-    // Send download alert to uploader (fire-and-forget)
-    if let Some(ref uploader_id) = files_to_download[0].user_id {
-        let is_self_download = user_claims.as_ref().map(|c| c.sub.as_str()) == Some(uploader_id.as_str());
-        if !is_self_download {
-            if let Ok(Some(uploader)) = repository::find_user_by_id(&state.db, uploader_id).await {
-                if uploader.notify_download_alert {
-                    let downloader_name = if let Some(ref claims) = user_claims {
-                        repository::find_user_by_id(&state.db, &claims.sub).await.ok().flatten().map(|u| u.name)
-                    } else {
-                        None
-                    };
-                    let alert_files: Vec<FileNotificationInfo> = files_to_download
-                        .iter()
-                        .map(|f| FileNotificationInfo {
-                            file_name: f.file_name.clone(),
-                            file_size: f.file_size,
-                            file_type: f.file_type.clone(),
-                        })
-                        .collect();
-                    state.email.send_download_alert_notification(
-                        &uploader.name,
-                        &uploader.email,
-                        downloader_name.as_deref(),
-                        &req.code,
-                        alert_files,
-                        &ip_address,
-                        &uploader.notify_language,
-                    );
-                }
-            }
-        }
-    }
+    let notification_files: Vec<FileNotificationInfo> = files_to_download
+        .iter()
+        .map(|f| FileNotificationInfo {
+            file_name: f.file_name.clone(),
+            file_size: f.file_size,
+            file_type: f.file_type.clone(),
+        })
+        .collect();
+    state
+        .notifications
+        .notify_download(
+            &req.code,
+            notification_files,
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            files_to_download[0].user_id.as_deref(),
+            &ip_address,
+        )
+        .await;
 
     let is_one_time = files_to_download[0].is_one_time;
     if is_one_time {
@@ -950,59 +829,20 @@ pub async fn get_download_url(
         )
         .await;
 
-        // Send download notification email (fire-and-forget)
-        if let Some(ref claims) = user_claims {
-            if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
-                if user.notify_download {
-                    let uploader_name = if let Some(ref uid) = file_share.user_id {
-                        repository::find_user_by_id(&state.db, uid).await.ok().flatten().map(|u| u.name)
-                    } else {
-                        None
-                    };
-                    state.email.send_download_notification(
-                        &user.name,
-                        &user.email,
-                        code,
-                        vec![FileNotificationInfo {
-                            file_name: file_share.file_name.clone(),
-                            file_size: file_share.file_size,
-                            file_type: file_share.file_type.clone(),
-                        }],
-                        uploader_name.as_deref(),
-                        &user.notify_language,
-                    );
-                }
-            }
-        }
-
-        // Send download alert to uploader (fire-and-forget)
-        if let Some(ref uploader_id) = file_share.user_id {
-            let is_self_download = user_claims.as_ref().map(|c| c.sub.as_str()) == Some(uploader_id.as_str());
-            if !is_self_download {
-                if let Ok(Some(uploader)) = repository::find_user_by_id(&state.db, uploader_id).await {
-                    if uploader.notify_download_alert {
-                        let downloader_name = if let Some(ref claims) = user_claims {
-                            repository::find_user_by_id(&state.db, &claims.sub).await.ok().flatten().map(|u| u.name)
-                        } else {
-                            None
-                        };
-                        state.email.send_download_alert_notification(
-                            &uploader.name,
-                            &uploader.email,
-                            downloader_name.as_deref(),
-                            code,
-                            vec![FileNotificationInfo {
-                                file_name: file_share.file_name.clone(),
-                                file_size: file_share.file_size,
-                                file_type: file_share.file_type.clone(),
-                            }],
-                            &ip_address_for_alert,
-                            &uploader.notify_language,
-                        );
-                    }
-                }
-            }
-        }
+        state
+            .notifications
+            .notify_download(
+                code,
+                vec![FileNotificationInfo {
+                    file_name: file_share.file_name.clone(),
+                    file_size: file_share.file_size,
+                    file_type: file_share.file_type.clone(),
+                }],
+                user_claims.as_ref().map(|c| c.sub.as_str()),
+                file_share.user_id.as_deref(),
+                &ip_address_for_alert,
+            )
+            .await;
     }
 
     let inline = params

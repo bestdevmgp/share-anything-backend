@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::config::SmtpConfig;
 use chrono::{DateTime, Datelike, Utc};
 
+#[derive(Clone)]
 pub struct FileNotificationInfo {
     pub file_name: String,
     pub file_size: i64,
