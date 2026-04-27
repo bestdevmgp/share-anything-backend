@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::{Query, Request, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::Response,
     Json,
 };
@@ -293,14 +293,14 @@ pub async fn download_single_file(
         file_share
             .file_type
             .parse()
-            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| "attachment".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
 
     Ok(response)
@@ -378,14 +378,14 @@ pub async fn preview_file(
         file_share
             .file_type
             .parse()
-            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         encode_content_disposition("inline", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| "inline".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("inline")),
     );
 
     Ok(response)
@@ -502,14 +502,14 @@ pub async fn download_file(
         file_share
             .file_type
             .parse()
-            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| "attachment".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
 
     Ok(response)
@@ -672,16 +672,15 @@ pub async fn download_multiple_files(
 
     let mut response = Response::new(Body::from(zip_data));
 
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        "application/zip".parse().unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static("application/zip"));
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         format!("attachment; filename=\"files_{}.zip\"", req.code)
             .parse()
-            .unwrap(),
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
 
     Ok(response)

@@ -1,8 +1,8 @@
 use axum::{
     body::Body,
     extract::{Multipart, Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
-    response::Response,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
 use chrono::{DateTime, Utc};
@@ -616,14 +616,14 @@ pub async fn cli_download(
         file_share
             .file_type
             .parse()
-            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| "attachment".parse().unwrap()),
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
 
     Ok(response)
@@ -758,5 +758,5 @@ pub async fn cli_install_script() -> Response {
             "https://raw.githubusercontent.com/bestdevmgp/share-anything-cli/main/install.sh",
         )
         .body(Body::empty())
-        .unwrap()
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
