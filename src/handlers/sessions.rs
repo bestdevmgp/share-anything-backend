@@ -8,8 +8,8 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        not_found,
-        session::{BlockedDeviceResponse, SessionResponse},
+        bad_request, not_found,
+        session::{SessionResponse, TrustedDeviceResponse},
         AppError,
     },
 };
@@ -46,6 +46,9 @@ pub async fn terminate_session(
     Extension(claims): Extension<Claims>,
     Path(jti): Path<String>,
 ) -> Result<StatusCode, AppError> {
+    if jti == claims.jti {
+        return Err(bad_request("현재 사용 중인 세션은 종료할 수 없습니다"));
+    }
     let rows = repository::delete_session(&state.db, &claims.sub, &jti).await?;
     if rows == 0 {
         return Err(not_found("세션을 찾을 수 없습니다"));
@@ -61,61 +64,33 @@ pub async fn terminate_other_sessions(
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn block_session(
+pub async fn list_trusted_devices(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
-    Path(jti): Path<String>,
-) -> Result<StatusCode, AppError> {
-    let session = repository::find_session(&state.db, &jti)
-        .await?
-        .ok_or_else(|| not_found("세션을 찾을 수 없습니다"))?;
+) -> Result<Json<Vec<TrustedDeviceResponse>>, AppError> {
+    let devices = repository::find_trusted_devices_by_user(&state.db, &claims.sub).await?;
 
-    if session.user_id != claims.sub {
-        return Err(not_found("세션을 찾을 수 없습니다"));
-    }
-
-    repository::add_blocked_device(
-        &state.db,
-        &claims.sub,
-        &session.user_agent_hash,
-        session.user_agent.as_deref(),
-        &session.ip_address,
-        session.device_label.as_deref(),
-    )
-    .await?;
-
-    repository::delete_session(&state.db, &claims.sub, &jti).await?;
-
-    Ok(StatusCode::NO_CONTENT)
-}
-
-pub async fn list_blocked_devices(
-    State(state): State<SessionsState>,
-    Extension(claims): Extension<Claims>,
-) -> Result<Json<Vec<BlockedDeviceResponse>>, AppError> {
-    let devices = repository::find_blocked_devices_by_user(&state.db, &claims.sub).await?;
-
-    let response: Vec<BlockedDeviceResponse> = devices
+    let response: Vec<TrustedDeviceResponse> = devices
         .into_iter()
-        .map(|d| BlockedDeviceResponse {
+        .map(|d| TrustedDeviceResponse {
             id: d.id,
             device_label: d.device_label,
             ip_address: d.ip_address,
-            blocked_at: d.blocked_at,
+            trusted_at: d.trusted_at,
         })
         .collect();
 
     Ok(Json(response))
 }
 
-pub async fn unblock_device(
+pub async fn delete_trusted_device(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    let rows = repository::delete_blocked_device(&state.db, &claims.sub, &id).await?;
+    let rows = repository::delete_trusted_device(&state.db, &claims.sub, &id).await?;
     if rows == 0 {
-        return Err(not_found("차단된 기기를 찾을 수 없습니다"));
+        return Err(not_found("신뢰 기기를 찾을 수 없습니다"));
     }
     Ok(StatusCode::NO_CONTENT)
 }

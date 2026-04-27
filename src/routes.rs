@@ -207,19 +207,30 @@ pub fn create_router(
             delete(handlers::sessions::terminate_session),
         )
         .route(
-            "/user/sessions/:jti/block",
-            post(handlers::sessions::block_session),
+            "/user/trusted-devices",
+            get(handlers::sessions::list_trusted_devices),
         )
         .route(
-            "/user/blocked-devices",
-            get(handlers::sessions::list_blocked_devices),
-        )
-        .route(
-            "/user/blocked-devices/:id",
-            delete(handlers::sessions::unblock_device),
+            "/user/trusted-devices/:id",
+            delete(handlers::sessions::delete_trusted_device),
         )
         .layer(middleware::from_fn_with_state(auth_state.clone(), require_auth))
         .with_state(sessions_state);
+
+    let device_confirm_state = handlers::device_confirm::DeviceConfirmState {
+        config: config.clone(),
+        db: db.clone(),
+    };
+    let device_confirm_routes = Router::new()
+        .route(
+            "/auth/device/trust",
+            get(handlers::device_confirm::trust_device),
+        )
+        .route(
+            "/auth/device/terminate",
+            get(handlers::device_confirm::terminate_device),
+        )
+        .with_state(device_confirm_state);
 
     let ws_routes = Router::new()
         .route("/ws/signaling", get(handlers::signaling::websocket_handler))
@@ -347,6 +358,7 @@ pub fn create_router(
         .merge(download_routes)
         .merge(user_routes)
         .merge(sessions_routes)
+        .merge(device_confirm_routes)
         .merge(quick_access_routes)
         .merge(personal_token_routes)
         .merge(cli_routes)

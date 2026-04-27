@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     db::{repository, DbPool},
+    handlers::device_confirm::issue_device_confirm_token,
     middleware::auth::create_jwt,
     models::{
         forbidden, internal_error, session::CreateSessionDto, user::UserStatus, AppError,
@@ -195,32 +196,42 @@ impl AuthService {
         let user_agent = extract_user_agent(headers);
         let user_agent_hash = hash_ua(&user_agent);
 
-        if repository::is_device_blocked(&self.db, &user.id, &user_agent_hash, &ip).await? {
-            return Err(forbidden(
-                "이 기기는 차단되어 있어 로그인할 수 없습니다",
-            ));
-        }
+        let is_trusted =
+            repository::is_device_trusted(&self.db, &user.id, &user_agent_hash, &ip).await?;
 
         let jti = Uuid::new_v4().to_string();
         let device_label = parse_device_label(&user_agent);
         let location = self.geolocation.lookup(&ip).await;
+        let now = Utc::now();
         let expires_at =
-            Utc::now() + chrono::Duration::hours(self.config.jwt.expiration_hours);
+            now + chrono::Duration::hours(self.config.jwt.expiration_hours);
 
         repository::create_session(
             &self.db,
             CreateSessionDto {
                 jti: jti.clone(),
                 user_id: user.id.clone(),
-                device_label,
+                device_label: device_label.clone(),
                 user_agent,
-                user_agent_hash,
-                ip_address: ip,
-                location,
+                user_agent_hash: user_agent_hash.clone(),
+                ip_address: ip.clone(),
+                location: location.clone(),
                 expires_at,
             },
         )
         .await?;
+
+        if !is_trusted {
+            self.notify_new_device(
+                user,
+                &jti,
+                &user_agent_hash,
+                &ip,
+                location.as_deref(),
+                device_label.as_deref(),
+                now,
+            );
+        }
 
         create_jwt(
             &user.id,
@@ -234,6 +245,42 @@ impl AuthService {
             tracing::error!(error = ?e, "JWT creation failed");
             internal_error("JWT 발급 실패")
         })
+    }
+
+    fn notify_new_device(
+        &self,
+        user: &User,
+        jti: &str,
+        user_agent_hash: &str,
+        ip: &str,
+        location: Option<&str>,
+        device_label: Option<&str>,
+        logged_in_at: chrono::DateTime<Utc>,
+    ) {
+        let trust_token = match issue_device_confirm_token(
+            &self.config.jwt.secret,
+            &user.id,
+            jti,
+            user_agent_hash,
+            ip,
+            device_label,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(error = ?e, "Failed to issue device confirm token");
+                return;
+            }
+        };
+
+        self.email.send_new_device_notification(
+            &user.email,
+            device_label,
+            ip,
+            location,
+            logged_in_at,
+            &trust_token,
+            &user.notify_language,
+        );
     }
 
     pub fn build_response(&self, outcome: AuthOutcome, jwt: String) -> AuthResponse {

@@ -128,6 +128,114 @@ struct MagicLinkTemplate<'a> {
     frontend_url: &'a str,
 }
 
+#[derive(Template)]
+#[template(path = "device_confirm.html")]
+struct DeviceConfirmTemplate<'a> {
+    html_lang: &'a str,
+    device_label: &'a str,
+    ip_address: &'a str,
+    location: Option<&'a str>,
+    logged_in_at: String,
+    trust_link: String,
+    terminate_link: String,
+    t: &'static DeviceConfirmTranslations,
+    frontend_url: &'a str,
+}
+
+struct DeviceConfirmTranslations {
+    title: &'static str,
+    intro: &'static str,
+    device_label: &'static str,
+    ip_label: &'static str,
+    location_label: &'static str,
+    time_label: &'static str,
+    question: &'static str,
+    trust_button: &'static str,
+    terminate_button: &'static str,
+    expiry_note: &'static str,
+    footer: &'static str,
+}
+
+fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslations {
+    match lang {
+        "ko" => &DeviceConfirmTranslations {
+            title: "새 기기에서 로그인되었습니다",
+            intro: "회원님의 계정으로 새 기기에서 로그인이 발생했습니다. 아래 정보를 확인해주세요.",
+            device_label: "기기",
+            ip_label: "IP 주소",
+            location_label: "위치",
+            time_label: "로그인 시간",
+            question: "본인이 로그인한 것이 맞나요?",
+            trust_button: "네, 제가 로그인 했습니다",
+            terminate_button: "아니요, 제가 로그인하지 않았습니다",
+            expiry_note: "이 링크는 7일 후 만료됩니다. 본인이 아닌 경우 즉시 비밀번호를 변경하거나 다른 보안 조치를 취해주세요.",
+            footer: "본 메일은 새 기기 로그인 감지 시 자동으로 발송되는 알림 메일입니다.",
+        },
+        "ja" => &DeviceConfirmTranslations {
+            title: "新しい端末でログインしました",
+            intro: "あなたのアカウントで新しい端末からのログインが検出されました。以下の情報をご確認ください。",
+            device_label: "端末",
+            ip_label: "IPアドレス",
+            location_label: "場所",
+            time_label: "ログイン時刻",
+            question: "ご本人によるログインですか？",
+            trust_button: "はい、私がログインしました",
+            terminate_button: "いいえ、ログインしていません",
+            expiry_note: "このリンクは7日後に期限切れになります。本人でない場合は、直ちにパスワードを変更するなどの対策を行ってください。",
+            footer: "このメールは新しい端末からのログインを検知した際に自動送信される通知メールです。",
+        },
+        "zh-CN" => &DeviceConfirmTranslations {
+            title: "新设备登录通知",
+            intro: "您的账号在新设备上登录。请确认以下信息。",
+            device_label: "设备",
+            ip_label: "IP地址",
+            location_label: "位置",
+            time_label: "登录时间",
+            question: "是您本人登录吗？",
+            trust_button: "是的，是我登录的",
+            terminate_button: "不是我登录的",
+            expiry_note: "此链接将在7天后过期。如果不是本人，请立即修改密码或采取其他安全措施。",
+            footer: "此邮件在检测到新设备登录时自动发送。",
+        },
+        "zh-TW" => &DeviceConfirmTranslations {
+            title: "新裝置登入通知",
+            intro: "您的帳號在新裝置上登入。請確認以下資訊。",
+            device_label: "裝置",
+            ip_label: "IP位址",
+            location_label: "位置",
+            time_label: "登入時間",
+            question: "是您本人登入嗎？",
+            trust_button: "是的，是我登入的",
+            terminate_button: "不是我登入的",
+            expiry_note: "此連結將在7天後過期。如果不是本人，請立即修改密碼或採取其他安全措施。",
+            footer: "此郵件在偵測到新裝置登入時自動發送。",
+        },
+        _ => &DeviceConfirmTranslations {
+            title: "New device sign-in detected",
+            intro: "A new device just signed into your account. Please review the details below.",
+            device_label: "Device",
+            ip_label: "IP Address",
+            location_label: "Location",
+            time_label: "Sign-in Time",
+            question: "Was this you?",
+            trust_button: "Yes, this was me",
+            terminate_button: "No, this wasn't me",
+            expiry_note: "This link expires in 7 days. If this wasn't you, change your password and review your account security immediately.",
+            footer: "This email is automatically sent when a sign-in from a new device is detected.",
+        },
+    }
+}
+
+fn device_confirm_subject(lang: &str) -> &'static str {
+    match lang {
+        "ko" => "[ShareAnything] 새 기기 로그인 확인",
+        "ja" => "[ShareAnything] 新しい端末からのログイン確認",
+        "zh-CN" => "[ShareAnything] 新设备登录确认",
+        "zh-TW" => "[ShareAnything] 新裝置登入確認",
+        _ => "[ShareAnything] New device sign-in confirmation",
+    }
+}
+
 struct FileRow {
     file_name: String,
     label: &'static str,
@@ -1083,6 +1191,115 @@ impl EmailService {
 
         self.transport.as_ref().unwrap().send(message).await?;
         Ok(())
+    }
+
+    pub fn send_new_device_notification(
+        self: &Arc<Self>,
+        email: &str,
+        device_label: Option<&str>,
+        ip_address: &str,
+        location: Option<&str>,
+        logged_in_at: DateTime<Utc>,
+        trust_token: &str,
+        lang: &str,
+    ) {
+        if !self.is_enabled() {
+            return;
+        }
+        let this = Arc::clone(self);
+        let email = email.to_string();
+        let device_label = device_label.map(|s| s.to_string());
+        let ip_address = ip_address.to_string();
+        let location = location.map(|s| s.to_string());
+        let trust_token = trust_token.to_string();
+        let lang = lang.to_string();
+
+        tokio::spawn(async move {
+            let _ = this
+                .do_send_new_device_notification(
+                    &email,
+                    device_label.as_deref(),
+                    &ip_address,
+                    location.as_deref(),
+                    logged_in_at,
+                    &trust_token,
+                    &lang,
+                )
+                .await;
+        });
+    }
+
+    async fn do_send_new_device_notification(
+        &self,
+        email: &str,
+        device_label: Option<&str>,
+        ip_address: &str,
+        location: Option<&str>,
+        logged_in_at: DateTime<Utc>,
+        trust_token: &str,
+        lang: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
+        let to: Mailbox = email.parse()?;
+
+        let html_body = self.build_device_confirm_html(
+            device_label,
+            ip_address,
+            location,
+            logged_in_at,
+            trust_token,
+            lang,
+        );
+
+        let message = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(device_confirm_subject(lang))
+            .header(ContentType::TEXT_HTML)
+            .body(html_body)?;
+
+        self.transport.as_ref().unwrap().send(message).await?;
+        Ok(())
+    }
+
+    fn build_device_confirm_html(
+        &self,
+        device_label: Option<&str>,
+        ip_address: &str,
+        location: Option<&str>,
+        logged_in_at: DateTime<Utc>,
+        trust_token: &str,
+        lang: &str,
+    ) -> String {
+        let trust_link = format!("{}/auth/device/trust?token={}", &self.frontend_url, trust_token);
+        let terminate_link =
+            format!("{}/auth/device/terminate?token={}", &self.frontend_url, trust_token);
+        let logged_in_kst = logged_in_at + chrono::Duration::hours(9);
+        let date_str = format_date_localized(&logged_in_kst, lang);
+        let time_str = logged_in_kst.format("%H:%M").to_string();
+        let logged_in_at_str = format!("{} {}", date_str, time_str);
+
+        let unknown_label: &'static str = match lang {
+            "ko" => "알 수 없음",
+            "ja" => "不明",
+            "zh-CN" => "未知",
+            "zh-TW" => "未知",
+            _ => "Unknown",
+        };
+
+        DeviceConfirmTemplate {
+            html_lang: html_lang_attr(lang),
+            device_label: device_label.unwrap_or(unknown_label),
+            ip_address,
+            location,
+            logged_in_at: logged_in_at_str,
+            trust_link,
+            terminate_link,
+            t: get_device_confirm_translations(lang),
+            frontend_url: &self.frontend_url,
+        }
+        .render()
+        .unwrap_or_default()
     }
 
     fn build_magic_link_html(&self, email: &str, token: &str, lang: &str) -> String {

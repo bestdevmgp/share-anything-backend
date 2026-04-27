@@ -1,6 +1,6 @@
 use crate::models::*;
 use crate::models::personal_token::PersonalToken;
-use crate::models::session::{BlockedDevice, CreateSessionDto, Session};
+use crate::models::session::{CreateSessionDto, Session, TrustedDevice};
 use chrono::Utc;
 use sqlx::{FromRow, MySqlPool};
 use uuid::Uuid;
@@ -1186,7 +1186,7 @@ pub async fn delete_expired_sessions(pool: &MySqlPool) -> Result<u64, sqlx::Erro
     Ok(result.rows_affected())
 }
 
-pub async fn is_device_blocked(
+pub async fn is_device_trusted(
     pool: &MySqlPool,
     user_id: &str,
     user_agent_hash: &str,
@@ -1194,7 +1194,7 @@ pub async fn is_device_blocked(
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query_as::<_, (i64,)>(
         r#"
-        SELECT COUNT(*) FROM blocked_devices
+        SELECT COUNT(*) FROM trusted_devices
         WHERE user_id = ? AND user_agent_hash = ? AND ip_address = ?
         "#,
     )
@@ -1206,7 +1206,7 @@ pub async fn is_device_blocked(
     Ok(row.0 > 0)
 }
 
-pub async fn add_blocked_device(
+pub async fn add_trusted_device(
     pool: &MySqlPool,
     user_id: &str,
     user_agent_hash: &str,
@@ -1217,10 +1217,10 @@ pub async fn add_blocked_device(
     let id = Uuid::new_v4().to_string();
     sqlx::query(
         r#"
-        INSERT INTO blocked_devices
+        INSERT INTO trusted_devices
         (id, user_id, user_agent_hash, user_agent, ip_address, device_label)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE blocked_at = CURRENT_TIMESTAMP
+        ON DUPLICATE KEY UPDATE trusted_at = CURRENT_TIMESTAMP
         "#,
     )
     .bind(&id)
@@ -1234,24 +1234,24 @@ pub async fn add_blocked_device(
     Ok(id)
 }
 
-pub async fn find_blocked_devices_by_user(
+pub async fn find_trusted_devices_by_user(
     pool: &MySqlPool,
     user_id: &str,
-) -> Result<Vec<BlockedDevice>, sqlx::Error> {
-    sqlx::query_as::<_, BlockedDevice>(
-        "SELECT * FROM blocked_devices WHERE user_id = ? ORDER BY blocked_at DESC",
+) -> Result<Vec<TrustedDevice>, sqlx::Error> {
+    sqlx::query_as::<_, TrustedDevice>(
+        "SELECT * FROM trusted_devices WHERE user_id = ? ORDER BY trusted_at DESC",
     )
     .bind(user_id)
     .fetch_all(pool)
     .await
 }
 
-pub async fn delete_blocked_device(
+pub async fn delete_trusted_device(
     pool: &MySqlPool,
     user_id: &str,
     id: &str,
 ) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM blocked_devices WHERE id = ? AND user_id = ?")
+    let result = sqlx::query("DELETE FROM trusted_devices WHERE id = ? AND user_id = ?")
         .bind(id)
         .bind(user_id)
         .execute(pool)

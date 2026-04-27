@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="{{ html_lang }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;word-break:keep-all;overflow-wrap:break-word;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
+<tr>
+<td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
+
+{% include "partials/header.html" %}
+
+<tr>
+<td style="padding:28px 0 24px;">
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{{ t.title }}</h2>
+  <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#71717a;">{{ t.intro }}</p>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;background-color:#f8fafc;border-radius:8px;">
+    <tr>
+      <td style="padding:16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#71717a;width:30%;">{{ t.device_label }}</td>
+            <td style="padding:6px 0;font-size:13px;color:#18181b;font-weight:500;">{{ device_label }}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#71717a;">{{ t.ip_label }}</td>
+            <td style="padding:6px 0;font-size:13px;color:#18181b;font-weight:500;">{{ ip_address }}</td>
+          </tr>
+          {% if let Some(loc) = location %}
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#71717a;">{{ t.location_label }}</td>
+            <td style="padding:6px 0;font-size:13px;color:#18181b;font-weight:500;">{{ loc }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="padding:6px 0;font-size:13px;color:#71717a;">{{ t.time_label }}</td>
+            <td style="padding:6px 0;font-size:13px;color:#18181b;font-weight:500;">{{ logged_in_at }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#52525b;">{{ t.question }}</p>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+    <tr>
+      <td align="center" style="padding-bottom:10px;">
+        <table role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background-color:#16a34a;border-radius:8px;">
+              <a href="{{ trust_link }}" style="display:inline-block;padding:11px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">{{ t.trust_button }}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background-color:#dc2626;border-radius:8px;">
+              <a href="{{ terminate_link }}" style="display:inline-block;padding:11px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">{{ t.terminate_button }}</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0;font-size:12px;line-height:1.7;color:#a1a1aa;">{{ t.expiry_note }}</p>
+</td>
+</tr>
+
+<tr>
+<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
+  {% include "partials/footer_links.html" %}
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
+    {{ t.footer }}<br>
+    &copy; ShareAnything
+  </p>
+</td>
+</tr>
+
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>

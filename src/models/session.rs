@@ -20,14 +20,14 @@ pub struct Session {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, FromRow)]
-pub struct BlockedDevice {
+pub struct TrustedDevice {
     pub id: String,
     pub user_id: String,
     pub user_agent_hash: String,
     pub user_agent: Option<String>,
     pub ip_address: String,
     pub device_label: Option<String>,
-    pub blocked_at: DateTime<Utc>,
+    pub trusted_at: DateTime<Utc>,
 }
 
 pub struct CreateSessionDto {
@@ -55,11 +55,10 @@ pub struct SessionResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct BlockedDeviceResponse {
+pub struct TrustedDeviceResponse {
     pub id: String,
     pub device_label: Option<String>,
     pub ip_address: String,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
-    pub blocked_at: DateTime<Utc>,
+    pub trusted_at: DateTime<Utc>,
 }
-
