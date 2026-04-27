@@ -12,8 +12,108 @@ use chrono::{DateTime, Datelike, Utc};
 #[derive(Template)]
 #[template(path = "welcome.html")]
 struct WelcomeTemplate<'a> {
-    name: &'a str,
+    html_lang: &'a str,
+    greeting: String,
     frontend_url: &'a str,
+    t: &'static WelcomeTranslations,
+}
+
+struct WelcomeTranslations {
+    tagline: &'static str,
+    intro: &'static str,
+    feature_server_title: &'static str,
+    feature_server_desc: &'static str,
+    feature_p2p_title: &'static str,
+    feature_p2p_desc: &'static str,
+    feature_qa_title: &'static str,
+    feature_qa_desc: &'static str,
+    cta: &'static str,
+    footer: &'static str,
+}
+
+fn get_welcome_translations(lang: &str) -> &'static WelcomeTranslations {
+    match lang {
+        "ko" => &WelcomeTranslations {
+            tagline: "간편하고 안전한 파일 공유 서비스",
+            intro: "ShareAnything에 가입해 주셔서 감사합니다.<br>지금 바로 다양한 파일 공유 기능을 이용해 보세요.",
+            feature_server_title: "서버 업로드",
+            feature_server_desc: "파일을 업로드하고 공유 코드로 다운로드하세요. 최대 3GB까지 지원합니다.",
+            feature_p2p_title: "P2P 보안 전송",
+            feature_p2p_desc: "서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 무료로 빠르게 공유해보세요. 모든 보안 전송 파일은 WebRTC DTLS로 종단간 암호화됩니다.",
+            feature_qa_title: "Quick Access",
+            feature_qa_desc: "여러 기기에서 같은 계정으로 로그인하여 파일을 빠르게 저장하고 어디서든 접근하세요.",
+            cta: "ShareAnything 시작하기",
+            footer: "본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.",
+        },
+        "ja" => &WelcomeTranslations {
+            tagline: "シンプルで安全なファイル共有サービス",
+            intro: "ShareAnythingにご登録いただきありがとうございます。<br>今すぐ様々なファイル共有機能をお試しください。",
+            feature_server_title: "サーバーアップロード",
+            feature_server_desc: "ファイルをアップロードして共有コードでダウンロード。最大3GBまで対応しています。",
+            feature_p2p_title: "P2Pセキュア送信",
+            feature_p2p_desc: "サーバーを経由せず相手に直接ファイルを送信します。容量制限なく無料で素早く共有できます。すべてのセキュア送信ファイルはWebRTC DTLSでエンドツーエンド暗号化されます。",
+            feature_qa_title: "Quick Access",
+            feature_qa_desc: "同じアカウントで複数の端末からログインし、ファイルを素早く保存していつでもアクセスできます。",
+            cta: "ShareAnythingを始める",
+            footer: "本メールはShareAnythingご登録時に自動送信されるメールです。",
+        },
+        "zh-CN" => &WelcomeTranslations {
+            tagline: "简单安全的文件共享服务",
+            intro: "感谢您注册ShareAnything。<br>立即体验各种文件共享功能。",
+            feature_server_title: "服务器上传",
+            feature_server_desc: "上传文件并使用共享码下载，最高支持3GB。",
+            feature_p2p_title: "P2P安全传输",
+            feature_p2p_desc: "无需经过服务器，直接将文件发送给对方。免费快速共享，无大小限制。所有安全传输的文件均通过WebRTC DTLS进行端到端加密。",
+            feature_qa_title: "Quick Access",
+            feature_qa_desc: "在多个设备上使用同一账户登录，快速保存文件并随时随地访问。",
+            cta: "开始使用ShareAnything",
+            footer: "此邮件在注册ShareAnything时自动发送。",
+        },
+        "zh-TW" => &WelcomeTranslations {
+            tagline: "簡單安全的檔案共享服務",
+            intro: "感謝您註冊ShareAnything。<br>立即體驗各種檔案共享功能。",
+            feature_server_title: "伺服器上傳",
+            feature_server_desc: "上傳檔案並使用共享碼下載，最高支援3GB。",
+            feature_p2p_title: "P2P安全傳輸",
+            feature_p2p_desc: "無需經過伺服器，直接將檔案傳送給對方。免費快速共享，無大小限制。所有安全傳輸的檔案均通過WebRTC DTLS進行端對端加密。",
+            feature_qa_title: "Quick Access",
+            feature_qa_desc: "在多個裝置上使用同一帳號登入，快速儲存檔案並隨時隨地存取。",
+            cta: "開始使用ShareAnything",
+            footer: "此郵件在註冊ShareAnything時自動發送。",
+        },
+        _ => &WelcomeTranslations {
+            tagline: "Simple, secure file sharing",
+            intro: "Thanks for joining ShareAnything.<br>Try out our file sharing features right away.",
+            feature_server_title: "Server Upload",
+            feature_server_desc: "Upload files and share them with a code. Supports up to 3GB.",
+            feature_p2p_title: "Secure P2P Transfer",
+            feature_p2p_desc: "Send files directly to the other party without going through our servers. Share quickly and freely with no size limit. All secure transfers are end-to-end encrypted with WebRTC DTLS.",
+            feature_qa_title: "Quick Access",
+            feature_qa_desc: "Sign in to the same account on multiple devices to instantly store and access files anywhere.",
+            cta: "Get Started",
+            footer: "This email is automatically sent when you sign up for ShareAnything.",
+        },
+    }
+}
+
+fn welcome_subject(lang: &str, name: &str) -> String {
+    match lang {
+        "ko" => format!("{}님, ShareAnything에 오신 것을 환영합니다!", name),
+        "ja" => format!("{}様、ShareAnythingへようこそ!", name),
+        "zh-CN" => format!("{}，欢迎使用ShareAnything!", name),
+        "zh-TW" => format!("{},歡迎使用ShareAnything!", name),
+        _ => format!("{}, welcome to ShareAnything!", name),
+    }
+}
+
+fn welcome_greeting(lang: &str, name: &str) -> String {
+    match lang {
+        "ko" => format!("환영합니다, {}님!", name),
+        "ja" => format!("{}様、ようこそ!", name),
+        "zh-CN" => format!("{},欢迎您!", name),
+        "zh-TW" => format!("{},歡迎您!", name),
+        _ => format!("Welcome, {}!", name),
+    }
 }
 
 #[derive(Template)]
@@ -642,7 +742,7 @@ impl EmailService {
         self.transport.is_some()
     }
 
-    pub fn send_welcome_email(self: &Arc<Self>, name: &str, email: &str) {
+    pub fn send_welcome_email(self: &Arc<Self>, name: &str, email: &str, lang: &str) {
         if !self.is_enabled() {
             return;
         }
@@ -650,9 +750,10 @@ impl EmailService {
         let this = Arc::clone(self);
         let name = name.to_string();
         let email = email.to_string();
+        let lang = lang.to_string();
 
         tokio::spawn(async move {
-            let _ = this.do_send_welcome_email(&name, &email).await;
+            let _ = this.do_send_welcome_email(&name, &email, &lang).await;
         });
     }
 
@@ -660,16 +761,17 @@ impl EmailService {
         &self,
         name: &str,
         email: &str,
+        lang: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
         let to: Mailbox = email.parse()?;
 
-        let html_body = self.build_welcome_html(name);
+        let html_body = self.build_welcome_html(name, lang);
 
         let message = Message::builder()
             .from(from)
             .to(to)
-            .subject(format!("{}님, ShareAnything에 오신 것을 환영합니다!", name))
+            .subject(welcome_subject(lang, name))
             .header(ContentType::TEXT_HTML)
             .body(html_body)?;
 
@@ -677,10 +779,12 @@ impl EmailService {
         Ok(())
     }
 
-    fn build_welcome_html(&self, name: &str) -> String {
+    fn build_welcome_html(&self, name: &str, lang: &str) -> String {
         WelcomeTemplate {
-            name,
+            html_lang: html_lang_attr(lang),
+            greeting: welcome_greeting(lang, name),
             frontend_url: &self.frontend_url,
+            t: get_welcome_translations(lang),
         }
         .render()
         .unwrap_or_default()

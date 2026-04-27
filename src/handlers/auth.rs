@@ -129,8 +129,9 @@ pub async fn google_callback_handler(
     Query(query): Query<GoogleCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
     let info = oauth::google::fetch_user_info(&state.config, &query.code).await?;
-    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -223,8 +224,9 @@ pub async fn naver_callback_handler(
     Query(query): Query<NaverCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
     let info = oauth::naver::fetch_user_info(&state.config, &query.code, &query.state).await?;
-    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -318,8 +320,9 @@ pub async fn kakao_callback_handler(
     Query(query): Query<KakaoCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
     let info = oauth::kakao::fetch_user_info(&state.config, &query.code).await?;
-    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -418,13 +421,14 @@ pub async fn apple_callback_handler(
     Query(query): Query<AppleCallbackHandlerQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
     let info = oauth::apple::fetch_user_info(
         &state.config,
         &query.code,
         query.apple_user.as_deref(),
     )
     .await?;
-    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -439,21 +443,29 @@ fn create_apple_oauth_client(config: &Config) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(config.oauth.apple.redirect_uri.clone()).unwrap())
 }
 
-fn extract_accept_language(headers: &HeaderMap) -> String {
-    headers
+fn detect_browser_language(headers: &HeaderMap) -> Option<&'static str> {
+    let lang = headers
         .get("accept-language")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.split(',').next())
-        .map(|v| v.split(';').next().unwrap_or("ko").trim())
-        .map(|lang| match lang {
-            l if l.starts_with("en") => "en",
-            l if l.starts_with("ja") => "ja",
-            l if l.starts_with("zh-TW") || l.starts_with("zh-Hant") => "zh-TW",
-            l if l.starts_with("zh") => "zh-CN",
-            _ => "ko",
-        })
-        .unwrap_or("ko")
-        .to_string()
+        .map(|v| v.split(';').next().unwrap_or("").trim().to_string())?;
+
+    match lang.as_str() {
+        l if l.starts_with("en") => Some("en"),
+        l if l.starts_with("ja") => Some("ja"),
+        l if l.starts_with("zh-TW") || l.starts_with("zh-Hant") => Some("zh-TW"),
+        l if l.starts_with("zh") => Some("zh-CN"),
+        l if l.starts_with("ko") => Some("ko"),
+        _ => None,
+    }
+}
+
+fn extract_accept_language(headers: &HeaderMap) -> String {
+    detect_browser_language(headers).unwrap_or("ko").to_string()
+}
+
+fn welcome_email_language(headers: &HeaderMap) -> String {
+    detect_browser_language(headers).unwrap_or("en").to_string()
 }
 
 fn is_valid_email(email: &str) -> bool {
@@ -552,13 +564,14 @@ pub async fn email_verify(
         .map_or(false, |did| !did.is_empty() && did == &session.device_id);
 
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
 
     if same_device {
         repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
 
         let (outcome, existing_provider) = state
             .auth
-            .upsert_email_user(&session.email, &client_ip)
+            .upsert_email_user(&session.email, &client_ip, &welcome_lang)
             .await?;
         let jwt = state.auth.issue_jwt(&outcome.user)?;
 
@@ -602,9 +615,10 @@ pub async fn email_verify_code(
     repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
 
     let client_ip = extract_client_ip(&headers);
+    let welcome_lang = welcome_email_language(&headers);
     let (outcome, existing_provider) = state
         .auth
-        .upsert_email_user(&session.email, &client_ip)
+        .upsert_email_user(&session.email, &client_ip, &welcome_lang)
         .await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
 
@@ -635,7 +649,7 @@ pub async fn email_status(
     if session.status == "completed" {
         let (outcome, existing_provider) = state
             .auth
-            .upsert_email_user(&session.email, "polling")
+            .upsert_email_user(&session.email, "polling", "en")
             .await?;
         let jwt = state.auth.issue_jwt(&outcome.user)?;
 

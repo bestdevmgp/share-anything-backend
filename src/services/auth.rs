@@ -54,6 +54,7 @@ impl AuthService {
         &self,
         info: OAuthUserInfo,
         client_ip: &str,
+        welcome_lang: &str,
     ) -> Result<AuthOutcome, AppError> {
         let mut reactivated = false;
         let mut is_new_user = false;
@@ -72,7 +73,8 @@ impl AuthService {
                         }
                         DeletedUserAction::HardDeleteAndRecreate => {
                             repository::hard_delete_user(&self.db, &existing.id).await?;
-                            self.create_and_announce_user(info, client_ip).await?
+                            self.create_and_announce_user(info, client_ip, welcome_lang)
+                                .await?
                         }
                     }
                 } else if existing.status != UserStatus::Active {
@@ -83,7 +85,8 @@ impl AuthService {
             }
             None => {
                 is_new_user = true;
-                self.create_and_announce_user(info, client_ip).await?
+                self.create_and_announce_user(info, client_ip, welcome_lang)
+                    .await?
             }
         };
 
@@ -98,6 +101,7 @@ impl AuthService {
         &self,
         email: &str,
         client_ip: &str,
+        welcome_lang: &str,
     ) -> Result<(AuthOutcome, Option<String>), AppError> {
         let mut reactivated = false;
         let mut is_new_user = false;
@@ -115,8 +119,12 @@ impl AuthService {
                         }
                         DeletedUserAction::HardDeleteAndRecreate => {
                             repository::hard_delete_user(&self.db, &existing.id).await?;
-                            self.create_and_announce_user(email_user_info(email), client_ip)
-                                .await?
+                            self.create_and_announce_user(
+                                email_user_info(email),
+                                client_ip,
+                                welcome_lang,
+                            )
+                            .await?
                         }
                     }
                 } else if existing.status != UserStatus::Active {
@@ -130,7 +138,7 @@ impl AuthService {
             }
             None => {
                 is_new_user = true;
-                self.create_and_announce_user(email_user_info(email), client_ip)
+                self.create_and_announce_user(email_user_info(email), client_ip, welcome_lang)
                     .await?
             }
         };
@@ -149,6 +157,7 @@ impl AuthService {
         &self,
         info: OAuthUserInfo,
         client_ip: &str,
+        welcome_lang: &str,
     ) -> Result<User, AppError> {
         let provider_label = display_name(&info.provider);
         let dto = CreateUserDto {
@@ -163,7 +172,7 @@ impl AuthService {
         self.discord
             .notify_new_user(&new_user.name, &new_user.email, provider_label, client_ip);
         self.email
-            .send_welcome_email(&new_user.name, &new_user.email);
+            .send_welcome_email(&new_user.name, &new_user.email, welcome_lang);
 
         Ok(new_user)
     }
