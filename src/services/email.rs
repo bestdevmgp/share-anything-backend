@@ -1,3 +1,4 @@
+use askama::Template;
 use lettre::{
     message::{header::ContentType, Mailbox},
     transport::smtp::authentication::Credentials,
@@ -7,6 +8,96 @@ use std::sync::Arc;
 
 use crate::config::SmtpConfig;
 use chrono::{DateTime, Datelike, Utc};
+
+#[derive(Template)]
+#[template(path = "welcome.html")]
+struct WelcomeTemplate<'a> {
+    name: &'a str,
+    frontend_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "magic_link.html")]
+struct MagicLinkTemplate<'a> {
+    email: &'a str,
+    magic_link: &'a str,
+    title: &'a str,
+    desc: &'a str,
+    link_label: &'a str,
+    footer: &'a str,
+    frontend_url: &'a str,
+}
+
+struct FileRow {
+    file_name: String,
+    label: &'static str,
+    bg: &'static str,
+    fg: &'static str,
+    size: String,
+}
+
+impl FileRow {
+    fn from_info(file: &FileNotificationInfo) -> Self {
+        let (label, bg, fg) = file_type_label(&file.file_type);
+        Self {
+            file_name: file.file_name.clone(),
+            label,
+            bg,
+            fg,
+            size: format_file_size(file.file_size),
+        }
+    }
+
+    fn list(files: &[FileNotificationInfo]) -> Vec<FileRow> {
+        files.iter().map(Self::from_info).collect()
+    }
+}
+
+#[derive(Template)]
+#[template(path = "upload.html")]
+struct UploadTemplate<'a> {
+    html_lang: &'a str,
+    title: String,
+    t: &'static EmailTranslations,
+    files: Vec<FileRow>,
+    share_code: &'a str,
+    description: Option<&'a str>,
+    password: Option<&'a str>,
+    expires_str: String,
+    download_link: String,
+    history_hint_html: String,
+    disable_hint_html: String,
+    frontend_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "download.html")]
+struct DownloadTemplate<'a> {
+    html_lang: &'a str,
+    title: String,
+    t: &'static EmailTranslations,
+    files: Vec<FileRow>,
+    share_code: &'a str,
+    uploader_name: Option<&'a str>,
+    disable_hint_html: String,
+    frontend_url: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "download_alert.html")]
+struct DownloadAlertTemplate<'a> {
+    html_lang: &'a str,
+    title: String,
+    downloader_desc: String,
+    t: &'static EmailTranslations,
+    files: Vec<FileRow>,
+    share_code: &'a str,
+    downloader_display: &'a str,
+    client_ip: &'a str,
+    download_link: String,
+    disable_hint_html: String,
+    frontend_url: &'a str,
+}
 
 #[derive(Clone)]
 pub struct FileNotificationInfo {
@@ -511,39 +602,6 @@ fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
     }
 }
 
-/// Common email footer links: GitHub, Website, Email (icon images)
-fn email_footer_links_html(frontend_url: &str) -> String {
-    format!(
-        r#"<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 12px;"><tr>
-    <td style="padding:0 8px;"><a href="https://github.com/bestdevmgp"><img src="{frontend_url}/email/icon-github.png" alt="GitHub" width="20" height="20" style="display:block;border:0;" /></a></td>
-    <td style="padding:0 8px;"><a href="https://mingyu.dev"><img src="{frontend_url}/email/icon-website.png" alt="Portfolio" width="20" height="20" style="display:block;border:0;" /></a></td>
-    <td style="padding:0 8px;"><a href="mailto:me@mingyu.dev"><img src="{frontend_url}/email/icon-email.png" alt="Contact" width="20" height="20" style="display:block;border:0;" /></a></td>
-  </tr></table>"#,
-        frontend_url = frontend_url
-    )
-}
-
-/// Common email header: logo icon + "ShareAnything" + divider line
-fn email_header_html(frontend_url: &str) -> String {
-    format!(
-        r#"<!-- Logo -->
-<tr>
-<td style="padding:32px 0 20px;text-align:center;">
-  <table role="presentation" cellpadding="0" cellspacing="0" style="display:inline-table;"><tr>
-    <td style="vertical-align:middle;">
-      <img src="{frontend_url}/logo192.png" alt="ShareAnything" width="40" height="40" style="display:block;border:0;border-radius:10px;" />
-    </td>
-    <td style="padding-left:12px;vertical-align:middle;">
-      <span style="font-size:26px;font-weight:700;color:#18181b;letter-spacing:-0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">ShareAnything</span>
-    </td>
-  </tr></table>
-</td>
-</tr>
-<tr><td style="border-bottom:1px solid #e4e4e7;"></td></tr>"#,
-        frontend_url = frontend_url
-    )
-}
-
 #[derive(Clone)]
 pub struct EmailService {
     transport: Option<AsyncSmtpTransport<Tokio1Executor>>,
@@ -628,93 +686,12 @@ impl EmailService {
     }
 
     fn build_welcome_html(&self, name: &str) -> String {
-        let frontend_url = &self.frontend_url;
-        let header = email_header_html(&self.frontend_url);
-
-        format!(
-            r##"<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
-<tr>
-<td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0">
-
-{header}
-
-<!-- Body -->
-<tr>
-<td style="padding:28px 0 24px;">
-  <p style="margin:0 0 24px;font-size:13px;color:#a1a1aa;">간편하고 안전한 파일 공유 서비스</p>
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">환영합니다, {name}님!</h2>
-  <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">
-    ShareAnything에 가입해 주셔서 감사합니다.<br>
-    지금 바로 다양한 파일 공유 기능을 이용해 보세요.
-  </p>
-
-  <!-- Features -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <strong style="color:#18181b;font-size:14px;">서버 업로드</strong>
-        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">파일을 업로드하고 다운로드 코드를 공유하세요. 최대 5GB까지 지원합니다.</p>
-      </td>
-    </tr>
-    <tr><td style="height:8px;"></td></tr>
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <strong style="color:#18181b;font-size:14px;">P2P 전송</strong>
-        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 빠르게!</p>
-      </td>
-    </tr>
-    <tr><td style="height:8px;"></td></tr>
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <strong style="color:#18181b;font-size:14px;">Quick Access</strong>
-        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">자주 사용하는 파일을 빠르게 저장하고 어디서든 접근하세요.</p>
-      </td>
-    </tr>
-  </table>
-
-  <!-- CTA Button -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <a href="{frontend_url}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-          ShareAnything 시작하기
-        </a>
-      </td>
-    </tr>
-  </table>
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="padding:24px;background-color:#f4f4f5;margin-top:20px;text-align:center;">
-  {footer_links}
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
-    본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.<br>
-    &copy; ShareAnything
-  </p>
-</td>
-</tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>"##,
-            header = header,
-            name = name,
-            frontend_url = frontend_url,
-            footer_links = email_footer_links_html(&self.frontend_url),
-        )
+        WelcomeTemplate {
+            name,
+            frontend_url: &self.frontend_url,
+        }
+        .render()
+        .unwrap_or_default()
     }
 
     // ========================================================================
@@ -912,132 +889,25 @@ impl EmailService {
         lang: &str,
     ) -> String {
         let t = get_email_translations(lang);
-        let html_lang = html_lang_attr(lang);
-        let frontend_url = &self.frontend_url;
-        let download_link = format!("{}/download/{}", frontend_url, share_code);
-
-        let file_count = files.len();
-        let title = upload_title(lang, file_count);
-
-        let file_rows = Self::build_file_list_html(files);
-
         let expires_kst = expires_at + chrono::Duration::hours(9);
-        let expires_str = format_date_localized(&expires_kst, lang);
+        let download_link = format!("{}/download/{}", &self.frontend_url, share_code);
 
-        let description_row = if let Some(desc) = description {
-            format!(
-                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
-                t.description_label, desc
-            )
-        } else {
-            String::new()
-        };
-
-        let password_row = if let Some(pw) = password {
-            format!(
-                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
-                t.password_label, pw
-            )
-        } else {
-            String::new()
-        };
-
-        let history_hint = upload_history_hint_html(lang, frontend_url, t);
-        let header = email_header_html(&self.frontend_url);
-        let disable_hint = notification_disable_hint_html(lang, frontend_url);
-
-        format!(
-            r##"<!DOCTYPE html>
-<html lang="{html_lang}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
-<tr>
-<td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0">
-
-{header}
-
-<!-- Body -->
-<tr>
-<td style="padding:28px 0 24px;">
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
-    {upload_desc}
-  </p>
-  {history_hint}
-
-  <!-- File List -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-{file_rows}
-  </table>
-
-  <!-- Info -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
-          {description_row}
-          {password_row}
-          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{expires_label}: <strong style="color:#18181b;">{expires_str}</strong></td></tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- CTA Button -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <a href="{download_link}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-          {upload_cta}
-        </a>
-      </td>
-    </tr>
-  </table>
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
-  {footer_links}
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
-    {upload_footer}<br>
-    {disable_hint}<br>
-    &copy; ShareAnything
-  </p>
-</td>
-</tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>"##,
-            html_lang = html_lang,
-            header = header,
-            title = title,
-            upload_desc = t.upload_desc,
-            history_hint = history_hint,
-            file_rows = file_rows,
-            share_code_label = t.share_code_label,
-            share_code = share_code,
-            description_row = description_row,
-            password_row = password_row,
-            expires_label = t.expires_label,
-            expires_str = expires_str,
-            download_link = download_link,
-            upload_cta = t.upload_cta,
-            upload_footer = t.upload_footer,
-            disable_hint = disable_hint,
-            footer_links = email_footer_links_html(&self.frontend_url),
-        )
+        UploadTemplate {
+            html_lang: html_lang_attr(lang),
+            title: upload_title(lang, files.len()),
+            t,
+            files: FileRow::list(files),
+            share_code,
+            description,
+            password,
+            expires_str: format_date_localized(&expires_kst, lang),
+            download_link,
+            history_hint_html: upload_history_hint_html(lang, &self.frontend_url, t),
+            disable_hint_html: notification_disable_hint_html(lang, &self.frontend_url),
+            frontend_url: &self.frontend_url,
+        }
+        .render()
+        .unwrap_or_default()
     }
 
     fn build_download_notification_html(
@@ -1049,111 +919,18 @@ impl EmailService {
         lang: &str,
     ) -> String {
         let t = get_email_translations(lang);
-        let html_lang = html_lang_attr(lang);
-        let frontend_url = &self.frontend_url;
-
-        let file_count = files.len();
-        let title = download_title(lang, file_count);
-
-        let file_rows = Self::build_file_list_html(files);
-
-        let uploader_row = if let Some(uname) = uploader_name {
-            format!(
-                r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong></td></tr>"#,
-                t.uploader_label, uname
-            )
-        } else {
-            String::new()
-        };
-
-        let header = email_header_html(&self.frontend_url);
-        let disable_hint = notification_disable_hint_html(lang, frontend_url);
-
-        format!(
-            r##"<!DOCTYPE html>
-<html lang="{html_lang}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
-<tr>
-<td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0">
-
-{header}
-
-<!-- Body -->
-<tr>
-<td style="padding:28px 0 24px;">
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
-    {download_desc}
-  </p>
-
-  <!-- File List -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-{file_rows}
-  </table>
-
-  <!-- Info -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
-          {uploader_row}
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- CTA Button -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <a href="{frontend_url}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-          {download_cta}
-        </a>
-      </td>
-    </tr>
-  </table>
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
-  {footer_links}
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
-    {download_footer}<br>
-    {disable_hint}<br>
-    &copy; ShareAnything
-  </p>
-</td>
-</tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>"##,
-            html_lang = html_lang,
-            header = header,
-            title = title,
-            download_desc = t.download_desc,
-            file_rows = file_rows,
-            share_code_label = t.share_code_label,
-            share_code = share_code,
-            uploader_row = uploader_row,
-            frontend_url = frontend_url,
-            download_cta = t.download_cta,
-            download_footer = t.download_footer,
-            disable_hint = disable_hint,
-            footer_links = email_footer_links_html(&self.frontend_url),
-        )
+        DownloadTemplate {
+            html_lang: html_lang_attr(lang),
+            title: download_title(lang, files.len()),
+            t,
+            files: FileRow::list(files),
+            share_code,
+            uploader_name,
+            disable_hint_html: notification_disable_hint_html(lang, &self.frontend_url),
+            frontend_url: &self.frontend_url,
+        }
+        .render()
+        .unwrap_or_default()
     }
 
     fn build_download_alert_html(
@@ -1166,111 +943,23 @@ impl EmailService {
         lang: &str,
     ) -> String {
         let t = get_email_translations(lang);
-        let html_lang = html_lang_attr(lang);
-        let frontend_url = &self.frontend_url;
-        let download_link = format!("{}/download/{}", frontend_url, share_code);
+        let download_link = format!("{}/download/{}", &self.frontend_url, share_code);
 
-        let file_count = files.len();
-        let title = alert_title(lang, file_count);
-
-        let downloader_desc = alert_desc(lang, downloader_name);
-
-        let file_rows = Self::build_file_list_html(files);
-
-        let downloader_display = downloader_name.unwrap_or(t.anonymous_user);
-        let downloader_row = format!(
-            r#"<tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{}: <strong style="color:#18181b;">{}</strong> <span style="color:#a1a1aa;">({})</span></td></tr>"#,
-            t.downloader_label, downloader_display, client_ip
-        );
-
-        let header = email_header_html(&self.frontend_url);
-        let disable_hint = notification_disable_hint_html(lang, frontend_url);
-
-        format!(
-            r##"<!DOCTYPE html>
-<html lang="{html_lang}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
-<tr>
-<td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0">
-
-{header}
-
-<!-- Body -->
-<tr>
-<td style="padding:28px 0 24px;">
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#71717a;">
-    {downloader_desc}
-  </p>
-
-  <!-- File List -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-{file_rows}
-  </table>
-
-  <!-- Info -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-          <tr><td style="padding:6px 0;font-size:13px;color:#71717a;">{share_code_label}: <strong style="color:#18181b;">{share_code}</strong></td></tr>
-          {downloader_row}
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- CTA Button -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center">
-        <a href="{download_link}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
-          {alert_cta}
-        </a>
-      </td>
-    </tr>
-  </table>
-</td>
-</tr>
-
-<!-- Footer -->
-<tr>
-<td style="padding:24px;background-color:#f4f4f5;text-align:center;">
-  {footer_links}
-  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
-    {alert_footer}<br>
-    {disable_hint}<br>
-    &copy; ShareAnything
-  </p>
-</td>
-</tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>"##,
-            html_lang = html_lang,
-            header = header,
-            title = title,
-            downloader_desc = downloader_desc,
-            file_rows = file_rows,
-            share_code_label = t.share_code_label,
-            share_code = share_code,
-            downloader_row = downloader_row,
-            download_link = download_link,
-            alert_cta = t.alert_cta,
-            alert_footer = t.alert_footer,
-            disable_hint = disable_hint,
-            footer_links = email_footer_links_html(&self.frontend_url),
-        )
+        DownloadAlertTemplate {
+            html_lang: html_lang_attr(lang),
+            title: alert_title(lang, files.len()),
+            downloader_desc: alert_desc(lang, downloader_name),
+            t,
+            files: FileRow::list(files),
+            share_code,
+            downloader_display: downloader_name.unwrap_or(t.anonymous_user),
+            client_ip,
+            download_link,
+            disable_hint_html: notification_disable_hint_html(lang, &self.frontend_url),
+            frontend_url: &self.frontend_url,
+        }
+        .render()
+        .unwrap_or_default()
     }
 
     pub fn send_magic_link_email(self: &Arc<Self>, email: &str, token: &str, lang: &str) {
@@ -1317,9 +1006,7 @@ impl EmailService {
     }
 
     fn build_magic_link_html(&self, email: &str, token: &str, lang: &str) -> String {
-        let frontend_url = &self.frontend_url;
-        let header = email_header_html(&self.frontend_url);
-        let magic_link = format!("{}/auth/email/magic-link#{}", frontend_url, token);
+        let magic_link = format!("{}/auth/email/magic-link#{}", &self.frontend_url, token);
 
         let (title, desc, link_label, footer) = match lang {
             "en" => (
@@ -1354,94 +1041,22 @@ impl EmailService {
             ),
         };
 
-        format!(
-            r##"<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
-<tr>
-<td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0">
-
-{header}
-
-<tr>
-<td style="padding:28px 0 24px;text-align:center;">
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{title}</h2>
-  <p style="margin:0 0 4px;font-size:13px;color:#a1a1aa;">{email}</p>
-  <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">{desc}</p>
-
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
-  <tr><td style="background-color:#2563eb;border-radius:8px;">
-    <a href="{magic_link}" style="display:inline-block;padding:10px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">{link_label}</a>
-  </td></tr>
-  </table>
-
-  <p style="margin:0;font-size:12px;color:#a1a1aa;">{footer}</p>
-</td>
-</tr>
-
-<tr><td style="border-top:1px solid #e4e4e7;padding:20px 0;text-align:center;">
-  {footer_links}
-  <span style="font-size:12px;color:#a1a1aa;">ShareAnything</span>
-</td></tr>
-
-</table>
-</td>
-</tr>
-</table>
-</body>
-</html>"##,
-            header = header,
-            title = title,
-            email = email,
-            desc = desc,
-            magic_link = magic_link,
-            link_label = link_label,
-            footer = footer,
-            footer_links = email_footer_links_html(&self.frontend_url),
-        )
-    }
-
-    fn build_file_list_html(files: &[FileNotificationInfo]) -> String {
-        let mut rows = String::new();
-        for (i, file) in files.iter().enumerate() {
-            let (label, bg, fg) = file_type_label(&file.file_type);
-            let size = format_file_size(file.file_size);
-            if i > 0 {
-                rows.push_str("    <tr><td style=\"height:6px;\"></td></tr>\n");
-            }
-            rows.push_str(&format!(
-                r#"    <tr>
-      <td style="padding:10px 16px;background-color:#f8fafc;border-radius:8px;">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          <td style="padding-right:10px;vertical-align:middle;">
-            <span style="display:inline-block;background:{bg};color:{fg};padding:2px 7px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.3px;line-height:18px;">{label}</span>
-          </td>
-          <td>
-            <span style="color:#18181b;font-size:14px;font-weight:500;">{file_name}</span>
-            <span style="color:#a1a1aa;font-size:13px;margin-left:8px;">{size}</span>
-          </td>
-        </tr></table>
-      </td>
-    </tr>
-"#,
-                bg = bg,
-                fg = fg,
-                label = label,
-                file_name = file.file_name,
-                size = size,
-            ));
+        MagicLinkTemplate {
+            email,
+            magic_link: &magic_link,
+            title,
+            desc,
+            link_label,
+            footer,
+            frontend_url: &self.frontend_url,
         }
-        rows
+        .render()
+        .unwrap_or_default()
     }
+
 }
 
-fn file_type_label(file_type: &str) -> (&str, &str, &str) {
+fn file_type_label(file_type: &str) -> (&'static str, &'static str, &'static str) {
     // (label, background_color, text_color)
     if file_type.starts_with("image/") {
         ("IMG", "#dbeafe", "#2563eb")

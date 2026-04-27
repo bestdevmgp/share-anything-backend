@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:0 20px;">
+<tr>
+<td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0">
+
+{% include "partials/header.html" %}
+
+<!-- Body -->
+<tr>
+<td style="padding:28px 0 24px;">
+  <p style="margin:0 0 24px;font-size:13px;color:#a1a1aa;">간편하고 안전한 파일 공유 서비스</p>
+  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">환영합니다, {{ name }}님!</h2>
+  <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#71717a;">
+    ShareAnything에 가입해 주셔서 감사합니다.<br>
+    지금 바로 다양한 파일 공유 기능을 이용해 보세요.
+  </p>
+
+  <!-- Features -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+    <tr>
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <strong style="color:#18181b;font-size:14px;">서버 업로드</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">파일을 업로드하고 다운로드 코드를 공유하세요. 최대 5GB까지 지원합니다.</p>
+      </td>
+    </tr>
+    <tr><td style="height:8px;"></td></tr>
+    <tr>
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <strong style="color:#18181b;font-size:14px;">P2P 전송</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 빠르게!</p>
+      </td>
+    </tr>
+    <tr><td style="height:8px;"></td></tr>
+    <tr>
+      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;">
+        <strong style="color:#18181b;font-size:14px;">Quick Access</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#71717a;">자주 사용하는 파일을 빠르게 저장하고 어디서든 접근하세요.</p>
+      </td>
+    </tr>
+  </table>
+
+  <!-- CTA Button -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <a href="{{ frontend_url }}" style="display:inline-block;padding:10px 28px;background-color:#2563eb;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:8px;">
+          ShareAnything 시작하기
+        </a>
+      </td>
+    </tr>
+  </table>
+</td>
+</tr>
+
+<!-- Footer -->
+<tr>
+<td style="padding:24px;background-color:#f4f4f5;margin-top:20px;text-align:center;">
+  {% include "partials/footer_links.html" %}
+  <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;line-height:1.8;">
+    본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.<br>
+    &copy; ShareAnything
+  </p>
+</td>
+</tr>
+
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
