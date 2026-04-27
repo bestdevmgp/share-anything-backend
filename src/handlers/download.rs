@@ -59,29 +59,24 @@ pub async fn get_file_list(
         .await
         .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
-    let file_shares = repository::find_file_shares_by_code(&state.db, &query.code)
-        .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+    let rows = repository::find_file_shares_by_code_with_uploader(&state.db, &query.code).await?;
 
-    if file_shares.is_empty() {
+    if rows.is_empty() {
         return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
     }
 
-    let first_file = &file_shares[0];
+    let uploader_name = rows[0].1.clone();
+    let first_file = &rows[0].0;
+    let total_count = rows.len();
+    let description = first_file.description.clone();
+    let has_password = first_file.password_hash.is_some();
+    let is_one_time = first_file.is_one_time;
+    let transfer_type = first_file.transfer_type.clone();
+    let expires_at = first_file.expires_at;
 
-    let uploader_name = if let Some(user_id) = &first_file.user_id {
-        repository::find_user_by_id(&state.db, user_id)
-            .await
-            .ok()
-            .flatten()
-            .map(|u| u.name)
-    } else {
-        None
-    };
-
-    let files: Vec<FileInfoInGroup> = file_shares
+    let files: Vec<FileInfoInGroup> = rows
         .iter()
-        .map(|f| FileInfoInGroup {
+        .map(|(f, _)| FileInfoInGroup {
             id: f.id.clone(),
             file_name: f.file_name.clone(),
             file_size: f.file_size,
@@ -89,7 +84,7 @@ pub async fn get_file_list(
         })
         .collect();
 
-    let uploader_online = if first_file.transfer_type == "p2p" {
+    let uploader_online = if transfer_type == "p2p" {
         Some(state.signaling.find_uploader(&query.code).is_some())
     } else {
         None
@@ -98,12 +93,12 @@ pub async fn get_file_list(
     Ok(Json(FileListResponse {
         share_code: query.code,
         files,
-        total_count: file_shares.len(),
-        description: first_file.description.clone(),
-        has_password: first_file.password_hash.is_some(),
-        is_one_time: first_file.is_one_time,
-        transfer_type: first_file.transfer_type.clone(),
-        expires_at: first_file.expires_at,
+        total_count,
+        description,
+        has_password,
+        is_one_time,
+        transfer_type,
+        expires_at,
         uploader_name,
         uploader_online,
     }))
@@ -137,20 +132,10 @@ pub async fn get_file_info(
         .await
         .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
 
-    let file_share = repository::find_file_share_by_code(&state.db, &query.code)
-        .await
-        .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
-
-    let uploader_name = if let Some(user_id) = &file_share.user_id {
-        repository::find_user_by_id(&state.db, user_id)
-            .await
-            .ok()
-            .flatten()
-            .map(|u| u.name)
-    } else {
-        None
-    };
+    let (file_share, uploader_name) =
+        repository::find_file_share_by_code_with_uploader(&state.db, &query.code)
+            .await?
+            .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
 
     let uploader_online = if file_share.transfer_type == "p2p" {
         Some(state.signaling.find_uploader(&query.code).is_some())
@@ -696,6 +681,8 @@ pub async fn download_multiple_files(
         .compression_method(zip::CompressionMethod::Deflated)
         .unix_permissions(0o755);
 
+    let mut log_dtos: Vec<CreateDownloadLogDto> = Vec::with_capacity(files_to_download.len());
+
     for file_share in files_to_download.iter() {
         let file_data = state
             .storage
@@ -709,17 +696,22 @@ pub async fn download_multiple_files(
         zip.write_all(&file_data)
             .map_err(|_| internal_error("ZIP 파일 쓰기 실패"))?;
 
-        let _ = repository::create_download_log(
-            &state.db,
-            CreateDownloadLogDto {
-                file_share_id: file_share.id.clone(),
-                downloader_user_id: user_claims.as_ref().map(|c| c.sub.clone()),
-                ip_address: ip_address.clone(),
-                user_agent: user_agent.clone(),
-            },
-            device_platform.clone(),
-        )
-        .await;
+        log_dtos.push(CreateDownloadLogDto {
+            file_share_id: file_share.id.clone(),
+            downloader_user_id: user_claims.as_ref().map(|c| c.sub.clone()),
+            ip_address: ip_address.clone(),
+            user_agent: user_agent.clone(),
+        });
+    }
+
+    if let Err(e) = repository::batch_create_download_logs(
+        &state.db,
+        log_dtos,
+        device_platform.clone(),
+    )
+    .await
+    {
+        tracing::warn!(error = %e, "Failed to record bulk download logs");
     }
 
     let buffer = zip

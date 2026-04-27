@@ -1,7 +1,7 @@
 use crate::models::*;
 use crate::models::personal_token::PersonalToken;
 use chrono::Utc;
-use sqlx::MySqlPool;
+use sqlx::{FromRow, MySqlPool};
 use uuid::Uuid;
 use crate::models::email_auth::EmailAuthSession;
 
@@ -270,6 +270,49 @@ pub async fn find_file_shares_by_code(
     .await
 }
 
+pub async fn find_file_shares_by_code_with_uploader(
+    pool: &MySqlPool,
+    share_code: &str,
+) -> Result<Vec<(FileShare, Option<String>)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        (SELECT fs.*, u.name AS uploader_name FROM file_shares fs
+         INNER JOIN public_share_grants g ON g.file_share_id = fs.id
+         LEFT JOIN users u ON u.id = fs.user_id
+         WHERE g.share_code = ? AND g.expires_at > UTC_TIMESTAMP())
+        UNION ALL
+        (SELECT fs.*, u.name AS uploader_name FROM file_shares fs
+         LEFT JOIN users u ON u.id = fs.user_id
+         WHERE fs.share_code = ? AND fs.expires_at > UTC_TIMESTAMP())
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(share_code)
+    .bind(share_code)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let uploader_name: Option<String> = row.try_get("uploader_name")?;
+            let file_share = FileShare::from_row(&row)?;
+            Ok((file_share, uploader_name))
+        })
+        .collect()
+}
+
+pub async fn find_file_share_by_code_with_uploader(
+    pool: &MySqlPool,
+    share_code: &str,
+) -> Result<Option<(FileShare, Option<String>)>, sqlx::Error> {
+    Ok(find_file_shares_by_code_with_uploader(pool, share_code)
+        .await?
+        .into_iter()
+        .next())
+}
+
 pub async fn find_file_share_by_id(
     pool: &MySqlPool,
     id: &str,
@@ -282,6 +325,40 @@ pub async fn find_file_share_by_id(
     .bind(id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn find_file_shares_with_download_count_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<(FileShare, i64)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT fs.*, COALESCE(COUNT(dl.id), 0) AS download_count
+        FROM file_shares fs
+        LEFT JOIN download_logs dl ON dl.file_share_id = fs.id
+        WHERE fs.user_id = ? AND fs.is_quick_access = false
+        GROUP BY fs.id
+        ORDER BY fs.created_at DESC
+        LIMIT ? OFFSET ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let download_count: i64 = row.try_get("download_count")?;
+            let file_share = FileShare::from_row(&row)?;
+            Ok((file_share, download_count))
+        })
+        .collect()
 }
 
 pub async fn find_file_shares_by_user(
@@ -497,36 +574,70 @@ pub async fn create_download_log(
     .await
 }
 
-pub async fn find_download_logs_by_file_share(
+pub async fn batch_create_download_logs(
+    pool: &MySqlPool,
+    dtos: Vec<CreateDownloadLogDto>,
+    device_platform: Option<String>,
+) -> Result<(), sqlx::Error> {
+    if dtos.is_empty() {
+        return Ok(());
+    }
+
+    let now = Utc::now();
+    let mut sql = String::from(
+        "INSERT INTO download_logs \
+         (id, file_share_id, downloader_user_id, ip_address, user_agent, device_platform, downloaded_at) \
+         VALUES ",
+    );
+    for i in 0..dtos.len() {
+        if i > 0 {
+            sql.push_str(", ");
+        }
+        sql.push_str("(?, ?, ?, ?, ?, ?, ?)");
+    }
+
+    let mut q = sqlx::query(&sql);
+    for dto in &dtos {
+        q = q
+            .bind(Uuid::new_v4().to_string())
+            .bind(&dto.file_share_id)
+            .bind(&dto.downloader_user_id)
+            .bind(&dto.ip_address)
+            .bind(&dto.user_agent)
+            .bind(&device_platform)
+            .bind(now);
+    }
+
+    q.execute(pool).await?;
+    Ok(())
+}
+
+pub async fn find_download_logs_with_downloader_name_by_file_share(
     pool: &MySqlPool,
     file_share_id: &str,
-) -> Result<Vec<DownloadLog>, sqlx::Error> {
-    sqlx::query_as::<_, DownloadLog>(
+) -> Result<Vec<(DownloadLog, Option<String>)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
         r#"
-        SELECT * FROM download_logs
-        WHERE file_share_id = ?
-        ORDER BY downloaded_at DESC
+        SELECT dl.*, u.name AS downloader_name
+        FROM download_logs dl
+        LEFT JOIN users u ON u.id = dl.downloader_user_id
+        WHERE dl.file_share_id = ?
+        ORDER BY dl.downloaded_at DESC
         "#,
     )
     .bind(file_share_id)
     .fetch_all(pool)
-    .await
-}
-
-pub async fn count_downloads_by_file_share(
-    pool: &MySqlPool,
-    file_share_id: &str,
-) -> Result<i64, sqlx::Error> {
-    let result = sqlx::query_as::<_, (i64,)>(
-        r#"
-        SELECT COUNT(*) FROM download_logs WHERE file_share_id = ?
-        "#,
-    )
-    .bind(file_share_id)
-    .fetch_one(pool)
     .await?;
 
-    Ok(result.0)
+    rows.into_iter()
+        .map(|row| {
+            let downloader_name: Option<String> = row.try_get("downloader_name")?;
+            let log = DownloadLog::from_row(&row)?;
+            Ok((log, downloader_name))
+        })
+        .collect()
 }
 
 pub async fn update_p2p_status(

@@ -52,49 +52,44 @@ pub async fn get_upload_history(
         .get::<Claims>()
         .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
-    let file_shares = repository::find_file_shares_by_user(
+    let rows = repository::find_file_shares_with_download_count_by_user(
         &state.db,
         &user_claims.sub,
         pagination.limit,
         pagination.offset,
     )
-    .await
-    .map_err(|e| internal_error(format!("업로드 이력 조회 실패: {}", e)))?;
+    .await?;
 
-    let mut items = Vec::new();
+    let items: Vec<FileShareWithStats> = rows
+        .into_iter()
+        .map(|(file_share, download_count)| {
+            let download_url = format!(
+                "{}/download?code={}",
+                state.config.server.base_url, file_share.share_code
+            );
+            let qr_code = generate_qr_code(&download_url).ok();
 
-    for file_share in file_shares {
-        let download_count = repository::count_downloads_by_file_share(&state.db, &file_share.id)
-            .await
-            .unwrap_or(0);
-
-        let download_url = format!(
-            "{}/download?code={}",
-            state.config.server.base_url, file_share.share_code
-        );
-
-        let qr_code = generate_qr_code(&download_url).ok();
-
-        items.push(FileShareWithStats {
-            file_share: FileShareResponse {
-                id: file_share.id.clone(),
-                share_code: file_share.share_code.clone(),
-                file_name: file_share.file_name.clone(),
-                file_size: file_share.file_size,
-                file_type: file_share.file_type.clone(),
-                transfer_type: file_share.transfer_type.clone(),
-                description: file_share.description.clone(),
-                has_password: file_share.password_hash.is_some(),
-                is_one_time: file_share.is_one_time,
-                expires_at: file_share.expires_at,
-                created_at: file_share.created_at,
-                download_url,
-                qr_code,
-                uploader_online: None,
-            },
-            download_count,
-        });
-    }
+            FileShareWithStats {
+                file_share: FileShareResponse {
+                    id: file_share.id,
+                    share_code: file_share.share_code,
+                    file_name: file_share.file_name,
+                    file_size: file_share.file_size,
+                    file_type: file_share.file_type,
+                    transfer_type: file_share.transfer_type,
+                    description: file_share.description,
+                    has_password: file_share.password_hash.is_some(),
+                    is_one_time: file_share.is_one_time,
+                    expires_at: file_share.expires_at,
+                    created_at: file_share.created_at,
+                    download_url,
+                    qr_code,
+                    uploader_online: None,
+                },
+                download_count,
+            }
+        })
+        .collect();
 
     let total = items.len();
 
@@ -143,31 +138,22 @@ pub async fn get_download_logs(
         return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
     }
 
-    let logs = repository::find_download_logs_by_file_share(&state.db, &file_id)
-        .await
-        .map_err(|e| internal_error(format!("다운로드 로그 조회 실패: {}", e)))?;
+    let rows = repository::find_download_logs_with_downloader_name_by_file_share(
+        &state.db,
+        &file_id,
+    )
+    .await?;
 
-    let mut response = Vec::new();
-
-    for log in logs {
-        let downloader_name = if let Some(user_id) = &log.downloader_user_id {
-            repository::find_user_by_id(&state.db, user_id)
-                .await
-                .ok()
-                .flatten()
-                .map(|u| u.name)
-        } else {
-            None
-        };
-
-        response.push(DownloadLogResponse {
+    let response: Vec<DownloadLogResponse> = rows
+        .into_iter()
+        .map(|(log, downloader_name)| DownloadLogResponse {
             id: log.id,
             downloader_name,
             ip_address: log.ip_address,
             device_platform: log.device_platform.unwrap_or_else(|| "Unknown".to_string()),
             downloaded_at: log.downloaded_at,
-        });
-    }
+        })
+        .collect();
 
     Ok(Json(response))
 }
