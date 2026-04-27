@@ -1,12 +1,14 @@
 use axum::{
     extract::{Request, State},
-    http::StatusCode,
     middleware::Next,
     response::Response,
 };
 use sha2::{Digest, Sha256};
 
-use crate::db::{repository, DbPool};
+use crate::{
+    db::{repository, DbPool},
+    models::{unauthorized, AppError},
+};
 
 #[derive(Debug, Clone)]
 pub struct PersonalTokenUser {
@@ -23,14 +25,14 @@ pub async fn cli_auth(
     State(state): State<CliAuthState>,
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     if let Some(token_header) = request.headers().get("X-Personal-Token") {
         let token = token_header
             .to_str()
-            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+            .map_err(|_| unauthorized("잘못된 인증 헤더입니다"))?;
 
         if !token.starts_with("sa_") {
-            return Err(StatusCode::UNAUTHORIZED);
+            return Err(unauthorized("유효하지 않은 토큰 형식입니다"));
         }
 
         let mut hasher = Sha256::new();
@@ -38,13 +40,12 @@ pub async fn cli_auth(
         let token_hash = hex::encode(hasher.finalize());
 
         let token_record = repository::find_personal_token_by_hash(&state.db, &token_hash)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .await?
+            .ok_or_else(|| unauthorized("유효하지 않은 토큰입니다"))?;
 
         if let Some(expires_at) = token_record.expires_at {
             if expires_at < chrono::Utc::now() {
-                return Err(StatusCode::UNAUTHORIZED);
+                return Err(unauthorized("만료된 토큰입니다"));
             }
         }
 
@@ -57,7 +58,9 @@ pub async fn cli_auth(
         });
 
         tokio::spawn(async move {
-            let _ = repository::update_personal_token_last_used(&db, &token_id).await;
+            if let Err(e) = repository::update_personal_token_last_used(&db, &token_id).await {
+                tracing::warn!(error = %e, "Failed to update personal token last_used_at");
+            }
         });
     }
 

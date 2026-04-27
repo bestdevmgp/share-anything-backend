@@ -1,9 +1,9 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-use crate::config::Config;
+use crate::{config::Config, models::{internal_error, AppError}};
 
 #[derive(Clone)]
 pub struct TurnState {
@@ -54,11 +54,6 @@ impl StringOrVec {
     }
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
 /// Get TURN server credentials
 ///
 /// Returns ICE server configuration including STUN and TURN servers
@@ -69,12 +64,12 @@ pub struct ErrorResponse {
     tag = "turn",
     responses(
         (status = 200, description = "TURN credentials retrieved successfully", body = TurnCredentialsResponse),
-        (status = 500, description = "Failed to get TURN credentials", body = ErrorResponse)
+        (status = 500, description = "Failed to get TURN credentials", body = crate::models::ErrorResponse)
     )
 )]
 pub async fn get_turn_credentials(
     State(state): State<TurnState>,
-) -> Result<Json<TurnCredentialsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<TurnCredentialsResponse>, AppError> {
     let client = reqwest::Client::new();
 
     // Cloudflare Calls API endpoint
@@ -94,38 +89,16 @@ pub async fn get_turn_credentials(
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to request TURN credentials: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Failed to request TURN credentials".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
         tracing::error!("Cloudflare TURN API error: {} - {}", status, error_text);
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: format!("Cloudflare TURN API error: {}", status),
-            }),
-        ));
+        return Err(internal_error(format!("Cloudflare TURN API error: {}", status)));
     }
 
-    let cf_response: CloudflareIceServersResponse = response.json().await.map_err(|e| {
-        tracing::error!("Failed to parse TURN credentials response: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Failed to parse TURN credentials".to_string(),
-            }),
-        )
-    })?;
+    let cf_response: CloudflareIceServersResponse = response.json().await?;
 
     // Build ICE servers list with Cloudflare STUN and TURN servers
     let mut ice_servers = vec![

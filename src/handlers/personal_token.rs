@@ -12,7 +12,7 @@ use crate::{
     middleware::auth::Claims,
     models::{
         personal_token::{PersonalTokenResponse, CreatePersonalTokenRequest, CreatePersonalTokenResponse},
-        bad_request, internal_error, not_found, ErrorResponse,
+        bad_request, internal_error, not_found, AppError,
     },
 };
 
@@ -34,7 +34,7 @@ pub async fn create_personal_token(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
     Json(request): Json<CreatePersonalTokenRequest>,
-) -> Result<Json<CreatePersonalTokenResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<CreatePersonalTokenResponse>, AppError> {
     let user_id = &claims.sub;
     let name = request.name.unwrap_or_else(|| "CLI Token".to_string());
 
@@ -80,7 +80,7 @@ pub async fn create_personal_token(
 pub async fn list_personal_tokens(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
-) -> Result<Json<Vec<PersonalTokenResponse>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<Vec<PersonalTokenResponse>>, AppError> {
     let tokens = repository::find_personal_tokens_by_user(&state.db, &claims.sub)
         .await
         .map_err(|e| internal_error(format!("Personal Token 목록 조회 실패: {}", e)))?;
@@ -104,7 +104,7 @@ pub async fn delete_personal_token(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
     Path(token_id): Path<String>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let rows = repository::revoke_personal_token(&state.db, &token_id, &claims.sub)
         .await
         .map_err(|e| internal_error(format!("Personal Token 폐기 실패: {}", e)))?;

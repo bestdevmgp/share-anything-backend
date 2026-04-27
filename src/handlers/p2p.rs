@@ -1,13 +1,12 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    models::ErrorResponse,
+    models::AppError,
     services::signaling::SignalingState,
 };
 
@@ -36,7 +35,7 @@ pub struct P2pStatusResponse {
 pub async fn check_uploader_status(
     State(state): State<SignalingState>,
     Query(query): Query<P2pStatusQuery>,
-) -> Result<Json<P2pStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<P2pStatusResponse>, AppError> {
     let is_online = state.find_uploader(&query.code).is_some();
 
     Ok(Json(P2pStatusResponse {

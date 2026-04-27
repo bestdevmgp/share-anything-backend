@@ -15,7 +15,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::personal_token_auth::PersonalTokenUser,
     models::{
-        bad_request, internal_error, not_found, unauthorized, ErrorResponse,
+        bad_request, internal_error, not_found, unauthorized, AppError,
         ExpirationPeriod, CreateDownloadLogDto,
     },
     services::StorageService,
@@ -232,7 +232,7 @@ pub async fn cli_upload(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     mut multipart: Multipart,
-) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliUploadResponse>, AppError> {
     let token_user = token_user.map(|ext| ext.0.clone());
 
     struct FileData {
@@ -416,7 +416,7 @@ pub async fn cli_p2p_create(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Json(request): Json<CliP2PCreateRequest>,
-) -> Result<PrettyJson<CliP2PCreateResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliP2PCreateResponse>, AppError> {
     let token_user = token_user.map(|ext| ext.0.clone());
 
     if request.files.is_empty() {
@@ -478,7 +478,7 @@ pub async fn cli_multipart_init(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Json(request): Json<CliMultipartInitRequest>,
-) -> Result<Json<CliMultipartInitResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<CliMultipartInitResponse>, AppError> {
     let token_user = token_user.map(|ext| ext.0.clone());
 
     if request.files.is_empty() {
@@ -595,7 +595,7 @@ pub async fn cli_multipart_init(
 pub async fn cli_presign_parts(
     State(state): State<CliState>,
     Json(request): Json<CliPresignPartsRequest>,
-) -> Result<Json<CliPresignPartsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<CliPresignPartsResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
@@ -635,7 +635,7 @@ pub async fn cli_presign_parts(
 pub async fn cli_complete_multipart(
     State(state): State<CliState>,
     Json(request): Json<CliCompleteMultipartRequest>,
-) -> Result<PrettyJson<CliUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliUploadResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
@@ -716,7 +716,7 @@ pub async fn cli_download(
     Path(code): Path<String>,
     Query(query): Query<CliDownloadQuery>,
     headers: HeaderMap,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
         .map_err(|_| internal_error("Failed to query files"))?;
@@ -821,7 +821,7 @@ pub async fn cli_download(
 pub async fn cli_download_info(
     State(state): State<CliState>,
     Path(code): Path<String>,
-) -> Result<PrettyJson<CliFileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliFileInfoResponse>, AppError> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
         .map_err(|_| internal_error("Failed to query files"))?;
@@ -853,7 +853,7 @@ pub async fn cli_download_info(
 pub async fn cli_file_list(
     State(state): State<CliState>,
     Path(code): Path<String>,
-) -> Result<PrettyJson<CliFileListResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<CliFileListResponse>, AppError> {
     let file_shares = repository::find_file_shares_by_code(&state.db, &code)
         .await
         .map_err(|_| internal_error("Failed to query files"))?;
@@ -888,7 +888,7 @@ pub async fn cli_upload_history(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
     Query(query): Query<CliUploadHistoryQuery>,
-) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<serde_json::Value>, AppError> {
     let limit = query.limit.unwrap_or(20).min(100);
     let offset = query.offset.unwrap_or(0);
 
@@ -918,7 +918,7 @@ pub async fn cli_upload_history(
 pub async fn cli_me(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
-) -> Result<PrettyJson<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<PrettyJson<serde_json::Value>, AppError> {
     let user = repository::find_user_by_id(&state.db, &token_user.user_id)
         .await
         .map_err(|e| internal_error(format!("Failed to fetch user: {}", e)))?

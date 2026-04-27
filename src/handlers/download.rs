@@ -13,7 +13,7 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, forbidden, not_found, internal_error, ErrorResponse, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
+    models::{bad_request, unauthorized, forbidden, not_found, internal_error, AppError, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
     services::{StorageService, signaling::SignalingState, email::{EmailService, FileNotificationInfo}},
     utils::{encode_content_disposition, parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
@@ -77,7 +77,7 @@ pub async fn get_file_list(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
     headers: HeaderMap,
-) -> Result<Json<FileListResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<FileListResponse>, AppError> {
     let turnstile_token = headers
         .get("X-Turnstile-Token")
         .and_then(|v| v.to_str().ok())
@@ -155,7 +155,7 @@ pub async fn get_file_info(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
     headers: HeaderMap,
-) -> Result<Json<FileInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<FileInfoResponse>, AppError> {
     let turnstile_token = headers
         .get("X-Turnstile-Token")
         .and_then(|v| v.to_str().ok())
@@ -224,7 +224,7 @@ pub async fn download_single_file(
     Query(params): Query<serde_json::Value>,
     headers: HeaderMap,
     request: Request,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let code = params
         .get("code")
         .and_then(|v| v.as_str())
@@ -249,7 +249,7 @@ pub async fn download_single_file(
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
 
     if file_share.transfer_type == "p2p" {
-        return Err(bad_request(
+        return Err(forbidden(
             "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
         ));
     }
@@ -411,7 +411,7 @@ pub async fn preview_file(
     State(state): State<DownloadState>,
     Query(params): Query<serde_json::Value>,
     headers: HeaderMap,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let code = params
         .get("code")
         .and_then(|v| v.as_str())
@@ -496,7 +496,7 @@ pub async fn download_file(
     Query(query): Query<DownloadQuery>,
     headers: HeaderMap,
     request: Request,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
@@ -656,7 +656,7 @@ pub async fn download_multiple_files(
     State(state): State<DownloadState>,
     headers: HeaderMap,
     request: Request,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let user_claims = request.extensions().get::<Claims>().cloned();
 
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
@@ -860,7 +860,7 @@ pub async fn download_multiple_files(
 pub async fn verify_password(
     State(state): State<DownloadState>,
     Json(req): Json<VerifyPasswordRequest>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let file_share = repository::find_file_share_by_code(&state.db, &req.code)
         .await
         .map_err(|_| internal_error("파일 조회 실패"))?
@@ -901,7 +901,7 @@ pub async fn get_download_url(
     Query(params): Query<serde_json::Value>,
     headers: HeaderMap,
     request: Request,
-) -> Result<Json<DownloadUrlResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<DownloadUrlResponse>, AppError> {
     let code = params
         .get("code")
         .and_then(|v| v.as_str())
@@ -926,7 +926,7 @@ pub async fn get_download_url(
         .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
 
     if file_share.transfer_type == "p2p" {
-        return Err(bad_request(
+        return Err(forbidden(
             "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
         ));
     }

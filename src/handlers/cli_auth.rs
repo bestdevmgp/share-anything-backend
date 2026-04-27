@@ -1,6 +1,5 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use rand::Rng;
@@ -14,7 +13,7 @@ use crate::{
     middleware::auth::Claims,
     models::{
         cli_auth::{CliAuthSessionResponse, CliAuthStatusResponse},
-        bad_request, internal_error, not_found, ErrorResponse,
+        bad_request, internal_error, not_found, AppError,
     },
 };
 
@@ -35,7 +34,7 @@ fn generate_personal_token() -> String {
 
 pub async fn create_session(
     State(state): State<CliAuthHandlerState>,
-) -> Result<Json<CliAuthSessionResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<CliAuthSessionResponse>, AppError> {
     let session_id = Uuid::new_v4().to_string();
     let expires_at = chrono::Utc::now() + chrono::Duration::minutes(10);
 
@@ -58,7 +57,7 @@ pub async fn create_session(
 pub async fn check_status(
     State(state): State<CliAuthHandlerState>,
     Path(session_id): Path<String>,
-) -> Result<Json<CliAuthStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<CliAuthStatusResponse>, AppError> {
     let session = repository::find_cli_auth_session(&state.db, &session_id)
         .await
         .map_err(|e| internal_error(format!("CLI 인증 세션 조회 실패: {}", e)))?
@@ -108,7 +107,7 @@ pub async fn complete_session(
     State(state): State<CliAuthHandlerState>,
     claims: axum::extract::Extension<Claims>,
     Path(session_id): Path<String>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let user_id = &claims.sub;
 
     // Verify session exists and is pending

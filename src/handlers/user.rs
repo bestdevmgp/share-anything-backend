@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{unauthorized, forbidden, not_found, internal_error, bad_request, ErrorResponse, DownloadLogResponse, FileShareResponse, FileShareWithStats},
+    models::{unauthorized, forbidden, not_found, internal_error, bad_request, AppError, DownloadLogResponse, FileShareResponse, FileShareWithStats},
     services::{generate_qr_code, StorageService},
 };
 
@@ -63,7 +63,7 @@ pub async fn get_upload_history(
     State(state): State<UserState>,
     Query(pagination): Query<PaginationQuery>,
     request: Request,
-) -> Result<Json<UploadHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<UploadHistoryResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -145,7 +145,7 @@ pub async fn get_download_logs(
     State(state): State<UserState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<Json<Vec<DownloadLogResponse>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<Vec<DownloadLogResponse>>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -211,7 +211,7 @@ pub async fn delete_file_share(
     State(state): State<UserState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -257,7 +257,7 @@ pub async fn delete_file_share(
 pub async fn delete_all_file_shares(
     State(state): State<UserState>,
     request: Request,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -307,7 +307,7 @@ pub struct UpdateNameResponse {
 pub async fn update_name(
     State(state): State<UserState>,
     request: Request,
-) -> Result<Json<UpdateNameResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<UpdateNameResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -336,7 +336,7 @@ pub async fn update_name(
 pub async fn delete_account(
     State(state): State<UserState>,
     request: Request,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -357,7 +357,7 @@ pub async fn delete_account(
 pub async fn get_notification_settings(
     State(state): State<UserState>,
     request: Request,
-) -> Result<Json<NotificationSettingsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<NotificationSettingsResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -380,7 +380,7 @@ pub async fn get_notification_settings(
 pub async fn update_notification_settings(
     State(state): State<UserState>,
     request: Request,
-) -> Result<Json<NotificationSettingsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<NotificationSettingsResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()

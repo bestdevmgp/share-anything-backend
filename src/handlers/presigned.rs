@@ -1,6 +1,6 @@
 use axum::{
     extract::{Extension, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     Json,
 };
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        bad_request, unauthorized, forbidden, internal_error, ErrorResponse,
+        bad_request, unauthorized, forbidden, internal_error, AppError,
         ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse,
         PresignedUploadRequest, PresignedUploadResponse, PresignedUploadUrl,
         CompleteUploadRequest,
@@ -40,7 +40,7 @@ pub async fn request_presigned_upload(
     user_claims: Option<Extension<Claims>>,
     headers: HeaderMap,
     Json(request): Json<PresignedUploadRequest>,
-) -> Result<Json<PresignedUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<PresignedUploadResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -166,7 +166,7 @@ pub async fn request_presigned_upload(
 pub async fn complete_presigned_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteUploadRequest>,
-) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -289,7 +289,7 @@ pub async fn init_multipart_upload(
     user_claims: Option<Extension<Claims>>,
     headers: HeaderMap,
     Json(request): Json<InitMultipartUploadRequest>,
-) -> Result<Json<InitMultipartUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<InitMultipartUploadResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
 
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -423,7 +423,7 @@ pub async fn init_multipart_upload(
 pub async fn get_part_presigned_urls(
     State(state): State<PresignedState>,
     Json(request): Json<GetPartUrlsRequest>,
-) -> Result<Json<GetPartUrlsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<GetPartUrlsResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -469,7 +469,7 @@ pub async fn get_part_presigned_urls(
 pub async fn complete_multipart_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteMultipartUploadRequest>,
-) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {

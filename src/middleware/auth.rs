@@ -1,6 +1,6 @@
 use axum::{
     extract::{Request, State},
-    http::{header, StatusCode},
+    http::header,
     middleware::Next,
     response::Response,
 };
@@ -9,7 +9,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::config::Config;
+use crate::{config::Config, models::{unauthorized, AppError}};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -29,7 +29,7 @@ pub async fn optional_auth(
     State(state): State<AuthState>,
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     if let Some(auth_header) = request.headers().get(header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
@@ -47,20 +47,22 @@ pub async fn require_auth(
     State(state): State<AuthState>,
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     let auth_header = request
         .headers()
         .get(header::AUTHORIZATION)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
-    let auth_str = auth_header.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let auth_str = auth_header
+        .to_str()
+        .map_err(|_| unauthorized("잘못된 인증 헤더입니다"))?;
 
     let token = auth_str
         .strip_prefix("Bearer ")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+        .ok_or_else(|| unauthorized("Bearer 토큰이 필요합니다"))?;
 
     let claims = verify_jwt(token, &state.config.jwt.secret)
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+        .map_err(|_| unauthorized("유효하지 않은 인증 토큰입니다"))?;
 
     request.extensions_mut().insert(claims);
 

@@ -13,7 +13,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        unauthorized, forbidden, not_found, internal_error, ErrorResponse,
+        unauthorized, forbidden, not_found, internal_error, bad_request, AppError,
         QuickAccessUploadRequest, QuickAccessFileResponse, QuickAccessListResponse,
         InitMultipartUploadResponse, MultipartUploadFileInit,
     },
@@ -31,7 +31,7 @@ pub struct QuickAccessState {
 pub async fn init_quick_access_upload(
     State(state): State<QuickAccessState>,
     request: Request,
-) -> Result<Json<InitMultipartUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<InitMultipartUploadResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -46,14 +46,14 @@ pub async fn init_quick_access_upload(
         .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
 
     if req.files.is_empty() {
-        return Err(internal_error("최소 1개 이상의 파일 정보가 필요합니다"));
+        return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
     }
 
     let max_total_size: i64 = 3 * 1024 * 1024 * 1024;
     let total_size: i64 = req.files.iter().map(|f| f.file_size).sum();
 
     if total_size > max_total_size {
-        return Err(internal_error("파일 크기 제한을 초과하였습니다"));
+        return Err(bad_request("파일 크기 제한을 초과하였습니다"));
     }
 
     let share_code = loop {
@@ -131,7 +131,7 @@ pub async fn init_quick_access_upload(
 pub async fn list_quick_access_files(
     State(state): State<QuickAccessState>,
     request: Request,
-) -> Result<Json<QuickAccessListResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<QuickAccessListResponse>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -166,7 +166,7 @@ pub async fn delete_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<StatusCode, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -204,7 +204,7 @@ pub async fn preview_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -251,7 +251,7 @@ pub async fn share_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()
@@ -308,7 +308,7 @@ pub async fn download_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
     request: Request,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<serde_json::Value>, AppError> {
     let user_claims = request
         .extensions()
         .get::<Claims>()

@@ -19,7 +19,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::create_jwt,
     models::{
-        CreateUserDto, OAuthProvider,
+        CreateUserDto, OAuthProvider, AppError,
         user::UserStatus,
         email_auth::{
             EmailAuthData, EmailAuthUser, EmailSendRequest, EmailSendResponse,
@@ -171,7 +171,7 @@ pub async fn google_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<GoogleCallbackQuery>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
     let client = create_google_oauth_client(&state.config);
 
@@ -240,7 +240,7 @@ pub async fn google_callback_handler(
                     }
                 }
             } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN);
+                return Err(StatusCode::FORBIDDEN.into());
             } else {
                 user
             }
@@ -268,7 +268,7 @@ pub async fn google_callback_handler(
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     };
 
@@ -459,7 +459,7 @@ pub async fn naver_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<NaverCallbackQuery>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
     // Exchange code for token (using direct HTTP request because Naver returns expires_in as string)
     let http_client = reqwest::Client::new();
@@ -483,7 +483,7 @@ pub async fn naver_callback_handler(
         let status = token_response.status();
         let body = token_response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
         tracing::error!("Naver token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED.into());
     }
 
     let body_text = token_response.text().await.map_err(|e| {
@@ -552,7 +552,7 @@ pub async fn naver_callback_handler(
                     }
                 }
             } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN);
+                return Err(StatusCode::FORBIDDEN.into());
             } else {
                 user
             }
@@ -580,7 +580,7 @@ pub async fn naver_callback_handler(
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     };
 
@@ -751,7 +751,7 @@ pub async fn kakao_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<KakaoCallbackQuery>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
     let http_client = reqwest::Client::new();
     let token_response = http_client
@@ -777,7 +777,7 @@ pub async fn kakao_callback_handler(
             .await
             .unwrap_or_else(|_| "Unable to read body".to_string());
         tracing::error!("Kakao token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED.into());
     }
 
     let body_text = token_response.text().await.map_err(|e| {
@@ -859,7 +859,7 @@ pub async fn kakao_callback_handler(
                     }
                 }
             } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN);
+                return Err(StatusCode::FORBIDDEN.into());
             } else {
                 user
             }
@@ -887,7 +887,7 @@ pub async fn kakao_callback_handler(
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     };
 
@@ -1079,7 +1079,7 @@ pub async fn apple_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<AppleCallbackHandlerQuery>,
-) -> Result<Json<AuthResponse>, StatusCode> {
+) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
     let client_secret = generate_apple_client_secret(&state.config).map_err(|e| {
         tracing::error!("Failed to generate Apple client secret: {:?}", e);
@@ -1110,7 +1110,7 @@ pub async fn apple_callback_handler(
             .await
             .unwrap_or_else(|_| "Unable to read body".to_string());
         tracing::error!("Apple token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED.into());
     }
 
     let body_text = token_response.text().await.map_err(|e| {
@@ -1197,7 +1197,7 @@ pub async fn apple_callback_handler(
                     }
                 }
             } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN);
+                return Err(StatusCode::FORBIDDEN.into());
             } else {
                 user
             }
@@ -1225,7 +1225,7 @@ pub async fn apple_callback_handler(
         }
         Err(e) => {
             tracing::error!("Database query failed: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into());
         }
     };
 
@@ -1362,7 +1362,7 @@ async fn find_or_create_email_user(
     state: &AppState,
     email: &str,
     client_ip: &str,
-) -> Result<(crate::models::User, Option<String>), StatusCode> {
+) -> Result<(crate::models::User, Option<String>), AppError> {
     match repository::find_user_by_email(&state.db, email).await {
         Ok(Some(mut user)) => {
             if user.status == UserStatus::Deleted {
@@ -1402,7 +1402,7 @@ async fn find_or_create_email_user(
                     }
                 }
             } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN);
+                return Err(StatusCode::FORBIDDEN.into());
             }
             let existing = if user.oauth_provider != OAuthProvider::Email {
                 Some(user.oauth_provider.to_string())
@@ -1431,7 +1431,7 @@ async fn find_or_create_email_user(
         }
         Err(e) => {
             tracing::error!("DB error finding user by email: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into())
         }
     }
 }
@@ -1457,17 +1457,17 @@ pub async fn email_send(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<EmailSendRequest>,
-) -> Result<Json<EmailSendResponse>, StatusCode> {
+) -> Result<Json<EmailSendResponse>, AppError> {
     let email = body.email.trim().to_lowercase();
     if !is_valid_email(&email) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(StatusCode::BAD_REQUEST.into());
     }
 
     let client_ip = extract_client_ip(&headers);
     let lang = extract_accept_language(&headers);
 
     if let Ok(Some(_)) = repository::find_recent_email_auth_session(&state.db, &email).await {
-        return Err(StatusCode::TOO_MANY_REQUESTS);
+        return Err(StatusCode::TOO_MANY_REQUESTS.into());
     }
 
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -1505,7 +1505,7 @@ pub async fn email_verify(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<EmailVerifyRequest>,
-) -> Result<Json<EmailVerifyResponse>, StatusCode> {
+) -> Result<Json<EmailVerifyResponse>, AppError> {
     let session = repository::find_email_auth_session_by_token(&state.db, &body.token)
         .await
         .map_err(|e| {
@@ -1515,7 +1515,7 @@ pub async fn email_verify(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.status != "pending" {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     let same_device = body
@@ -1573,7 +1573,7 @@ pub async fn email_verify_code(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<EmailVerifyCodeRequest>,
-) -> Result<Json<EmailVerifyCodeResponse>, StatusCode> {
+) -> Result<Json<EmailVerifyCodeResponse>, AppError> {
     let session = repository::find_email_auth_session_by_id(&state.db, &body.session_id)
         .await
         .map_err(|e| {
@@ -1583,11 +1583,11 @@ pub async fn email_verify_code(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.expires_at < chrono::Utc::now() {
-        return Err(StatusCode::GONE);
+        return Err(StatusCode::GONE.into());
     }
 
     if session.verification_code != body.code {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Err(StatusCode::UNAUTHORIZED.into());
     }
 
     repository::update_email_auth_session_status(&state.db, &session.id, "completed")
@@ -1628,7 +1628,7 @@ pub async fn email_verify_code(
 pub async fn email_status(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
-) -> Result<Json<EmailStatusResponse>, StatusCode> {
+) -> Result<Json<EmailStatusResponse>, AppError> {
     let session = repository::find_email_auth_session_by_id(&state.db, &session_id)
         .await
         .map_err(|e| {

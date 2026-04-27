@@ -1,6 +1,6 @@
 use axum::{
     extract::{Extension, Multipart, Request, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     Json,
 };
 use serde::Deserialize;
@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, forbidden, internal_error, ErrorResponse, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
+    models::{bad_request, unauthorized, forbidden, internal_error, AppError, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
     services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
     utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
@@ -52,7 +52,7 @@ pub async fn upload_file(
     user_claims: Option<Extension<Claims>>,
     headers: HeaderMap,
     mut multipart: Multipart,
-) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
 
     struct FileData {
@@ -364,7 +364,7 @@ pub async fn create_p2p_session(
     State(state): State<UploadState>,
     headers: HeaderMap,
     request_parts: Request,
-) -> Result<Json<MultipleFileUploadResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let user_claims = request_parts.extensions().get::<Claims>().cloned();
 
     let body_bytes = axum::body::to_bytes(request_parts.into_body(), usize::MAX)
