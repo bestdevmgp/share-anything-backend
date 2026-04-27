@@ -18,7 +18,7 @@ use crate::{
         InitMultipartUploadResponse, MultipartUploadFileInit,
     },
     services::StorageService,
-    utils::{generate_share_code, generate_storage_key},
+    utils::generate_storage_key,
 };
 
 #[derive(Clone)]
@@ -56,15 +56,7 @@ pub async fn init_quick_access_upload(
         return Err(bad_request("파일 크기 제한을 초과하였습니다"));
     }
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let upload_session_id = Uuid::new_v4().to_string();
     let chunk_size = req.chunk_size;
@@ -275,15 +267,7 @@ pub async fn share_quick_access_file(
         return Err(not_found("파일이 만료되었습니다"));
     }
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let grant_expires_at = Utc::now() + chrono::Duration::minutes(30);
 

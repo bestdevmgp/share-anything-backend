@@ -16,7 +16,7 @@ use crate::{
         UploadMetadata, CreateP2PSessionRequest,
     },
     services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
-    utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
+    utils::{generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 use chrono::Utc;
 
@@ -205,15 +205,7 @@ pub async fn upload_file(
         None
     };
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
@@ -370,15 +362,7 @@ pub async fn create_p2p_session(
         None
     };
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let expires_at = Utc::now() + chrono::Duration::hours(24);
     let share_group_id = Uuid::new_v4().to_string();

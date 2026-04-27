@@ -25,8 +25,7 @@ use crate::{
     },
     services::StorageService,
     utils::{
-        encode_content_disposition, generate_share_code, generate_storage_key,
-        parse_device_platform, PrettyJson,
+        encode_content_disposition, generate_storage_key, parse_device_platform, PrettyJson,
     },
 };
 
@@ -187,15 +186,7 @@ pub async fn cli_upload(
 
     let expires_at = Utc::now() + expiration.to_duration();
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("Failed to check share code"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let share_group_id = Uuid::new_v4().to_string();
     let user_id = token_user.as_ref().map(|u| u.user_id.clone());
@@ -265,15 +256,7 @@ pub async fn cli_p2p_create(
         None
     };
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("Failed to check share code"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let expires_at = Utc::now() + chrono::Duration::hours(24);
     let share_group_id = Uuid::new_v4().to_string();
@@ -355,15 +338,7 @@ pub async fn cli_multipart_init(
         return Err(unauthorized("Personal token required to set one-time download"));
     }
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("Failed to check share code"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let upload_session_id = Uuid::new_v4().to_string();
     let chunk_size = request.chunk_size;

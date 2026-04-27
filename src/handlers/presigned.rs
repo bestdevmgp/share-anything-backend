@@ -22,7 +22,7 @@ use crate::{
         CompleteMultipartUploadRequest,
     },
     services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
-    utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
+    utils::{generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
 
 #[derive(Clone)]
@@ -89,15 +89,7 @@ pub async fn request_presigned_upload(
         return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
     }
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let upload_session_id = Uuid::new_v4().to_string();
     let mut urls: Vec<PresignedUploadUrl> = Vec::new();
@@ -338,15 +330,7 @@ pub async fn init_multipart_upload(
         return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
     }
 
-    let share_code = loop {
-        let code = generate_share_code();
-        if !repository::check_code_exists(&state.db, &code)
-            .await
-            .map_err(|_| internal_error("공유 코드 중복 확인 실패"))?
-        {
-            break code;
-        }
-    };
+    let share_code = repository::reserve_share_code(&state.db).await?;
 
     let upload_session_id = Uuid::new_v4().to_string();
     let chunk_size = request.chunk_size;

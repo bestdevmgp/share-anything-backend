@@ -402,14 +402,20 @@ pub async fn delete_file_share(
     pool: &MySqlPool,
     id: &str,
 ) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        r#"
-        DELETE FROM file_shares WHERE id = ?
-        "#,
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
+    let share_code: Option<(String,)> =
+        sqlx::query_as("SELECT share_code FROM file_shares WHERE id = ?")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
+
+    let result = sqlx::query("DELETE FROM file_shares WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    if let Some((code,)) = share_code {
+        release_share_code(pool, &code).await?;
+    }
 
     Ok(result.rows_affected())
 }
@@ -418,9 +424,9 @@ pub async fn delete_all_user_file_shares(
     pool: &MySqlPool,
     user_id: &str,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let files = sqlx::query_as::<_, (String,)>(
+    let rows = sqlx::query_as::<_, (String, String)>(
         r#"
-        SELECT storage_key FROM file_shares
+        SELECT storage_key, share_code FROM file_shares
         WHERE user_id = ? AND is_quick_access = false
         "#,
     )
@@ -428,7 +434,7 @@ pub async fn delete_all_user_file_shares(
     .fetch_all(pool)
     .await?;
 
-    let storage_keys: Vec<String> = files.into_iter().map(|(k,)| k).collect();
+    let (storage_keys, share_codes): (Vec<String>, Vec<String>) = rows.into_iter().unzip();
 
     sqlx::query(
         r#"
@@ -439,6 +445,16 @@ pub async fn delete_all_user_file_shares(
     .execute(pool)
     .await?;
 
+    if !share_codes.is_empty() {
+        let placeholders = vec!["?"; share_codes.len()].join(", ");
+        let sql = format!("DELETE FROM share_codes WHERE code IN ({})", placeholders);
+        let mut q = sqlx::query(&sql);
+        for code in &share_codes {
+            q = q.bind(code);
+        }
+        q.execute(pool).await?;
+    }
+
     Ok(storage_keys)
 }
 
@@ -448,9 +464,9 @@ pub async fn delete_all_user_file_shares(
 pub async fn delete_expired_file_shares(
     pool: &MySqlPool,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let expired_files = sqlx::query_as::<_, (String,)>(
+    let expired_files = sqlx::query_as::<_, (String, String)>(
         r#"
-        SELECT fs.storage_key FROM file_shares fs
+        SELECT fs.storage_key, fs.share_code FROM file_shares fs
         WHERE fs.expires_at <= UTC_TIMESTAMP()
           AND NOT EXISTS (
               SELECT 1 FROM public_share_grants g
@@ -462,7 +478,8 @@ pub async fn delete_expired_file_shares(
     .fetch_all(pool)
     .await?;
 
-    let storage_keys: Vec<String> = expired_files.into_iter().map(|(k,)| k).collect();
+    let (storage_keys, share_codes): (Vec<String>, Vec<String>) =
+        expired_files.into_iter().unzip();
 
     sqlx::query(
         r#"
@@ -477,6 +494,16 @@ pub async fn delete_expired_file_shares(
     )
     .execute(pool)
     .await?;
+
+    if !share_codes.is_empty() {
+        let placeholders = vec!["?"; share_codes.len()].join(", ");
+        let sql = format!("DELETE FROM share_codes WHERE code IN ({})", placeholders);
+        let mut q = sqlx::query(&sql);
+        for code in &share_codes {
+            q = q.bind(code);
+        }
+        q.execute(pool).await?;
+    }
 
     Ok(storage_keys)
 }
@@ -507,6 +534,12 @@ pub async fn create_public_share_grant(
 pub async fn delete_expired_public_share_grants(
     pool: &MySqlPool,
 ) -> Result<u64, sqlx::Error> {
+    let expired_codes: Vec<(String,)> = sqlx::query_as(
+        "SELECT share_code FROM public_share_grants WHERE expires_at <= UTC_TIMESTAMP()",
+    )
+    .fetch_all(pool)
+    .await?;
+
     let result = sqlx::query(
         r#"
         DELETE FROM public_share_grants WHERE expires_at <= UTC_TIMESTAMP()
@@ -515,28 +548,52 @@ pub async fn delete_expired_public_share_grants(
     .execute(pool)
     .await?;
 
+    if !expired_codes.is_empty() {
+        let placeholders = vec!["?"; expired_codes.len()].join(", ");
+        let sql = format!("DELETE FROM share_codes WHERE code IN ({})", placeholders);
+        let mut q = sqlx::query(&sql);
+        for (code,) in &expired_codes {
+            q = q.bind(code);
+        }
+        q.execute(pool).await?;
+    }
+
     Ok(result.rows_affected())
 }
 
-// Checks code availability across both namespaces so a newly generated code cannot collide
-// with either an existing file_shares row or an active/stale public_share_grants row.
-pub async fn check_code_exists(
-    pool: &MySqlPool,
-    share_code: &str,
-) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query_as::<_, (i64,)>(
-        r#"
-        SELECT
-          (SELECT COUNT(*) FROM file_shares WHERE share_code = ?)
-          + (SELECT COUNT(*) FROM public_share_grants WHERE share_code = ?)
-        "#,
-    )
-    .bind(share_code)
-    .bind(share_code)
-    .fetch_one(pool)
-    .await?;
+// Reserves a unique share_code by inserting into share_codes (PK on code). The atomic INSERT
+// guarantees uniqueness across both file_shares and public_share_grants — both tables draw
+// codes from this single registry. Retries on PK collision (1062 / SQLSTATE 23000).
+const MAX_SHARE_CODE_RESERVATION_ATTEMPTS: u32 = 16;
 
-    Ok(result.0 > 0)
+pub async fn reserve_share_code(pool: &MySqlPool) -> Result<String, sqlx::Error> {
+    use crate::utils::generate_share_code;
+
+    for _ in 0..MAX_SHARE_CODE_RESERVATION_ATTEMPTS {
+        let code = generate_share_code();
+        let result = sqlx::query("INSERT INTO share_codes (code) VALUES (?)")
+            .bind(&code)
+            .execute(pool)
+            .await;
+        match result {
+            Ok(_) => return Ok(code),
+            Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("23000") => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(sqlx::Error::Protocol(
+        "공유 코드 예약을 반복 시도했지만 실패했습니다 (코드 풀이 거의 가득 찼을 수 있음)"
+            .into(),
+    ))
+}
+
+pub async fn release_share_code(pool: &MySqlPool, code: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM share_codes WHERE code = ?")
+        .bind(code)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub async fn create_download_log(
