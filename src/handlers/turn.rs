@@ -1,27 +1,15 @@
 use axum::{extract::State, Json};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
-use utoipa::ToSchema;
 
-use crate::{config::Config, models::{internal_error, AppError}};
+use crate::{
+    config::Config,
+    models::{internal_error, AppError, IceServer, TurnCredentialsResponse},
+};
 
 #[derive(Clone)]
 pub struct TurnState {
     pub config: Arc<Config>,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct IceServer {
-    pub urls: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub username: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub credential: Option<String>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct TurnCredentialsResponse {
-    pub ice_servers: Vec<IceServer>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,13 +60,12 @@ pub async fn get_turn_credentials(
 ) -> Result<Json<TurnCredentialsResponse>, AppError> {
     let client = reqwest::Client::new();
 
-    // Cloudflare Calls API endpoint
     let url = format!(
         "https://rtc.live.cloudflare.com/v1/turn/keys/{}/credentials/generate-ice-servers",
         state.config.cloudflare_turn.key_id
     );
 
-    // Request body with TTL (24 hours = 86400 seconds)
+    // 24 hours TTL
     let body = serde_json::json!({
         "ttl": 86400
     });
@@ -100,9 +87,7 @@ pub async fn get_turn_credentials(
 
     let cf_response: CloudflareIceServersResponse = response.json().await?;
 
-    // Build ICE servers list with Cloudflare STUN and TURN servers
     let mut ice_servers = vec![
-        // Cloudflare free STUN server
         IceServer {
             urls: vec!["stun:stun.cloudflare.com:3478".to_string()],
             username: None,
@@ -110,7 +95,6 @@ pub async fn get_turn_credentials(
         },
     ];
 
-    // Add all TURN servers from Cloudflare response
     for server in cf_response.ice_servers {
         ice_servers.push(IceServer {
             urls: server.urls.into_vec(),

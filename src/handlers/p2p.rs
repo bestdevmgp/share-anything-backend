@@ -2,24 +2,11 @@ use axum::{
     extract::{Query, State},
     Json,
 };
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::{
-    models::AppError,
+    models::{AppError, P2pStatusQuery, P2pStatusResponse},
     services::signaling::SignalingState,
 };
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct P2pStatusQuery {
-    pub code: String,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct P2pStatusResponse {
-    pub share_code: String,
-    pub uploader_online: bool,
-}
 
 #[utoipa::path(
     get,

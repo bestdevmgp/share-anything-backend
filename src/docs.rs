@@ -5,7 +5,8 @@ use utoipa::Modify;
 use crate::models::{
     DownloadLog, DownloadLogResponse, ExpirationPeriod, FileShare, FileShareResponse,
     FileShareWithStats, MultipleFileUploadResponse, OAuthProvider, User, FileListResponse,
-    FileInfoInGroup, DownloadFilesRequest,
+    FileInfoInGroup, DownloadFilesRequest, UploadHistoryResponse,
+    FileInfoResponse, VerifyPasswordRequest, AuthResponse, UserResponse,
 };
 
 struct SecurityAddon;
@@ -63,11 +64,11 @@ impl Modify for SecurityAddon {
             ExpirationPeriod,
             DownloadLog,
             DownloadLogResponse,
-            crate::handlers::auth::AuthResponse,
-            crate::handlers::auth::UserResponse,
-            crate::handlers::download::FileInfoResponse,
-            crate::handlers::download::VerifyPasswordRequest,
-            crate::handlers::user::UploadHistoryResponse,
+            AuthResponse,
+            UserResponse,
+            FileInfoResponse,
+            VerifyPasswordRequest,
+            UploadHistoryResponse,
         )
     ),
     modifiers(&SecurityAddon),

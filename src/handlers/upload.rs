@@ -3,7 +3,6 @@ use axum::{
     http::HeaderMap,
     Json,
 };
-use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -11,7 +10,11 @@ use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, forbidden, internal_error, AppError, ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType},
+    models::{
+        bad_request, unauthorized, forbidden, internal_error, AppError,
+        ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType,
+        UploadMetadata, CreateP2PSessionRequest,
+    },
     services::{generate_qr_code, StorageService, email::{EmailService, FileNotificationInfo}},
     utils::{generate_share_code, generate_storage_key, verify_turnstile_token, extract_client_ip},
 };
@@ -23,15 +26,6 @@ pub struct UploadState {
     pub db: DbPool,
     pub storage: StorageService,
     pub email: Arc<EmailService>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UploadMetadata {
-    pub description: Option<String>,
-    pub password: Option<String>,
-    pub expiration: Option<ExpirationPeriod>,
-    pub is_one_time: Option<bool>,
-    pub transfer_type: Option<TransferType>,
 }
 
 #[utoipa::path(
@@ -332,21 +326,6 @@ pub async fn upload_file(
         total_count: uploaded_files.len(),
         files: uploaded_files,
     }))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct P2PFileInfo {
-    pub name: String,
-    pub size: i64,
-    #[serde(rename = "type")]
-    pub content_type: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateP2PSessionRequest {
-    pub files: Vec<P2PFileInfo>,
-    pub turnstile_token: String,
-    pub password: Option<String>,
 }
 
 #[utoipa::path(

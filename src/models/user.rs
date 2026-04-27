@@ -129,3 +129,51 @@ pub struct CreateUserDto {
     pub name: String,
     pub profile_image: Option<String>,
 }
+
+// ----- API DTOs (handlers/user.rs) -----
+
+#[derive(Debug, Deserialize)]
+pub struct PaginationQuery {
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UploadHistoryResponse {
+    pub items: Vec<crate::models::FileShareWithStats>,
+    pub total: usize,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct NotificationSettingsResponse {
+    pub notify_upload: bool,
+    pub notify_download: bool,
+    pub notify_download_alert: bool,
+    pub notify_language: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateNotificationSettingsRequest {
+    pub notify_upload: bool,
+    pub notify_download: bool,
+    pub notify_download_alert: bool,
+    pub notify_language: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateNameRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UpdateNameResponse {
+    pub name: String,
+}

@@ -3,15 +3,18 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
 
 use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{unauthorized, forbidden, not_found, internal_error, bad_request, AppError, DownloadLogResponse, FileShareResponse, FileShareWithStats},
+    models::{
+        unauthorized, forbidden, not_found, internal_error, bad_request, AppError,
+        DownloadLogResponse, FileShareResponse, FileShareWithStats,
+        PaginationQuery, UploadHistoryResponse, NotificationSettingsResponse,
+        UpdateNotificationSettingsRequest, UpdateNameRequest, UpdateNameResponse,
+    },
     services::{generate_qr_code, StorageService},
 };
 
@@ -20,26 +23,6 @@ pub struct UserState {
     pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PaginationQuery {
-    #[serde(default = "default_limit")]
-    limit: i64,
-    #[serde(default)]
-    offset: i64,
-}
-
-fn default_limit() -> i64 {
-    20
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct UploadHistoryResponse {
-    pub items: Vec<FileShareWithStats>,
-    pub total: usize,
-    pub limit: i64,
-    pub offset: i64,
 }
 
 /// Get user's upload history (requires authentication)
@@ -276,32 +259,6 @@ pub async fn delete_all_file_shares(
     }
 
     Ok(StatusCode::NO_CONTENT)
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct NotificationSettingsResponse {
-    pub notify_upload: bool,
-    pub notify_download: bool,
-    pub notify_download_alert: bool,
-    pub notify_language: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdateNotificationSettingsRequest {
-    pub notify_upload: bool,
-    pub notify_download: bool,
-    pub notify_download_alert: bool,
-    pub notify_language: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdateNameRequest {
-    pub name: String,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct UpdateNameResponse {
-    pub name: String,
 }
 
 pub async fn update_name(

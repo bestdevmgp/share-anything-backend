@@ -12,7 +12,6 @@ use oauth2::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
 
 use crate::{
     config::Config,
@@ -26,6 +25,8 @@ use crate::{
             EmailStatusResponse, EmailVerifyCodeRequest, EmailVerifyCodeResponse,
             EmailVerifyRequest, EmailVerifyResponse,
         },
+        OAuthLoginQuery, GoogleCallbackQuery, NaverCallbackQuery, KakaoCallbackQuery,
+        AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse, UserResponse,
     },
     services::discord::DiscordNotifier,
     services::email::EmailService,
@@ -74,17 +75,6 @@ fn extract_client_ip(headers: &HeaderMap) -> String {
 // ============================================================================
 // Google OAuth
 // ============================================================================
-
-#[derive(Debug, Deserialize)]
-pub struct OAuthLoginQuery {
-    redirect_uri: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct GoogleCallbackQuery {
-    code: String,
-    state: String,
-}
 
 #[derive(Debug, Deserialize)]
 struct GoogleUserInfo {
@@ -332,12 +322,6 @@ async fn fetch_google_user_info(
 // ============================================================================
 // Naver OAuth
 // ============================================================================
-
-#[derive(Debug, Deserialize)]
-pub struct NaverCallbackQuery {
-    code: String,
-    state: String,
-}
 
 // Naver returns expires_in as a string, not a number (non-standard OAuth 2.0)
 #[derive(Debug, Deserialize)]
@@ -643,12 +627,6 @@ async fn fetch_naver_user_info(
 
 // Kakao OAuth
 #[derive(Debug, Deserialize)]
-pub struct KakaoCallbackQuery {
-    code: String,
-    state: String,
-}
-
-#[derive(Debug, Deserialize)]
 struct KakaoTokenResponse {
     access_token: String,
     #[allow(dead_code)]
@@ -952,22 +930,6 @@ async fn fetch_kakao_user_info(
 }
 
 // Apple OAuth
-#[derive(Debug, Deserialize)]
-pub struct AppleCallbackForm {
-    code: String,
-    state: String,
-    user: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AppleCallbackHandlerQuery {
-    code: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    state: Option<String>,
-    apple_user: Option<String>,
-}
-
 #[derive(Debug, Deserialize)]
 struct AppleUserFormInfo {
     name: Option<AppleNameInfo>,
@@ -1309,24 +1271,6 @@ fn decode_apple_id_token(
     let payload = general_purpose::URL_SAFE_NO_PAD.decode(parts[1])?;
     let claims: AppleIdTokenClaims = serde_json::from_slice(&payload)?;
     Ok(claims)
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct AuthResponse {
-    pub token: String,
-    pub user: UserResponse,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reactivated: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_new_user: Option<bool>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct UserResponse {
-    pub id: String,
-    pub email: String,
-    pub name: String,
-    pub profile_image: Option<String>,
 }
 
 // ============================================================================

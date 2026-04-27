@@ -5,15 +5,17 @@ use axum::{
     response::Response,
     Json,
 };
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
 
 use crate::{
     config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
-    models::{bad_request, unauthorized, forbidden, not_found, internal_error, AppError, CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest},
+    models::{
+        bad_request, unauthorized, forbidden, not_found, internal_error, AppError,
+        CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest,
+        DownloadQuery, VerifyPasswordRequest, DownloadUrlResponse, FileInfoResponse,
+    },
     services::{StorageService, signaling::SignalingState, email::{EmailService, FileNotificationInfo}},
     utils::{encode_content_disposition, parse_device_platform, verify_turnstile_token, extract_client_ip},
 };
@@ -27,38 +29,6 @@ pub struct DownloadState {
     pub storage: StorageService,
     pub signaling: SignalingState,
     pub email: Arc<EmailService>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct DownloadQuery {
-    code: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct VerifyPasswordRequest {
-    code: String,
-    password: String,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct DownloadUrlResponse {
-    pub download_url: String,
-    pub expires_in_secs: u64,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct FileInfoResponse {
-    pub file_name: String,
-    pub file_size: i64,
-    pub file_type: String,
-    pub transfer_type: String,
-    pub description: Option<String>,
-    pub has_password: bool,
-    pub is_one_time: bool,
-    #[serde(serialize_with = "crate::utils::serialize_as_kst")]
-    pub expires_at: chrono::DateTime<chrono::Utc>,
-    pub uploader_online: Option<bool>,
-    pub uploader_name: Option<String>,
 }
 
 #[utoipa::path(
