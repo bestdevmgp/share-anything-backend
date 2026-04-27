@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod oauth;
 pub mod storage;
 pub mod qr;
 pub mod cleanup;

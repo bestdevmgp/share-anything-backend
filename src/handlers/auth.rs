@@ -4,13 +4,10 @@ use axum::{
     response::{IntoResponse, Redirect},
     Form, Json,
 };
-use base64::{engine::general_purpose, Engine as _};
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    RedirectUrl, Scope, TokenResponse, TokenUrl,
+    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
 };
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::{
@@ -28,9 +25,10 @@ use crate::{
         OAuthLoginQuery, GoogleCallbackQuery, NaverCallbackQuery, KakaoCallbackQuery,
         AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse,
     },
-    services::auth::{AuthService, OAuthUserInfo},
+    services::auth::AuthService,
     services::discord::DiscordNotifier,
     services::email::EmailService,
+    services::oauth,
 };
 
 #[derive(Clone)]
@@ -77,14 +75,6 @@ fn extract_client_ip(headers: &HeaderMap) -> String {
 // ============================================================================
 // Google OAuth
 // ============================================================================
-
-#[derive(Debug, Deserialize)]
-struct GoogleUserInfo {
-    id: String,
-    email: String,
-    name: String,
-    picture: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -165,38 +155,8 @@ pub async fn google_callback_handler(
     Query(query): Query<GoogleCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
-    let client = create_google_oauth_client(&state.config);
-
-    let token = client
-        .exchange_code(AuthorizationCode::new(query.code.clone()))
-        .request_async(oauth2::reqwest::async_http_client)
-        .await
-        .map_err(|e| {
-            tracing::error!("Google OAuth token exchange failed: {:?}", e);
-            StatusCode::UNAUTHORIZED
-        })?;
-
-    let user_info = fetch_google_user_info(token.access_token().secret())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch Google user info: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let outcome = state
-        .auth
-        .upsert_oauth_user(
-            OAuthUserInfo {
-                provider: OAuthProvider::Google,
-                oauth_id: user_info.id,
-                email: user_info.email,
-                name: user_info.name,
-                profile_image: user_info.picture,
-            },
-            &client_ip,
-        )
-        .await?;
-
+    let info = oauth::google::fetch_user_info(&state.config, &query.code).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -213,74 +173,9 @@ fn create_google_oauth_client(config: &Config) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(config.oauth.google.redirect_uri.clone()).unwrap())
 }
 
-async fn fetch_google_user_info(
-    access_token: &str,
-) -> Result<GoogleUserInfo, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let response = client
-        .get("https://www.googleapis.com/oauth2/v2/userinfo")
-        .bearer_auth(access_token)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
-        return Err(format!("Google API error: {} - {}", status, body).into());
-    }
-
-    let user_info = response.json::<GoogleUserInfo>().await?;
-    Ok(user_info)
-}
-
 // ============================================================================
 // Naver OAuth
 // ============================================================================
-
-// Naver returns expires_in as a string, not a number (non-standard OAuth 2.0)
-#[derive(Debug, Deserialize)]
-struct NaverTokenResponse {
-    access_token: String,
-    #[allow(dead_code)]
-    refresh_token: String,
-    #[allow(dead_code)]
-    token_type: String,
-    #[allow(dead_code)]
-    #[serde(deserialize_with = "deserialize_expires_in")]
-    expires_in: u64,
-}
-
-fn deserialize_expires_in<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error;
-
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrNumber {
-        String(String),
-        Number(u64),
-    }
-
-    match StringOrNumber::deserialize(deserializer)? {
-        StringOrNumber::String(s) => s.parse::<u64>().map_err(Error::custom),
-        StringOrNumber::Number(n) => Ok(n),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct NaverUserInfo {
-    response: NaverUserResponse,
-}
-
-#[derive(Debug, Deserialize)]
-struct NaverUserResponse {
-    id: String,
-    email: String,
-    name: String,
-    profile_image: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -359,62 +254,8 @@ pub async fn naver_callback_handler(
     Query(query): Query<NaverCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
-    // Exchange code for token (using direct HTTP request because Naver returns expires_in as string)
-    let http_client = reqwest::Client::new();
-    let token_response = http_client
-        .post("https://nid.naver.com/oauth2.0/token")
-        .query(&[
-            ("grant_type", "authorization_code"),
-            ("client_id", &state.config.oauth.naver.client_id),
-            ("client_secret", &state.config.oauth.naver.client_secret),
-            ("code", &query.code),
-            ("state", &query.state),
-        ])
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::error!("Naver OAuth token request failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if !token_response.status().is_success() {
-        let status = token_response.status();
-        let body = token_response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
-        tracing::error!("Naver token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED.into());
-    }
-
-    let body_text = token_response.text().await.map_err(|e| {
-        tracing::error!("Failed to read Naver token response: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let naver_token: NaverTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
-        tracing::error!("Failed to parse Naver token response: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let user_info = fetch_naver_user_info(&naver_token.access_token)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch Naver user info: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let outcome = state
-        .auth
-        .upsert_oauth_user(
-            OAuthUserInfo {
-                provider: OAuthProvider::Naver,
-                oauth_id: user_info.response.id,
-                email: user_info.response.email,
-                name: user_info.response.name,
-                profile_image: user_info.response.profile_image,
-            },
-            &client_ip,
-        )
-        .await?;
-
+    let info = oauth::naver::fetch_user_info(&state.config, &query.code, &query.state).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -431,53 +272,7 @@ fn create_naver_oauth_client(config: &Config) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(config.oauth.naver.redirect_uri.clone()).unwrap())
 }
 
-async fn fetch_naver_user_info(
-    access_token: &str,
-) -> Result<NaverUserInfo, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let response = client
-        .get("https://openapi.naver.com/v1/nid/me")
-        .bearer_auth(access_token)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_else(|_| "Unable to read body".to_string());
-        return Err(format!("Naver API error: {} - {}", status, body).into());
-    }
-
-    let user_info = response.json::<NaverUserInfo>().await?;
-    Ok(user_info)
-}
-
 // Kakao OAuth
-#[derive(Debug, Deserialize)]
-struct KakaoTokenResponse {
-    access_token: String,
-    #[allow(dead_code)]
-    token_type: String,
-    #[allow(dead_code)]
-    expires_in: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct KakaoUserInfo {
-    id: i64,
-    kakao_account: Option<KakaoAccount>,
-}
-
-#[derive(Debug, Deserialize)]
-struct KakaoAccount {
-    email: Option<String>,
-    profile: Option<KakaoProfile>,
-}
-
-#[derive(Debug, Deserialize)]
-struct KakaoProfile {
-    nickname: Option<String>,
-    profile_image_url: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -557,74 +352,8 @@ pub async fn kakao_callback_handler(
     Query(query): Query<KakaoCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
-    let http_client = reqwest::Client::new();
-    let token_response = http_client
-        .post("https://kauth.kakao.com/oauth/token")
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("client_id", state.config.oauth.kakao.client_id.as_str()),
-            ("client_secret", state.config.oauth.kakao.client_secret.as_str()),
-            ("code", query.code.as_str()),
-            ("redirect_uri", state.config.oauth.kakao.redirect_uri.as_str()),
-        ])
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::error!("Kakao OAuth token request failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if !token_response.status().is_success() {
-        let status = token_response.status();
-        let body = token_response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unable to read body".to_string());
-        tracing::error!("Kakao token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED.into());
-    }
-
-    let body_text = token_response.text().await.map_err(|e| {
-        tracing::error!("Failed to read Kakao token response: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let kakao_token: KakaoTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
-        tracing::error!("Failed to parse Kakao token response: {} - body: {}", e, body_text);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let user_info = fetch_kakao_user_info(&kakao_token.access_token)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch Kakao user info: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let kakao_user_id = user_info.id.to_string();
-    let account = user_info.kakao_account.unwrap_or(KakaoAccount {
-        email: None,
-        profile: None,
-    });
-    let profile = account.profile.unwrap_or(KakaoProfile {
-        nickname: None,
-        profile_image_url: None,
-    });
-
-    let outcome = state
-        .auth
-        .upsert_oauth_user(
-            OAuthUserInfo {
-                provider: OAuthProvider::Kakao,
-                oauth_id: kakao_user_id,
-                email: account.email.unwrap_or_default(),
-                name: profile.nickname.unwrap_or_else(|| "Kakao User".to_string()),
-                profile_image: profile.profile_image_url,
-            },
-            &client_ip,
-        )
-        .await?;
-
+    let info = oauth::kakao::fetch_user_info(&state.config, &query.code).await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -641,60 +370,7 @@ fn create_kakao_oauth_client(config: &Config) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(config.oauth.kakao.redirect_uri.clone()).unwrap())
 }
 
-async fn fetch_kakao_user_info(
-    access_token: &str,
-) -> Result<KakaoUserInfo, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let response = client
-        .get("https://kapi.kakao.com/v2/user/me")
-        .bearer_auth(access_token)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unable to read body".to_string());
-        return Err(format!("Kakao API error: {} - {}", status, body).into());
-    }
-
-    let user_info = response.json::<KakaoUserInfo>().await?;
-    Ok(user_info)
-}
-
 // Apple OAuth
-#[derive(Debug, Deserialize)]
-struct AppleUserFormInfo {
-    name: Option<AppleNameInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppleNameInfo {
-    #[serde(rename = "firstName")]
-    first_name: Option<String>,
-    #[serde(rename = "lastName")]
-    last_name: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppleTokenResponse {
-    #[allow(dead_code)]
-    access_token: String,
-    id_token: String,
-    #[allow(dead_code)]
-    token_type: String,
-    #[allow(dead_code)]
-    expires_in: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct AppleIdTokenClaims {
-    sub: String,
-    email: Option<String>,
-}
-
 #[utoipa::path(
     get,
     path = "/auth/apple",
@@ -778,87 +454,13 @@ pub async fn apple_callback_handler(
     Query(query): Query<AppleCallbackHandlerQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let client_ip = extract_client_ip(&headers);
-    let client_secret = generate_apple_client_secret(&state.config).map_err(|e| {
-        tracing::error!("Failed to generate Apple client secret: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let http_client = reqwest::Client::new();
-    let token_response = http_client
-        .post("https://appleid.apple.com/auth/token")
-        .form(&[
-            ("client_id", state.config.oauth.apple.client_id.as_str()),
-            ("client_secret", &client_secret),
-            ("code", &query.code),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", &state.config.oauth.apple.redirect_uri),
-        ])
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::error!("Apple OAuth token request failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    if !token_response.status().is_success() {
-        let status = token_response.status();
-        let body = token_response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Unable to read body".to_string());
-        tracing::error!("Apple token exchange failed {}: {}", status, body);
-        return Err(StatusCode::UNAUTHORIZED.into());
-    }
-
-    let body_text = token_response.text().await.map_err(|e| {
-        tracing::error!("Failed to read Apple token response: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let apple_token: AppleTokenResponse = serde_json::from_str(&body_text).map_err(|e| {
-        tracing::error!("Failed to parse Apple token response: {} - body: {}", e, body_text);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let id_token_claims = decode_apple_id_token(&apple_token.id_token).map_err(|e| {
-        tracing::error!("Failed to decode Apple id_token: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    let apple_user_id = id_token_claims.sub;
-    let email = id_token_claims.email.unwrap_or_default();
-
-    let name = query
-        .apple_user
-        .as_deref()
-        .and_then(|user_str| serde_json::from_str::<AppleUserFormInfo>(user_str).ok())
-        .and_then(|info| info.name)
-        .map(|name_info| {
-            let first = name_info.first_name.unwrap_or_default();
-            let last = name_info.last_name.unwrap_or_default();
-            let full = format!("{} {}", last, first).trim().to_string();
-            if full.is_empty() {
-                "Apple User".to_string()
-            } else {
-                full
-            }
-        })
-        .unwrap_or_else(|| "Apple User".to_string());
-
-    let outcome = state
-        .auth
-        .upsert_oauth_user(
-            OAuthUserInfo {
-                provider: OAuthProvider::Apple,
-                oauth_id: apple_user_id,
-                email,
-                name,
-                profile_image: None,
-            },
-            &client_ip,
-        )
-        .await?;
-
+    let info = oauth::apple::fetch_user_info(
+        &state.config,
+        &query.code,
+        query.apple_user.as_deref(),
+    )
+    .await?;
+    let outcome = state.auth.upsert_oauth_user(info, &client_ip).await?;
     let jwt = state.auth.issue_jwt(&outcome.user)?;
     Ok(Json(state.auth.build_response(outcome, jwt)))
 }
@@ -871,53 +473,6 @@ fn create_apple_oauth_client(config: &Config) -> BasicClient {
         Some(TokenUrl::new("https://appleid.apple.com/auth/token".to_string()).unwrap()),
     )
     .set_redirect_uri(RedirectUrl::new(config.oauth.apple.redirect_uri.clone()).unwrap())
-}
-
-fn generate_apple_client_secret(
-    config: &Config,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let now = chrono::Utc::now().timestamp() as usize;
-    let exp = now + (86400 * 180); // 6 months
-
-    #[derive(Serialize)]
-    struct AppleClientSecretClaims {
-        iss: String,
-        iat: usize,
-        exp: usize,
-        aud: String,
-        sub: String,
-    }
-
-    let claims = AppleClientSecretClaims {
-        iss: config.oauth.apple.team_id.clone(),
-        iat: now,
-        exp,
-        aud: "https://appleid.apple.com".to_string(),
-        sub: config.oauth.apple.client_id.clone(),
-    };
-
-    let header = jsonwebtoken::Header {
-        alg: jsonwebtoken::Algorithm::ES256,
-        kid: Some(config.oauth.apple.key_id.clone()),
-        ..Default::default()
-    };
-
-    let key = jsonwebtoken::EncodingKey::from_ec_pem(config.oauth.apple.private_key.as_bytes())?;
-    let token = jsonwebtoken::encode(&header, &claims, &key)?;
-    Ok(token)
-}
-
-fn decode_apple_id_token(
-    id_token: &str,
-) -> Result<AppleIdTokenClaims, Box<dyn std::error::Error>> {
-    let parts: Vec<&str> = id_token.split('.').collect();
-    if parts.len() != 3 {
-        return Err("Invalid id_token format".into());
-    }
-
-    let payload = general_purpose::URL_SAFE_NO_PAD.decode(parts[1])?;
-    let claims: AppleIdTokenClaims = serde_json::from_slice(&payload)?;
-    Ok(claims)
 }
 
 // ============================================================================
