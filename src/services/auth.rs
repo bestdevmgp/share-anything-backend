@@ -103,6 +103,61 @@ impl AuthService {
         })
     }
 
+    /// 매직 링크 인증 — 이메일로 기존 사용자(어떤 provider든) 찾기. 있으면 그대로 사용,
+    /// 없으면 `OAuthProvider::Email`로 신규 생성. 기존 사용자가 다른 provider 가입자라면
+    /// 그 provider 이름을 함께 반환해서 frontend가 "이미 Google로 가입된 계정입니다" 같은
+    /// 안내를 띄울 수 있도록 한다.
+    pub async fn upsert_email_user(
+        &self,
+        email: &str,
+        client_ip: &str,
+    ) -> Result<(AuthOutcome, Option<String>), AppError> {
+        let mut reactivated = false;
+        let mut is_new_user = false;
+        let mut existing_provider: Option<String> = None;
+
+        let user = match repository::find_user_by_email(&self.db, email).await? {
+            Some(mut existing) => {
+                if existing.status == UserStatus::Deleted {
+                    match check_deleted_user(&existing) {
+                        DeletedUserAction::Reactivate => {
+                            repository::reactivate_user(&self.db, &existing.id).await?;
+                            existing.status = UserStatus::Active;
+                            reactivated = true;
+                            existing
+                        }
+                        DeletedUserAction::HardDeleteAndRecreate => {
+                            repository::hard_delete_user(&self.db, &existing.id).await?;
+                            self.create_and_announce_user(email_user_info(email), client_ip)
+                                .await?
+                        }
+                    }
+                } else if existing.status != UserStatus::Active {
+                    return Err(forbidden("이 계정은 비활성화 상태입니다"));
+                } else {
+                    if existing.oauth_provider != OAuthProvider::Email {
+                        existing_provider = Some(existing.oauth_provider.to_string());
+                    }
+                    existing
+                }
+            }
+            None => {
+                is_new_user = true;
+                self.create_and_announce_user(email_user_info(email), client_ip)
+                    .await?
+            }
+        };
+
+        Ok((
+            AuthOutcome {
+                user,
+                reactivated,
+                is_new_user,
+            },
+            existing_provider,
+        ))
+    }
+
     async fn create_and_announce_user(
         &self,
         info: OAuthUserInfo,
@@ -166,6 +221,16 @@ fn check_deleted_user(user: &User) -> DeletedUserAction {
         DeletedUserAction::Reactivate
     } else {
         DeletedUserAction::HardDeleteAndRecreate
+    }
+}
+
+fn email_user_info(email: &str) -> OAuthUserInfo {
+    OAuthUserInfo {
+        provider: OAuthProvider::Email,
+        oauth_id: email.to_string(),
+        email: email.to_string(),
+        name: email.split('@').next().unwrap_or("User").to_string(),
+        profile_image: None,
     }
 }
 

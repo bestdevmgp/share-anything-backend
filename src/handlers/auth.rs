@@ -7,16 +7,13 @@ use axum::{
 use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, TokenUrl,
 };
-use chrono::Utc;
 use std::sync::Arc;
 
 use crate::{
     config::Config,
     db::{repository, DbPool},
-    middleware::auth::create_jwt,
     models::{
-        CreateUserDto, OAuthProvider, AppError,
-        user::UserStatus,
+        AppError,
         email_auth::{
             EmailAuthData, EmailAuthUser, EmailSendRequest, EmailSendResponse,
             EmailStatusResponse, EmailVerifyCodeRequest, EmailVerifyCodeResponse,
@@ -26,7 +23,6 @@ use crate::{
         AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse,
     },
     services::auth::AuthService,
-    services::discord::DiscordNotifier,
     services::email::EmailService,
     services::oauth,
 };
@@ -35,25 +31,8 @@ use crate::{
 pub struct AppState {
     pub config: Arc<Config>,
     pub db: DbPool,
-    pub discord: Arc<DiscordNotifier>,
     pub email: Arc<EmailService>,
     pub auth: Arc<AuthService>,
-}
-
-const REACTIVATION_WINDOW_DAYS: i64 = 14;
-
-enum DeletedUserAction {
-    Reactivate,
-    HardDeleteAndRecreate,
-}
-
-fn check_deleted_user(user: &crate::models::User) -> DeletedUserAction {
-    let elapsed = Utc::now() - user.updated_at;
-    if elapsed.num_days() <= REACTIVATION_WINDOW_DAYS {
-        DeletedUserAction::Reactivate
-    } else {
-        DeletedUserAction::HardDeleteAndRecreate
-    }
 }
 
 fn extract_client_ip(headers: &HeaderMap) -> String {
@@ -504,84 +483,6 @@ fn is_valid_email(email: &str) -> bool {
         && parts[1].len() > 2
 }
 
-async fn find_or_create_email_user(
-    state: &AppState,
-    email: &str,
-    client_ip: &str,
-) -> Result<(crate::models::User, Option<String>), AppError> {
-    match repository::find_user_by_email(&state.db, email).await {
-        Ok(Some(mut user)) => {
-            if user.status == UserStatus::Deleted {
-                match check_deleted_user(&user) {
-                    DeletedUserAction::Reactivate => {
-                        repository::reactivate_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to reactivate user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        user.status = UserStatus::Active;
-                    }
-                    DeletedUserAction::HardDeleteAndRecreate => {
-                        repository::hard_delete_user(&state.db, &user.id)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to hard delete user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        let dto = CreateUserDto {
-                            oauth_provider: OAuthProvider::Email,
-                            oauth_id: email.to_string(),
-                            email: email.to_string(),
-                            name: email.split('@').next().unwrap_or("User").to_string(),
-                            profile_image: None,
-                        };
-                        let new_user = repository::create_user(&state.db, dto)
-                            .await
-                            .map_err(|e| {
-                                tracing::error!("Failed to create email user: {:?}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                        state.discord.notify_new_user(&new_user.name, &new_user.email, "Email", client_ip);
-                        state.email.send_welcome_email(&new_user.name, &new_user.email);
-                        return Ok((new_user, None));
-                    }
-                }
-            } else if user.status != UserStatus::Active {
-                return Err(StatusCode::FORBIDDEN.into());
-            }
-            let existing = if user.oauth_provider != OAuthProvider::Email {
-                Some(user.oauth_provider.to_string())
-            } else {
-                None
-            };
-            Ok((user, existing))
-        }
-        Ok(None) => {
-            let dto = CreateUserDto {
-                oauth_provider: OAuthProvider::Email,
-                oauth_id: email.to_string(),
-                email: email.to_string(),
-                name: email.split('@').next().unwrap_or("User").to_string(),
-                profile_image: None,
-            };
-            let new_user = repository::create_user(&state.db, dto)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to create email user: {:?}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?;
-            state.discord.notify_new_user(&new_user.name, &new_user.email, "Email", client_ip);
-            state.email.send_welcome_email(&new_user.name, &new_user.email);
-            Ok((new_user, None))
-        }
-        Err(e) => {
-            tracing::error!("DB error finding user by email: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR.into())
-        }
-    }
-}
-
 fn build_email_auth_data(
     user: &crate::models::User,
     jwt: String,
@@ -672,40 +573,21 @@ pub async fn email_verify(
     let client_ip = extract_client_ip(&headers);
 
     if same_device {
-        repository::update_email_auth_session_status(&state.db, &session.id, "completed")
-            .await
-            .map_err(|e| {
-                tracing::error!("DB error: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
 
-        let (user, existing_provider) =
-            find_or_create_email_user(&state, &session.email, &client_ip).await?;
-
-        let jwt = create_jwt(
-            &user.id,
-            &user.email,
-            &user.name,
-            &state.config.jwt.secret,
-            state.config.jwt.expiration_hours,
-        )
-        .map_err(|e| {
-            tracing::error!("JWT creation failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        let (outcome, existing_provider) = state
+            .auth
+            .upsert_email_user(&session.email, &client_ip)
+            .await?;
+        let jwt = state.auth.issue_jwt(&outcome.user)?;
 
         Ok(Json(EmailVerifyResponse {
             same_device: true,
-            auth: Some(build_email_auth_data(&user, jwt, existing_provider)),
+            auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
             verification_code: None,
         }))
     } else {
-        repository::update_email_auth_session_status(&state.db, &session.id, "verified")
-            .await
-            .map_err(|e| {
-                tracing::error!("DB error: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        repository::update_email_auth_session_status(&state.db, &session.id, "verified").await?;
 
         Ok(Json(EmailVerifyResponse {
             same_device: false,
@@ -736,36 +618,22 @@ pub async fn email_verify_code(
         return Err(StatusCode::UNAUTHORIZED.into());
     }
 
-    repository::update_email_auth_session_status(&state.db, &session.id, "completed")
-        .await
-        .map_err(|e| {
-            tracing::error!("DB error: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
 
     let client_ip = extract_client_ip(&headers);
-    let (user, existing_provider) =
-        find_or_create_email_user(&state, &session.email, &client_ip).await?;
-
-    let jwt = create_jwt(
-        &user.id,
-        &user.email,
-        &user.name,
-        &state.config.jwt.secret,
-        state.config.jwt.expiration_hours,
-    )
-    .map_err(|e| {
-        tracing::error!("JWT creation failed: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let (outcome, existing_provider) = state
+        .auth
+        .upsert_email_user(&session.email, &client_ip)
+        .await?;
+    let jwt = state.auth.issue_jwt(&outcome.user)?;
 
     Ok(Json(EmailVerifyCodeResponse {
         token: jwt,
         user: EmailAuthUser {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            profile_image: user.profile_image,
+            id: outcome.user.id,
+            email: outcome.user.email,
+            name: outcome.user.name,
+            profile_image: outcome.user.profile_image,
         },
         existing_provider,
     }))
@@ -784,24 +652,15 @@ pub async fn email_status(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     if session.status == "completed" {
-        let (user, existing_provider) =
-            find_or_create_email_user(&state, &session.email, "polling").await?;
-
-        let jwt = create_jwt(
-            &user.id,
-            &user.email,
-            &user.name,
-            &state.config.jwt.secret,
-            state.config.jwt.expiration_hours,
-        )
-        .map_err(|e| {
-            tracing::error!("JWT creation failed: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        let (outcome, existing_provider) = state
+            .auth
+            .upsert_email_user(&session.email, "polling")
+            .await?;
+        let jwt = state.auth.issue_jwt(&outcome.user)?;
 
         Ok(Json(EmailStatusResponse {
             status: "completed".to_string(),
-            auth: Some(build_email_auth_data(&user, jwt, existing_provider)),
+            auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
         }))
     } else {
         Ok(Json(EmailStatusResponse {

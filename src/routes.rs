@@ -45,7 +45,6 @@ pub fn create_router(
     let app_state = handlers::auth::AppState {
         config: config.clone(),
         db: db.clone(),
-        discord: discord.clone(),
         email: email.clone(),
         auth: auth_service.clone(),
     };
