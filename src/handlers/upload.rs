@@ -174,7 +174,7 @@ pub async fn upload_file(
         }
         exp
     } else {
-        ExpirationPeriod::FiveMinutes // Default
+        ExpirationPeriod::FiveMinutes
     };
 
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);

@@ -25,7 +25,6 @@ struct CloudflareIceServer {
     credential: Option<String>,
 }
 
-// Cloudflare API can return urls as either a string or array
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum StringOrVec {
@@ -42,10 +41,6 @@ impl StringOrVec {
     }
 }
 
-/// Get TURN server credentials
-///
-/// Returns ICE server configuration including STUN and TURN servers
-/// with temporary credentials from Cloudflare Calls.
 #[utoipa::path(
     get,
     path = "/turn/credentials",
@@ -65,9 +60,8 @@ pub async fn get_turn_credentials(
         state.config.cloudflare_turn.key_id
     );
 
-    // 24 hours TTL
     let body = serde_json::json!({
-        "ttl": 86400
+        "ttl": 60 * 60 * 24,
     });
 
     let response = client

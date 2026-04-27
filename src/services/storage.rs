@@ -138,7 +138,6 @@ impl StorageService {
             .bucket(&self.bucket_name)
             .key(key);
 
-        // Set Content-Disposition to force download with filename (RFC 5987 encoded for non-ASCII)
         if let Some(name) = file_name {
             let content_disposition = if name.is_ascii() {
                 format!("attachment; filename=\"{}\"", name)
@@ -163,8 +162,6 @@ impl StorageService {
             .await
             .is_ok()
     }
-
-    // Multipart Upload Methods
 
     pub async fn create_multipart_upload(
         &self,

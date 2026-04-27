@@ -28,13 +28,13 @@ pub struct FileShare {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExpirationPeriod {
-    FiveMinutes,      // 5분
-    ThirtyMinutes,    // 30분
-    OneHour,          // 1시간
-    ThreeHours,       // 3시간
-    SixHours,         // 6시간
-    TwelveHours,      // 12시간
-    TwentyFourHours,  // 24시간
+    FiveMinutes,
+    ThirtyMinutes,
+    OneHour,
+    ThreeHours,
+    SixHours,
+    TwelveHours,
+    TwentyFourHours,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -150,7 +150,6 @@ pub struct DownloadFilesRequest {
     pub password: Option<String>,
 }
 
-// Presigned Upload Types
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct PresignedUploadFileInfo {
     pub file_name: String,
@@ -198,7 +197,6 @@ pub struct CompleteUploadRequest {
     pub files: Vec<CompleteUploadFile>,
 }
 
-// Multipart Upload Types
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct MultipartUploadFileInfo {
     pub file_name: String,

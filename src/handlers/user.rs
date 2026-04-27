@@ -25,7 +25,6 @@ pub struct UserState {
     pub storage: StorageService,
 }
 
-/// Get user's upload history (requires authentication)
 #[utoipa::path(
     get,
     path = "/user/uploads",
@@ -101,7 +100,6 @@ pub async fn get_upload_history(
     }))
 }
 
-/// Get download logs for a specific file (requires authentication)
 #[utoipa::path(
     get,
     path = "/user/uploads/{file_id}/downloads",
@@ -158,7 +156,6 @@ pub async fn get_download_logs(
     Ok(Json(response))
 }
 
-/// Delete a file share (requires authentication)
 #[utoipa::path(
     delete,
     path = "/user/uploads/{file_id}",
@@ -210,7 +207,6 @@ pub async fn delete_file_share(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Delete all file shares for the authenticated user
 #[utoipa::path(
     delete,
     path = "/user/uploads",
@@ -296,7 +292,6 @@ pub async fn delete_account(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Get user notification settings (requires authentication)
 pub async fn get_notification_settings(
     State(state): State<UserState>,
     request: Request,
@@ -319,7 +314,6 @@ pub async fn get_notification_settings(
     }))
 }
 
-/// Update user notification settings (requires authentication)
 pub async fn update_notification_settings(
     State(state): State<UserState>,
     request: Request,

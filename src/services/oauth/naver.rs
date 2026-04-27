@@ -6,7 +6,6 @@ use crate::{
     services::auth::OAuthUserInfo,
 };
 
-// Naver returns expires_in as a string, not a number (non-standard OAuth 2.0).
 #[derive(Debug, Deserialize)]
 struct NaverTokenResponse {
     access_token: String,

@@ -18,6 +18,4 @@ pub struct CliAuthStatusResponse {
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
-pub struct CompleteCliAuthRequest {
-    // no fields needed - user is identified by JWT
-}
+pub struct CompleteCliAuthRequest {}

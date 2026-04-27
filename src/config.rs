@@ -207,9 +207,6 @@ impl Config {
             },
         };
 
-        // Validate URL formats up-front so request handlers can trust them and use .unwrap()
-        // safely on these fields. Without this, a malformed env var would surface as a runtime
-        // panic during the first OAuth/redirect call instead of at startup.
         validate_url("BASE_URL", &config.server.base_url)?;
         validate_url("FRONTEND_URL", &config.server.frontend_url)?;
         validate_url("GOOGLE_REDIRECT_URI", &config.oauth.google.redirect_uri)?;
@@ -227,9 +224,6 @@ impl Config {
     }
 }
 
-/// Verify that an env-var holds a syntactically valid absolute URL.
-/// Called during `Config::from_env` so any malformed URL fails the boot rather than
-/// surfacing later as a panic in the OAuth client builders.
 fn validate_url(name: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
     oauth2::url::Url::parse(value)
         .map_err(|e| format!("Invalid URL in {}: '{}' ({})", name, value, e))?;

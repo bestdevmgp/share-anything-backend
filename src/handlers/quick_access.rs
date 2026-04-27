@@ -153,7 +153,6 @@ pub async fn list_quick_access_files(
     Ok(Json(QuickAccessListResponse { files }))
 }
 
-/// Delete a Quick Access file
 pub async fn delete_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,

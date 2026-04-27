@@ -14,7 +14,6 @@ use crate::{
 
 const REACTIVATION_WINDOW_DAYS: i64 = 14;
 
-/// OAuth 또는 매직 링크 등 외부 출처로부터 받아온 사용자 정보의 정규화된 형태.
 pub struct OAuthUserInfo {
     pub provider: OAuthProvider,
     pub oauth_id: String,
@@ -29,8 +28,6 @@ pub struct AuthOutcome {
     pub is_new_user: bool,
 }
 
-/// 인증 흐름의 비즈니스 로직 — 사용자 조회/생성/재활성화, JWT 발급, 응답 빌드를 한 곳에 모은다.
-/// OAuth 4종 콜백이 모두 같은 흐름을 타도록 통합한다.
 pub struct AuthService {
     db: DbPool,
     config: Arc<Config>,
@@ -53,12 +50,6 @@ impl AuthService {
         })
     }
 
-    /// 외부 인증 결과(OAuth user info)로 사용자를 찾거나 생성한다.
-    /// - 활성 사용자: 그대로 반환
-    /// - 14일 이내 삭제 사용자: 재활성화
-    /// - 14일 초과 삭제 사용자: 하드 삭제 후 재생성
-    /// - 비활성(deactivated) 사용자: 403 Forbidden
-    /// - 신규 사용자: 생성 + 환영 메일 + Discord 알림
     pub async fn upsert_oauth_user(
         &self,
         info: OAuthUserInfo,
@@ -103,10 +94,6 @@ impl AuthService {
         })
     }
 
-    /// 매직 링크 인증 — 이메일로 기존 사용자(어떤 provider든) 찾기. 있으면 그대로 사용,
-    /// 없으면 `OAuthProvider::Email`로 신규 생성. 기존 사용자가 다른 provider 가입자라면
-    /// 그 provider 이름을 함께 반환해서 frontend가 "이미 Google로 가입된 계정입니다" 같은
-    /// 안내를 띄울 수 있도록 한다.
     pub async fn upsert_email_user(
         &self,
         email: &str,

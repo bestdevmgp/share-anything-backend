@@ -65,7 +65,6 @@ pub async fn check_status(
 
     let (status, token_value, user_name, expires_at) = session;
 
-    // Check if expired
     if expires_at < chrono::Utc::now() && status != "completed" {
         return Ok(Json(CliAuthStatusResponse {
             status: "expired".to_string(),
@@ -75,15 +74,14 @@ pub async fn check_status(
     }
 
     if status == "completed" {
-        // Atomically clear the token and only return it if we won the race
         let personal_token = if token_value.is_some() {
             let cleared = repository::clear_cli_auth_session_token(&state.db, &session_id)
                 .await
                 .map_err(|e| internal_error(format!("CLI 인증 토큰 삭제 실패: {}", e)))?;
             if cleared > 0 {
-                token_value // We cleared it first — safe to return
+                token_value
             } else {
-                None // Another request already read the token
+                None
             }
         } else {
             None
@@ -110,7 +108,6 @@ pub async fn complete_session(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let user_id = &claims.sub;
 
-    // Verify session exists and is pending
     let session = repository::find_cli_auth_session(&state.db, &session_id)
         .await
         .map_err(|e| internal_error(format!("CLI 인증 세션 조회 실패: {}", e)))?
@@ -126,7 +123,6 @@ pub async fn complete_session(
         return Err(bad_request("CLI 인증 세션이 이미 처리되었습니다"));
     }
 
-    // Generate a personal token for the CLI
     let raw_token = generate_personal_token();
     let token_prefix = &raw_token[..8];
 
@@ -148,7 +144,6 @@ pub async fn complete_session(
     .await
     .map_err(|e| internal_error(format!("Personal Token 생성 실패: {}", e)))?;
 
-    // Complete the CLI auth session
     let rows = repository::complete_cli_auth_session(
         &state.db,
         &session_id,

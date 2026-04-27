@@ -214,7 +214,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             alert_cta: "查看檔案",
             alert_footer: "此郵件在檔案被下載時自動發送給上傳者。",
         },
-        // "ko" and any unknown language default to Korean
         _ => &EmailTranslations {
             share_code_label: "공유 코드",
             password_label: "비밀번호",
@@ -238,8 +237,6 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
         },
     }
 }
-
-// --- Dynamic title/subject formatting helpers ---
 
 fn upload_title(lang: &str, count: usize) -> String {
     match lang {
@@ -549,7 +546,6 @@ fn upload_history_hint_html(lang: &str, frontend_url: &str, t: &EmailTranslation
             r#"<p style="margin:0 0 20px;font-size:13px;line-height:1.7;color:#71717a;">更多詳情請訪問{}。</p>"#,
             link
         ),
-        // ko default
         _ => format!(
             r#"<p style="margin:0 0 20px;font-size:13px;line-height:1.7;color:#71717a;">더 자세한 내용은 {}를 참고해주세요.</p>"#,
             link
@@ -646,10 +642,6 @@ impl EmailService {
         self.transport.is_some()
     }
 
-    // ========================================================================
-    // Welcome email (stays Korean, no lang param)
-    // ========================================================================
-
     pub fn send_welcome_email(self: &Arc<Self>, name: &str, email: &str) {
         if !self.is_enabled() {
             return;
@@ -693,10 +685,6 @@ impl EmailService {
         .render()
         .unwrap_or_default()
     }
-
-    // ========================================================================
-    // Upload notification email
-    // ========================================================================
 
     pub fn send_upload_notification(
         self: &Arc<Self>,
@@ -755,10 +743,6 @@ impl EmailService {
         Ok(())
     }
 
-    // ========================================================================
-    // Download notification email
-    // ========================================================================
-
     pub fn send_download_notification(
         self: &Arc<Self>,
         user_name: &str,
@@ -812,10 +796,6 @@ impl EmailService {
         self.transport.as_ref().unwrap().send(message).await?;
         Ok(())
     }
-
-    // ========================================================================
-    // Download alert notification email
-    // ========================================================================
 
     pub fn send_download_alert_notification(
         self: &Arc<Self>,
@@ -873,10 +853,6 @@ impl EmailService {
         self.transport.as_ref().unwrap().send(message).await?;
         Ok(())
     }
-
-    // ========================================================================
-    // HTML builders
-    // ========================================================================
 
     fn build_upload_notification_html(
         &self,
@@ -1057,7 +1033,6 @@ impl EmailService {
 }
 
 fn file_type_label(file_type: &str) -> (&'static str, &'static str, &'static str) {
-    // (label, background_color, text_color)
     if file_type.starts_with("image/") {
         ("IMG", "#dbeafe", "#2563eb")
     } else if file_type.starts_with("video/") {

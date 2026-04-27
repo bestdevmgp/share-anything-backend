@@ -22,7 +22,6 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql", "chrono",
 # Object Storage (S3-compatible)
 aws-sdk-s3 = "1.11"
 aws-config = "1.1"
-aws-credential-types = "1.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -52,7 +51,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
-anyhow = "1.0"
 thiserror = "1.0"
 
 # User agent parsing

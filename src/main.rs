@@ -73,8 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// SIGINT(Ctrl-C) 또는 SIGTERM을 받을 때까지 대기. 컨테이너 종료 시 in-flight 요청을
-/// 정상 처리하고 서버가 깨끗이 내려가도록 한다.
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(e) = tokio::signal::ctrl_c().await {

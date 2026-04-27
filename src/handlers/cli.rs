@@ -36,13 +36,9 @@ pub struct CliState {
     pub storage: StorageService,
 }
 
-// --- Constants ---
-
-const CLI_GUEST_MAX_FILE_SIZE: i64 = 100 * 1024 * 1024; // 100MB
-const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024; // 3GB
+const CLI_GUEST_MAX_FILE_SIZE: i64 = 100 * 1024 * 1024;
+const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024;
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
-
-// --- Helper ---
 
 fn format_expires_at(dt: DateTime<Utc>) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
@@ -60,8 +56,6 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
         _ => None,
     }
 }
-
-// --- Handlers ---
 
 pub async fn cli_upload(
     State(state): State<CliState>,
@@ -157,7 +151,6 @@ pub async fn cli_upload(
         )));
     }
 
-    // Expiration
     let expiration = if let Some(exp_str) = expiration_str {
         if token_user.is_none() {
             return Err(unauthorized("Personal token required to set expiration"));
@@ -168,7 +161,6 @@ pub async fn cli_upload(
         ExpirationPeriod::ThirtyMinutes
     };
 
-    // Password
     let password_hash = if let Some(pw) = password {
         if token_user.is_none() {
             return Err(unauthorized("Personal token required to set password"));
@@ -178,7 +170,6 @@ pub async fn cli_upload(
         None
     };
 
-    // One-time
     let is_one_time = is_one_time.unwrap_or(false);
     if is_one_time && token_user.is_none() {
         return Err(unauthorized("Personal token required to set one-time download"));
@@ -549,7 +540,6 @@ pub async fn cli_download(
         return Err(bad_request("P2P files cannot be downloaded via CLI"));
     }
 
-    // Password check
     if let Some(password_hash) = &file_share.password_hash {
         let password = query
             .password
@@ -569,7 +559,6 @@ pub async fn cli_download(
         }
     }
 
-    // Download log
     let ip_address = headers
         .get("X-Forwarded-For")
         .and_then(|v| v.to_str().ok())

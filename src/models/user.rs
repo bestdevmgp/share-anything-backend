@@ -130,8 +130,6 @@ pub struct CreateUserDto {
     pub profile_image: Option<String>,
 }
 
-// ----- API DTOs (handlers/user.rs) -----
-
 #[derive(Debug, Deserialize)]
 pub struct PaginationQuery {
     #[serde(default = "default_limit")]

@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-// --- Response types ---
-
 #[derive(Debug, Serialize)]
 pub struct CliUploadResponse {
     pub share_code: String,
@@ -36,8 +34,6 @@ pub struct CliFileListResponse {
     pub expires_at: String,
 }
 
-// --- P2P types ---
-
 #[derive(Debug, Deserialize)]
 pub struct CliP2PFileInfo {
     pub name: String,
@@ -58,8 +54,6 @@ pub struct CliP2PCreateResponse {
     pub files: Vec<String>,
     pub expires_at: String,
 }
-
-// --- Multipart init types ---
 
 #[derive(Debug, Deserialize)]
 pub struct CliMultipartInitRequest {
@@ -94,8 +88,6 @@ pub struct CliMultipartFileInit {
     pub total_parts: i32,
 }
 
-// --- Presign parts types ---
-
 #[derive(Debug, Deserialize)]
 pub struct CliPresignPartsRequest {
     pub upload_session_id: String,
@@ -116,8 +108,6 @@ pub struct CliPartUrl {
     pub part_number: i32,
     pub presigned_url: String,
 }
-
-// --- Complete multipart types ---
 
 #[derive(Debug, Deserialize)]
 pub struct CliCompleteMultipartRequest {
@@ -141,8 +131,6 @@ pub struct CliCompletedPart {
     pub part_number: i32,
     pub etag: String,
 }
-
-// --- Query types ---
 
 #[derive(Debug, Deserialize)]
 pub struct CliDownloadQuery {

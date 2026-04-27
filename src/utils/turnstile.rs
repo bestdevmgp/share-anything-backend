@@ -16,16 +16,6 @@ struct TurnstileVerifyResponse {
     error_codes: Vec<String>,
 }
 
-/// Verify Cloudflare Turnstile token
-///
-/// # Arguments
-/// * `secret_key` - Turnstile secret key from environment
-/// * `token` - Turnstile token from client
-/// * `remote_ip` - Optional client IP address for additional verification
-///
-/// # Returns
-/// * `Ok(())` if verification successful
-/// * `Err(String)` with error message if verification failed
 pub async fn verify_turnstile_token(
     secret_key: &str,
     token: &str,
@@ -73,9 +63,6 @@ pub async fn verify_turnstile_token(
     Ok(())
 }
 
-/// Extract client IP address from headers
-///
-/// Tries X-Forwarded-For first, then X-Real-IP, falls back to "unknown"
 pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> String {
     headers
         .get("X-Forwarded-For")

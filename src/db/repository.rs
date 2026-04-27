@@ -458,9 +458,6 @@ pub async fn delete_all_user_file_shares(
     Ok(storage_keys)
 }
 
-// Deletes file_shares whose own window expired AND which are NOT kept alive by any active
-// public_share_grant. This preserves the R2 object until the grant's own window closes, so
-// recipients of a late-issued share ticket are guaranteed their full grant duration.
 pub async fn delete_expired_file_shares(
     pool: &MySqlPool,
 ) -> Result<Vec<String>, sqlx::Error> {
@@ -507,8 +504,6 @@ pub async fn delete_expired_file_shares(
 
     Ok(storage_keys)
 }
-
-// ---------- public_share_grants ----------
 
 pub async fn create_public_share_grant(
     pool: &MySqlPool,
@@ -561,9 +556,6 @@ pub async fn delete_expired_public_share_grants(
     Ok(result.rows_affected())
 }
 
-// Reserves a unique share_code by inserting into share_codes (PK on code). The atomic INSERT
-// guarantees uniqueness across both file_shares and public_share_grants — both tables draw
-// codes from this single registry. Retries on PK collision (1062 / SQLSTATE 23000).
 const MAX_SHARE_CODE_RESERVATION_ATTEMPTS: u32 = 16;
 
 pub async fn reserve_share_code(pool: &MySqlPool) -> Result<String, sqlx::Error> {
@@ -736,7 +728,6 @@ pub async fn complete_p2p_transfer(
     Ok(())
 }
 
-// Upload Session functions for presigned upload
 #[allow(dead_code)]
 #[derive(Debug, sqlx::FromRow)]
 pub struct UploadSession {
@@ -1042,7 +1033,6 @@ pub async fn find_cli_auth_session(
     pool: &MySqlPool,
     id: &str,
 ) -> Result<Option<(String, Option<String>, Option<String>, chrono::DateTime<Utc>)>, sqlx::Error> {
-    // Returns (status, personal_token_value, user_name, expires_at)
     sqlx::query_as::<_, (String, Option<String>, Option<String>, chrono::DateTime<Utc>)>(
         r#"
         SELECT s.status, s.personal_token_value, u.name, s.expires_at

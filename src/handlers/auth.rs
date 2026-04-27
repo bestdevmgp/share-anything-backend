@@ -51,10 +51,6 @@ fn extract_client_ip(headers: &HeaderMap) -> String {
     "unknown".to_string()
 }
 
-// ============================================================================
-// Google OAuth
-// ============================================================================
-
 #[utoipa::path(
     get,
     path = "/auth/google",
@@ -114,7 +110,6 @@ pub async fn google_callback(
     Redirect::temporary(&redirect_url)
 }
 
-/// New endpoint: Frontend calls this with the code to get the token
 #[utoipa::path(
     get,
     path = "/auth/callback/google",
@@ -151,10 +146,6 @@ fn create_google_oauth_client(config: &Config) -> BasicClient {
     )
     .set_redirect_uri(RedirectUrl::new(config.oauth.google.redirect_uri.clone()).unwrap())
 }
-
-// ============================================================================
-// Naver OAuth
-// ============================================================================
 
 #[utoipa::path(
     get,
@@ -213,7 +204,6 @@ pub async fn naver_callback(
     Redirect::temporary(&redirect_url)
 }
 
-/// New endpoint: Frontend calls this with the code to get the token
 #[utoipa::path(
     get,
     path = "/auth/callback/naver",
@@ -250,8 +240,6 @@ fn create_naver_oauth_client(config: &Config) -> BasicClient {
     )
     .set_redirect_uri(RedirectUrl::new(config.oauth.naver.redirect_uri.clone()).unwrap())
 }
-
-// Kakao OAuth
 
 #[utoipa::path(
     get,
@@ -311,7 +299,6 @@ pub async fn kakao_callback(
     Redirect::temporary(&redirect_url)
 }
 
-/// Frontend calls this with the code to get the token
 #[utoipa::path(
     get,
     path = "/auth/callback/kakao",
@@ -349,7 +336,6 @@ fn create_kakao_oauth_client(config: &Config) -> BasicClient {
     .set_redirect_uri(RedirectUrl::new(config.oauth.kakao.redirect_uri.clone()).unwrap())
 }
 
-// Apple OAuth
 #[utoipa::path(
     get,
     path = "/auth/apple",
@@ -412,7 +398,6 @@ pub async fn apple_callback(
     Redirect::to(&redirect_url)
 }
 
-/// Frontend calls this with the code to get the token
 #[utoipa::path(
     get,
     path = "/auth/callback/apple",
@@ -453,10 +438,6 @@ fn create_apple_oauth_client(config: &Config) -> BasicClient {
     )
     .set_redirect_uri(RedirectUrl::new(config.oauth.apple.redirect_uri.clone()).unwrap())
 }
-
-// ============================================================================
-// Email Magic Link Auth
-// ============================================================================
 
 fn extract_accept_language(headers: &HeaderMap) -> String {
     headers

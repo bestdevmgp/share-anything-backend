@@ -7,8 +7,6 @@ use crate::{
     services::email::{EmailService, FileNotificationInfo},
 };
 
-/// 사용자 대면 알림(이메일) 발송을 담당. 핸들러에서 직접 EmailService를 부르지 않고
-/// 이 서비스를 통해 한 번에 다운로더+업로더 알림 같은 결합 로직을 처리한다.
 pub struct NotificationService {
     db: DbPool,
     email: Arc<EmailService>,
@@ -19,8 +17,6 @@ impl NotificationService {
         Arc::new(Self { db, email })
     }
 
-    /// 다운로드 시 알림: 다운로더(자신의 다운로드 알림)와 업로더(누가 받았는지 알림)에게
-    /// 각각 이메일을 보낸다. self-download(업로더가 본인 파일 다운로드)일 때는 업로더 알림 생략.
     pub async fn notify_download(
         &self,
         share_code: &str,
@@ -38,7 +34,6 @@ impl NotificationService {
             None => None,
         };
 
-        // Notify downloader
         if let Some(ref user) = downloader {
             if user.notify_download {
                 self.email.send_download_notification(
@@ -52,7 +47,6 @@ impl NotificationService {
             }
         }
 
-        // Notify uploader unless self-download
         let is_self_download = match (&downloader, &uploader) {
             (Some(d), Some(u)) => d.id == u.id,
             _ => false,
@@ -76,8 +70,6 @@ impl NotificationService {
         }
     }
 
-    /// 업로드 시 알림: 업로더에게 본인 파일이 업로드 됐다는 메일. P2P 전송은 서버에 파일이
-    /// 남지 않으므로 알림 대상에서 제외한다.
     pub async fn notify_upload(
         &self,
         uploader_user_id: &str,

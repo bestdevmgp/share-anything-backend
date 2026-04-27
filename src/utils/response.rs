@@ -5,8 +5,6 @@ use axum::{
 };
 use serde::Serialize;
 
-/// JSON response with pretty-printed body — used by CLI endpoints so the user
-/// can read responses directly in the terminal.
 pub struct PrettyJson<T>(pub T);
 
 impl<T: Serialize> IntoResponse for PrettyJson<T> {
