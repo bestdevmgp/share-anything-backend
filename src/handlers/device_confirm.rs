@@ -12,38 +12,32 @@ use crate::{
     db::{repository, DbPool},
 };
 
-const DEVICE_CONFIRM_TYP: &str = "device_confirm";
-const DEVICE_CONFIRM_EXP_DAYS: i64 = 7;
+const DEVICE_REVOKE_TYP: &str = "device_revoke";
+const DEVICE_REVOKE_EXP_DAYS: i64 = 7;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DeviceConfirmClaims {
+pub struct DeviceRevokeClaims {
     pub sub: String,
     pub jti: String,
-    pub ua_hash: String,
-    pub ip: String,
-    pub dev: Option<String>,
+    pub device_id: String,
     pub typ: String,
     pub exp: usize,
     pub iat: usize,
 }
 
-pub fn issue_device_confirm_token(
+pub fn issue_device_revoke_token(
     secret: &str,
     user_id: &str,
     jti: &str,
-    user_agent_hash: &str,
-    ip_address: &str,
-    device_label: Option<&str>,
+    device_id: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
-    let exp = now + chrono::Duration::days(DEVICE_CONFIRM_EXP_DAYS);
-    let claims = DeviceConfirmClaims {
+    let exp = now + chrono::Duration::days(DEVICE_REVOKE_EXP_DAYS);
+    let claims = DeviceRevokeClaims {
         sub: user_id.to_string(),
         jti: jti.to_string(),
-        ua_hash: user_agent_hash.to_string(),
-        ip: ip_address.to_string(),
-        dev: device_label.map(|s| s.to_string()),
-        typ: DEVICE_CONFIRM_TYP.to_string(),
+        device_id: device_id.to_string(),
+        typ: DEVICE_REVOKE_TYP.to_string(),
         exp: exp.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
@@ -54,11 +48,11 @@ pub fn issue_device_confirm_token(
     )
 }
 
-fn verify(token: &str, secret: &str) -> Option<DeviceConfirmClaims> {
+fn verify(token: &str, secret: &str) -> Option<DeviceRevokeClaims> {
     let key = DecodingKey::from_secret(secret.as_ref());
     let validation = Validation::default();
-    let data = decode::<DeviceConfirmClaims>(token, &key, &validation).ok()?;
-    if data.claims.typ != DEVICE_CONFIRM_TYP {
+    let data = decode::<DeviceRevokeClaims>(token, &key, &validation).ok()?;
+    if data.claims.typ != DEVICE_REVOKE_TYP {
         return None;
     }
     Some(data.claims)
@@ -75,35 +69,7 @@ pub struct ConfirmQuery {
     pub token: String,
 }
 
-pub async fn trust_device(
-    State(state): State<DeviceConfirmState>,
-    Query(query): Query<ConfirmQuery>,
-) -> Redirect {
-    let frontend = &state.config.server.frontend_url;
-
-    let claims = match verify(&query.token, &state.config.jwt.secret) {
-        Some(c) => c,
-        None => return Redirect::to(&format!("{}/auth/device/result?status=invalid", frontend)),
-    };
-
-    if let Err(e) = repository::add_trusted_device(
-        &state.db,
-        &claims.sub,
-        &claims.ua_hash,
-        None,
-        &claims.ip,
-        claims.dev.as_deref(),
-    )
-    .await
-    {
-        tracing::error!(error = %e, "Failed to add trusted device");
-        return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
-    }
-
-    Redirect::to(&format!("{}/auth/device/result?status=trusted", frontend))
-}
-
-pub async fn terminate_device(
+pub async fn revoke_device(
     State(state): State<DeviceConfirmState>,
     Query(query): Query<ConfirmQuery>,
 ) -> Redirect {
@@ -115,9 +81,17 @@ pub async fn terminate_device(
     };
 
     if let Err(e) = repository::delete_session(&state.db, &claims.sub, &claims.jti).await {
-        tracing::error!(error = %e, "Failed to delete session for device terminate");
+        tracing::error!(error = %e, "Failed to delete session for device revoke");
         return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
     }
 
-    Redirect::to(&format!("{}/auth/device/result?status=terminated", frontend))
+    if let Err(e) =
+        repository::delete_trusted_device_by_device_id(&state.db, &claims.sub, &claims.device_id)
+            .await
+    {
+        tracing::error!(error = %e, "Failed to delete trusted device for revoke");
+        return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
+    }
+
+    Redirect::to(&format!("{}/auth/device/result?status=revoked", frontend))
 }

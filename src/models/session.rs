@@ -8,6 +8,7 @@ use utoipa::ToSchema;
 pub struct Session {
     pub jti: String,
     pub user_id: String,
+    pub device_id: String,
     pub device_label: Option<String>,
     pub user_agent: Option<String>,
     pub user_agent_hash: String,
@@ -23,16 +24,19 @@ pub struct Session {
 pub struct TrustedDevice {
     pub id: String,
     pub user_id: String,
+    pub device_id: String,
     pub user_agent_hash: String,
     pub user_agent: Option<String>,
     pub ip_address: String,
     pub device_label: Option<String>,
+    pub location: Option<String>,
     pub trusted_at: DateTime<Utc>,
 }
 
 pub struct CreateSessionDto {
     pub jti: String,
     pub user_id: String,
+    pub device_id: String,
     pub device_label: Option<String>,
     pub user_agent: String,
     pub user_agent_hash: String,
@@ -59,6 +63,7 @@ pub struct TrustedDeviceResponse {
     pub id: String,
     pub device_label: Option<String>,
     pub ip_address: String,
+    pub location: Option<String>,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub trusted_at: DateTime<Utc>,
 }

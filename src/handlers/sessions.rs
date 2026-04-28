@@ -76,6 +76,7 @@ pub async fn list_trusted_devices(
             id: d.id,
             device_label: d.device_label,
             ip_address: d.ip_address,
+            location: d.location,
             trusted_at: d.trusted_at,
         })
         .collect();

@@ -136,8 +136,7 @@ struct DeviceConfirmTemplate<'a> {
     ip_address: &'a str,
     location: Option<&'a str>,
     logged_in_at: String,
-    trust_link: String,
-    terminate_link: String,
+    revoke_link: String,
     t: &'static DeviceConfirmTranslations,
     frontend_url: &'a str,
 }
@@ -149,9 +148,8 @@ struct DeviceConfirmTranslations {
     ip_label: &'static str,
     location_label: &'static str,
     time_label: &'static str,
-    question: &'static str,
-    trust_button: &'static str,
-    terminate_button: &'static str,
+    note: &'static str,
+    revoke_button: &'static str,
     expiry_note: &'static str,
     footer: &'static str,
 }
@@ -165,9 +163,8 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             ip_label: "IP 주소",
             location_label: "위치",
             time_label: "로그인 시간",
-            question: "본인이 로그인한 것이 맞나요?",
-            trust_button: "네, 제가 로그인 했습니다",
-            terminate_button: "아니요, 제가 로그인하지 않았습니다",
+            note: "본인 로그인이 맞다면 이 메일은 무시하셔도 됩니다. 본인이 아닐 경우에만 아래 버튼을 눌러주세요.",
+            revoke_button: "이건 내가 한 게 아닙니다",
             expiry_note: "이 링크는 7일 후 만료됩니다. 본인이 아닌 경우 즉시 비밀번호를 변경하거나 다른 보안 조치를 취해주세요.",
             footer: "본 메일은 새 기기 로그인 감지 시 자동으로 발송되는 알림 메일입니다.",
         },
@@ -178,9 +175,8 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             ip_label: "IPアドレス",
             location_label: "場所",
             time_label: "ログイン時刻",
-            question: "ご本人によるログインですか？",
-            trust_button: "はい、私がログインしました",
-            terminate_button: "いいえ、ログインしていません",
+            note: "ご本人によるログインであればこのメールは無視して頂いて構いません。心当たりがない場合のみ下のボタンを押してください。",
+            revoke_button: "これは私ではありません",
             expiry_note: "このリンクは7日後に期限切れになります。本人でない場合は、直ちにパスワードを変更するなどの対策を行ってください。",
             footer: "このメールは新しい端末からのログインを検知した際に自動送信される通知メールです。",
         },
@@ -191,9 +187,8 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             ip_label: "IP地址",
             location_label: "位置",
             time_label: "登录时间",
-            question: "是您本人登录吗？",
-            trust_button: "是的，是我登录的",
-            terminate_button: "不是我登录的",
+            note: "如果是您本人登录，可忽略此邮件。如非本人，请点击下方按钮。",
+            revoke_button: "这不是我",
             expiry_note: "此链接将在7天后过期。如果不是本人，请立即修改密码或采取其他安全措施。",
             footer: "此邮件在检测到新设备登录时自动发送。",
         },
@@ -204,11 +199,10 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             ip_label: "IP位址",
             location_label: "位置",
             time_label: "登入時間",
-            question: "是您本人登入嗎？",
-            trust_button: "是的，是我登入的",
-            terminate_button: "不是我登入的",
+            note: "如果是您本人登入，可忽略此郵件。如非本人，請點擊下方按鈕。",
+            revoke_button: "這不是我",
             expiry_note: "此連結將在7天後過期。如果不是本人，請立即修改密碼或採取其他安全措施。",
-            footer: "此郵件在偵測到新裝置登入時自動發送。",
+            footer: "此郵件在偵測到新裝置登入時自動傳送。",
         },
         _ => &DeviceConfirmTranslations {
             title: "New device sign-in detected",
@@ -217,9 +211,8 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             ip_label: "IP Address",
             location_label: "Location",
             time_label: "Sign-in Time",
-            question: "Was this you?",
-            trust_button: "Yes, this was me",
-            terminate_button: "No, this wasn't me",
+            note: "If this was you, no further action is needed. Only click the button below if you don't recognize this sign-in.",
+            revoke_button: "This wasn't me",
             expiry_note: "This link expires in 7 days. If this wasn't you, change your password and review your account security immediately.",
             footer: "This email is automatically sent when a sign-in from a new device is detected.",
         },
@@ -228,11 +221,11 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
 
 fn device_confirm_subject(lang: &str) -> &'static str {
     match lang {
-        "ko" => "[ShareAnything] 새 기기 로그인 확인",
-        "ja" => "[ShareAnything] 新しい端末からのログイン確認",
-        "zh-CN" => "[ShareAnything] 新设备登录确认",
-        "zh-TW" => "[ShareAnything] 新裝置登入確認",
-        _ => "[ShareAnything] New device sign-in confirmation",
+        "ko" => "[ShareAnything] 새 기기 로그인 알림",
+        "ja" => "[ShareAnything] 新しい端末からのログイン通知",
+        "zh-CN" => "[ShareAnything] 新设备登录通知",
+        "zh-TW" => "[ShareAnything] 新裝置登入通知",
+        _ => "[ShareAnything] New device sign-in notification",
     }
 }
 
@@ -1202,7 +1195,7 @@ impl EmailService {
         ip_address: &str,
         location: Option<&str>,
         logged_in_at: DateTime<Utc>,
-        trust_token: &str,
+        revoke_token: &str,
         lang: &str,
     ) {
         if !self.is_enabled() {
@@ -1213,7 +1206,7 @@ impl EmailService {
         let device_label = device_label.map(|s| s.to_string());
         let ip_address = ip_address.to_string();
         let location = location.map(|s| s.to_string());
-        let trust_token = trust_token.to_string();
+        let revoke_token = revoke_token.to_string();
         let lang = lang.to_string();
 
         tokio::spawn(async move {
@@ -1224,7 +1217,7 @@ impl EmailService {
                     &ip_address,
                     location.as_deref(),
                     logged_in_at,
-                    &trust_token,
+                    &revoke_token,
                     &lang,
                 )
                 .await;
@@ -1238,7 +1231,7 @@ impl EmailService {
         ip_address: &str,
         location: Option<&str>,
         logged_in_at: DateTime<Utc>,
-        trust_token: &str,
+        revoke_token: &str,
         lang: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
@@ -1249,7 +1242,7 @@ impl EmailService {
             ip_address,
             location,
             logged_in_at,
-            trust_token,
+            revoke_token,
             lang,
         );
 
@@ -1270,12 +1263,11 @@ impl EmailService {
         ip_address: &str,
         location: Option<&str>,
         logged_in_at: DateTime<Utc>,
-        trust_token: &str,
+        revoke_token: &str,
         lang: &str,
     ) -> String {
-        let trust_link = format!("{}/auth/device/trust?token={}", &self.base_url, trust_token);
-        let terminate_link =
-            format!("{}/auth/device/terminate?token={}", &self.base_url, trust_token);
+        let revoke_link =
+            format!("{}/auth/device/revoke?token={}", &self.base_url, revoke_token);
         let logged_in_kst = logged_in_at + chrono::Duration::hours(9);
         let date_str = format_date_localized(&logged_in_kst, lang);
         let time_str = logged_in_kst.format("%H:%M").to_string();
@@ -1295,8 +1287,7 @@ impl EmailService {
             ip_address,
             location,
             logged_in_at: logged_in_at_str,
-            trust_link,
-            terminate_link,
+            revoke_link,
             t: get_device_confirm_translations(lang),
             frontend_url: &self.frontend_url,
         }

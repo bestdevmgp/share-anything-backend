@@ -223,12 +223,8 @@ pub fn create_router(
     };
     let device_confirm_routes = Router::new()
         .route(
-            "/auth/device/trust",
-            get(handlers::device_confirm::trust_device),
-        )
-        .route(
-            "/auth/device/terminate",
-            get(handlers::device_confirm::terminate_device),
+            "/auth/device/revoke",
+            get(handlers::device_confirm::revoke_device),
         )
         .with_state(device_confirm_state);
 

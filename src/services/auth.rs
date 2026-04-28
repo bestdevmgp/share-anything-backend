@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     db::{repository, DbPool},
-    handlers::device_confirm::issue_device_confirm_token,
+    handlers::device_confirm::issue_device_revoke_token,
     middleware::auth::create_jwt,
     models::{
         forbidden, internal_error, session::CreateSessionDto, user::UserStatus, AppError,
@@ -195,11 +195,12 @@ impl AuthService {
         let ip = extract_client_ip(headers);
         let user_agent = extract_user_agent(headers);
         let user_agent_hash = hash_ua(&user_agent);
+        let device_id = resolve_device_id(headers, &user_agent_hash);
 
-        let is_trusted =
-            repository::is_device_trusted(&self.db, &user.id, &user_agent_hash, &ip).await?;
+        let was_trusted =
+            repository::is_device_trusted(&self.db, &user.id, &device_id).await?;
 
-        repository::delete_sessions_by_device(&self.db, &user.id, &user_agent_hash, &ip).await?;
+        repository::delete_sessions_by_device(&self.db, &user.id, &device_id).await?;
 
         let jti = Uuid::new_v4().to_string();
         let device_label = parse_device_label(&user_agent);
@@ -213,8 +214,9 @@ impl AuthService {
             CreateSessionDto {
                 jti: jti.clone(),
                 user_id: user.id.clone(),
+                device_id: device_id.clone(),
                 device_label: device_label.clone(),
-                user_agent,
+                user_agent: user_agent.clone(),
                 user_agent_hash: user_agent_hash.clone(),
                 ip_address: ip.clone(),
                 location: location.clone(),
@@ -223,11 +225,23 @@ impl AuthService {
         )
         .await?;
 
-        if !is_trusted {
+        repository::upsert_trusted_device(
+            &self.db,
+            &user.id,
+            &device_id,
+            &user_agent_hash,
+            Some(&user_agent),
+            &ip,
+            device_label.as_deref(),
+            location.as_deref(),
+        )
+        .await?;
+
+        if !was_trusted {
             self.notify_new_device(
                 user,
                 &jti,
-                &user_agent_hash,
+                &device_id,
                 &ip,
                 location.as_deref(),
                 device_label.as_deref(),
@@ -253,23 +267,21 @@ impl AuthService {
         &self,
         user: &User,
         jti: &str,
-        user_agent_hash: &str,
+        device_id: &str,
         ip: &str,
         location: Option<&str>,
         device_label: Option<&str>,
         logged_in_at: chrono::DateTime<Utc>,
     ) {
-        let trust_token = match issue_device_confirm_token(
+        let revoke_token = match issue_device_revoke_token(
             &self.config.jwt.secret,
             &user.id,
             jti,
-            user_agent_hash,
-            ip,
-            device_label,
+            device_id,
         ) {
             Ok(t) => t,
             Err(e) => {
-                tracing::error!(error = ?e, "Failed to issue device confirm token");
+                tracing::error!(error = ?e, "Failed to issue device revoke token");
                 return;
             }
         };
@@ -280,7 +292,7 @@ impl AuthService {
             ip,
             location,
             logged_in_at,
-            &trust_token,
+            &revoke_token,
             &user.notify_language,
         );
     }
@@ -332,6 +344,15 @@ fn display_name(provider: &OAuthProvider) -> &'static str {
         OAuthProvider::Apple => "Apple",
         OAuthProvider::Email => "Email",
     }
+}
+
+fn resolve_device_id(headers: &HeaderMap, user_agent_hash: &str) -> String {
+    headers
+        .get("x-device-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s.len() <= 64)
+        .unwrap_or_else(|| user_agent_hash.to_string())
 }
 
 fn extract_user_agent(headers: &HeaderMap) -> String {

@@ -1103,12 +1103,13 @@ pub async fn create_session(pool: &MySqlPool, dto: CreateSessionDto) -> Result<(
     sqlx::query(
         r#"
         INSERT INTO sessions
-        (jti, user_id, device_label, user_agent, user_agent_hash, ip_address, location, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (jti, user_id, device_id, device_label, user_agent, user_agent_hash, ip_address, location, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&dto.jti)
     .bind(&dto.user_id)
+    .bind(&dto.device_id)
     .bind(&dto.device_label)
     .bind(&dto.user_agent)
     .bind(&dto.user_agent_hash)
@@ -1182,17 +1183,14 @@ pub async fn touch_session_last_seen(pool: &MySqlPool, jti: &str) -> Result<(), 
 pub async fn delete_sessions_by_device(
     pool: &MySqlPool,
     user_id: &str,
-    user_agent_hash: &str,
-    ip_address: &str,
+    device_id: &str,
 ) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        "DELETE FROM sessions WHERE user_id = ? AND user_agent_hash = ? AND ip_address = ?",
-    )
-    .bind(user_id)
-    .bind(user_agent_hash)
-    .bind(ip_address)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("DELETE FROM sessions WHERE user_id = ? AND device_id = ?")
+            .bind(user_id)
+            .bind(device_id)
+            .execute(pool)
+            .await?;
     Ok(result.rows_affected())
 }
 
@@ -1206,49 +1204,54 @@ pub async fn delete_expired_sessions(pool: &MySqlPool) -> Result<u64, sqlx::Erro
 pub async fn is_device_trusted(
     pool: &MySqlPool,
     user_id: &str,
-    user_agent_hash: &str,
-    ip_address: &str,
+    device_id: &str,
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query_as::<_, (i64,)>(
-        r#"
-        SELECT COUNT(*) FROM trusted_devices
-        WHERE user_id = ? AND user_agent_hash = ? AND ip_address = ?
-        "#,
+        "SELECT COUNT(*) FROM trusted_devices WHERE user_id = ? AND device_id = ?",
     )
     .bind(user_id)
-    .bind(user_agent_hash)
-    .bind(ip_address)
+    .bind(device_id)
     .fetch_one(pool)
     .await?;
     Ok(row.0 > 0)
 }
 
-pub async fn add_trusted_device(
+pub async fn upsert_trusted_device(
     pool: &MySqlPool,
     user_id: &str,
+    device_id: &str,
     user_agent_hash: &str,
     user_agent: Option<&str>,
     ip_address: &str,
     device_label: Option<&str>,
-) -> Result<String, sqlx::Error> {
+    location: Option<&str>,
+) -> Result<(), sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     sqlx::query(
         r#"
         INSERT INTO trusted_devices
-        (id, user_id, user_agent_hash, user_agent, ip_address, device_label)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE trusted_at = CURRENT_TIMESTAMP
+        (id, user_id, device_id, user_agent_hash, user_agent, ip_address, device_label, location)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            user_agent_hash = VALUES(user_agent_hash),
+            user_agent = VALUES(user_agent),
+            ip_address = VALUES(ip_address),
+            device_label = VALUES(device_label),
+            location = VALUES(location),
+            trusted_at = CURRENT_TIMESTAMP
         "#,
     )
     .bind(&id)
     .bind(user_id)
+    .bind(device_id)
     .bind(user_agent_hash)
     .bind(user_agent)
     .bind(ip_address)
     .bind(device_label)
+    .bind(location)
     .execute(pool)
     .await?;
-    Ok(id)
+    Ok(())
 }
 
 pub async fn find_trusted_devices_by_user(
@@ -1273,5 +1276,19 @@ pub async fn delete_trusted_device(
         .bind(user_id)
         .execute(pool)
         .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn delete_trusted_device_by_device_id(
+    pool: &MySqlPool,
+    user_id: &str,
+    device_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result =
+        sqlx::query("DELETE FROM trusted_devices WHERE user_id = ? AND device_id = ?")
+            .bind(user_id)
+            .bind(device_id)
+            .execute(pool)
+            .await?;
     Ok(result.rows_affected())
 }
