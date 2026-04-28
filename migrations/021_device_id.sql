@@ -1,5 +1,5 @@
 ALTER TABLE trusted_devices
-    ADD COLUMN device_id CHAR(36) NOT NULL DEFAULT '' AFTER user_id,
+    ADD COLUMN device_id VARCHAR(64) NOT NULL DEFAULT '' AFTER user_id,
     ADD COLUMN location VARCHAR(255) NULL AFTER device_label;
 
 UPDATE trusted_devices SET device_id = user_agent_hash WHERE device_id = '';
@@ -9,7 +9,7 @@ ALTER TABLE trusted_devices
     ADD UNIQUE KEY uniq_device (user_id, device_id);
 
 ALTER TABLE sessions
-    ADD COLUMN device_id CHAR(36) NOT NULL DEFAULT '' AFTER user_id;
+    ADD COLUMN device_id VARCHAR(64) NOT NULL DEFAULT '' AFTER user_id;
 
 UPDATE sessions SET device_id = user_agent_hash WHERE device_id = '';
 
