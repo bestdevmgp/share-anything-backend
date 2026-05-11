@@ -80,17 +80,30 @@ pub async fn revoke_device(
         None => return Redirect::to(&format!("{}/auth/device/result?status=invalid", frontend)),
     };
 
-    if let Err(e) = repository::delete_session(&state.db, &claims.sub, &claims.jti).await {
-        tracing::error!(error = %e, "Failed to delete session for device revoke");
-        return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
-    }
+    let session_deleted = match repository::delete_session(&state.db, &claims.sub, &claims.jti).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to delete session for device revoke");
+            return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
+        }
+    };
 
-    if let Err(e) =
-        repository::delete_trusted_device_by_device_id(&state.db, &claims.sub, &claims.device_id)
-            .await
+    let trusted_deleted = match repository::delete_trusted_device_by_device_id(
+        &state.db,
+        &claims.sub,
+        &claims.device_id,
+    )
+    .await
     {
-        tracing::error!(error = %e, "Failed to delete trusted device for revoke");
-        return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to delete trusted device for revoke");
+            return Redirect::to(&format!("{}/auth/device/result?status=error", frontend));
+        }
+    };
+
+    if session_deleted == 0 && trusted_deleted == 0 {
+        return Redirect::to(&format!("{}/auth/device/result?status=already", frontend));
     }
 
     Redirect::to(&format!("{}/auth/device/result?status=revoked", frontend))
