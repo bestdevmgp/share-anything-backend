@@ -1,0 +1,1 @@
+ALTER TABLE users MODIFY COLUMN profile_image VARCHAR(2048);
