@@ -81,6 +81,8 @@ pub async fn get_file_list(
             file_name: f.file_name.clone(),
             file_size: f.file_size,
             file_type: f.file_type.clone(),
+            image_width: f.image_width,
+            image_height: f.image_height,
         })
         .collect();
 

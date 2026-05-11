@@ -23,6 +23,8 @@ pub struct FileShare {
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub image_width: Option<i32>,
+    pub image_height: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -141,6 +143,10 @@ pub struct FileInfoInGroup {
     pub file_name: String,
     pub file_size: i64,
     pub file_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_width: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_height: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -188,6 +194,10 @@ pub struct CompleteUploadFile {
     pub storage_key: String,
     pub file_size: i64,
     pub content_type: String,
+    #[serde(default)]
+    pub image_width: Option<i32>,
+    #[serde(default)]
+    pub image_height: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -266,6 +276,10 @@ pub struct CompleteMultipartFileInfo {
     pub file_size: i64,
     pub content_type: String,
     pub parts: Vec<CompletedPart>,
+    #[serde(default)]
+    pub image_width: Option<i32>,
+    #[serde(default)]
+    pub image_height: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

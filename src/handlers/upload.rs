@@ -251,6 +251,8 @@ pub async fn upload_file(
             is_one_time,
             false,
             expires_at,
+            None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;
@@ -371,6 +373,8 @@ pub async fn create_p2p_session(
             true,
             false,
             expires_at,
+            None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("데이터베이스 저장 실패: {}", e)))?;

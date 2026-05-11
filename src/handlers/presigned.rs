@@ -198,6 +198,8 @@ pub async fn complete_presigned_upload(
             session.is_one_time,
             session.is_quick_access,
             expires_at,
+            file_info.image_width,
+            file_info.image_height,
         )
         .await
         .map_err(|e| {
@@ -498,6 +500,8 @@ pub async fn complete_multipart_upload(
             session.is_one_time,
             session.is_quick_access,
             expires_at,
+            file_info.image_width,
+            file_info.image_height,
         )
         .await
         .map_err(|e| {

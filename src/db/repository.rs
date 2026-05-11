@@ -192,6 +192,8 @@ pub async fn create_file_share(
     is_one_time: bool,
     is_quick_access: bool,
     expires_at: chrono::DateTime<Utc>,
+    image_width: Option<i32>,
+    image_height: Option<i32>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
@@ -200,8 +202,9 @@ pub async fn create_file_share(
         r#"
         INSERT INTO file_shares
         (id, share_group_id, user_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
-         description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
+         image_width, image_height)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -220,6 +223,8 @@ pub async fn create_file_share(
     .bind(expires_at)
     .bind(now)
     .bind(now)
+    .bind(image_width)
+    .bind(image_height)
     .execute(pool)
     .await?;
 

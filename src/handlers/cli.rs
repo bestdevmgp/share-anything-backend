@@ -212,6 +212,8 @@ pub async fn cli_upload(
             is_one_time,
             false,
             expires_at,
+            None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -270,6 +272,8 @@ pub async fn cli_p2p_create(
             true,
             false,
             expires_at,
+            None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -488,6 +492,8 @@ pub async fn cli_complete_multipart(
             session.is_one_time,
             false,
             expires_at,
+            None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
