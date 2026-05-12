@@ -190,6 +190,7 @@ impl AuthService {
     pub async fn create_session_token(
         &self,
         user: &User,
+        is_new_user: bool,
         headers: &HeaderMap,
     ) -> Result<String, AppError> {
         let ip = extract_client_ip(headers);
@@ -237,7 +238,7 @@ impl AuthService {
         )
         .await?;
 
-        if !was_trusted && user.notify_security {
+        if !was_trusted && !is_new_user && user.notify_security {
             self.notify_new_device(
                 user,
                 &jti,
