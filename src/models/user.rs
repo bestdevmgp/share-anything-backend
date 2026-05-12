@@ -36,6 +36,7 @@ pub struct User {
     pub notify_upload: bool,
     pub notify_download: bool,
     pub notify_download_alert: bool,
+    pub notify_security: bool,
     pub notify_language: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -77,6 +78,7 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             notify_upload: row.try_get("notify_upload")?,
             notify_download: row.try_get("notify_download")?,
             notify_download_alert: row.try_get("notify_download_alert")?,
+            notify_security: row.try_get("notify_security")?,
             notify_language: row.try_get("notify_language")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
@@ -155,6 +157,7 @@ pub struct NotificationSettingsResponse {
     pub notify_upload: bool,
     pub notify_download: bool,
     pub notify_download_alert: bool,
+    pub notify_security: bool,
     pub notify_language: String,
 }
 
@@ -163,6 +166,7 @@ pub struct UpdateNotificationSettingsRequest {
     pub notify_upload: bool,
     pub notify_download: bool,
     pub notify_download_alert: bool,
+    pub notify_security: bool,
     pub notify_language: String,
 }
 

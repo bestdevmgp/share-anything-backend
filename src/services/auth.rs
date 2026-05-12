@@ -237,7 +237,7 @@ impl AuthService {
         )
         .await?;
 
-        if !was_trusted {
+        if !was_trusted && user.notify_security {
             self.notify_new_device(
                 user,
                 &jti,

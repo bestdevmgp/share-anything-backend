@@ -301,7 +301,7 @@ pub async fn get_notification_settings(
         .get::<Claims>()
         .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
 
-    let (notify_upload, notify_download, notify_download_alert, notify_language) =
+    let (notify_upload, notify_download, notify_download_alert, notify_security, notify_language) =
         repository::get_user_notification_settings(&state.db, &user_claims.sub)
             .await
             .map_err(|e| internal_error(format!("알림 설정 조회 실패: {}", e)))?;
@@ -310,6 +310,7 @@ pub async fn get_notification_settings(
         notify_upload,
         notify_download,
         notify_download_alert,
+        notify_security,
         notify_language,
     }))
 }
@@ -337,6 +338,7 @@ pub async fn update_notification_settings(
         req.notify_upload,
         req.notify_download,
         req.notify_download_alert,
+        req.notify_security,
         &req.notify_language,
     )
     .await
@@ -346,6 +348,7 @@ pub async fn update_notification_settings(
         notify_upload: req.notify_upload,
         notify_download: req.notify_download,
         notify_download_alert: req.notify_download_alert,
+        notify_security: req.notify_security,
         notify_language: req.notify_language,
     }))
 }
