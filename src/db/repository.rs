@@ -1144,7 +1144,9 @@ pub async fn find_sessions_by_user(
     sqlx::query_as::<_, Session>(
         r#"
         SELECT * FROM sessions
-        WHERE user_id = ? AND expires_at > UTC_TIMESTAMP()
+        WHERE user_id = ?
+          AND expires_at > UTC_TIMESTAMP()
+          AND last_seen_at > UTC_TIMESTAMP() - INTERVAL 5 MINUTE
         ORDER BY last_seen_at DESC
         "#,
     )
