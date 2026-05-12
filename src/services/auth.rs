@@ -306,6 +306,7 @@ impl AuthService {
                 email: outcome.user.email,
                 name: outcome.user.name,
                 profile_image: outcome.user.profile_image,
+                oauth_provider: outcome.user.oauth_provider.to_string(),
             },
             reactivated: if outcome.reactivated { Some(true) } else { None },
             is_new_user: if outcome.is_new_user { Some(true) } else { None },

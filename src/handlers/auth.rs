@@ -488,6 +488,7 @@ fn build_email_auth_data(
             email: user.email.clone(),
             name: user.name.clone(),
             profile_image: user.profile_image.clone(),
+            oauth_provider: user.oauth_provider.to_string(),
         },
         existing_provider,
     }
@@ -629,6 +630,7 @@ pub async fn email_verify_code(
             email: outcome.user.email,
             name: outcome.user.name,
             profile_image: outcome.user.profile_image,
+            oauth_provider: outcome.user.oauth_provider.to_string(),
         },
         existing_provider,
     }))

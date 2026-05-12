@@ -95,4 +95,5 @@ pub struct EmailAuthUser {
     pub email: String,
     pub name: String,
     pub profile_image: Option<String>,
+    pub oauth_provider: String,
 }
