@@ -61,6 +61,7 @@ pub struct SessionResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TrustedDeviceResponse {
     pub id: String,
+    pub device_id: String,
     pub device_label: Option<String>,
     pub ip_address: String,
     pub location: Option<String>,

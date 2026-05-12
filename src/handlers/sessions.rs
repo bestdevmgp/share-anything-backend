@@ -74,6 +74,7 @@ pub async fn list_trusted_devices(
         .into_iter()
         .map(|d| TrustedDeviceResponse {
             id: d.id,
+            device_id: d.device_id,
             device_label: d.device_label,
             ip_address: d.ip_address,
             location: d.location,
