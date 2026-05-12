@@ -104,7 +104,7 @@ pub struct FileShareResponse {
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub created_at: DateTime<Utc>,
     pub download_url: String,
-    pub qr_code: Option<String>, // Base64 encoded QR code image
+    pub qr_code: Option<String>,
     pub uploader_online: Option<bool>,
 }
 
@@ -222,7 +222,7 @@ pub struct InitMultipartUploadRequest {
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
     pub turnstile_token: String,
-    pub chunk_size: i64, // Size of each chunk in bytes
+    pub chunk_size: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

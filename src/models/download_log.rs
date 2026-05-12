@@ -25,7 +25,7 @@ pub struct CreateDownloadLogDto {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DownloadLogResponse {
     pub id: String,
-    pub downloader_name: Option<String>, // If logged in user
+    pub downloader_name: Option<String>,
     pub ip_address: String,
     pub device_platform: String,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]

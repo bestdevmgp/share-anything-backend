@@ -182,7 +182,7 @@ impl CliRateLimiter {
         }
 
         let now = Instant::now();
-        let window = Duration::from_secs(3600); // 1 hour
+        let window = Duration::from_secs(3600);
 
         let (map, max_requests) = match (is_upload, is_authenticated) {
             (true, false) => (&self.guest_upload_counts, 10u32),

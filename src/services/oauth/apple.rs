@@ -40,7 +40,7 @@ struct AppleClientSecretClaims {
     sub: String,
 }
 
-const APPLE_CLIENT_SECRET_TTL_SECS: usize = 86400 * 180; // 6 months
+const APPLE_CLIENT_SECRET_TTL_SECS: usize = 86400 * 180;
 
 fn generate_client_secret(config: &Config) -> Result<String, AppError> {
     let now = chrono::Utc::now().timestamp() as usize;
