@@ -325,6 +325,9 @@ pub fn create_router(
     let cli_auth_routes = Router::new()
         .route("/cli/me", get(handlers::cli::cli_me))
         .route("/cli/user/uploads", get(handlers::cli::cli_upload_history))
+        .route("/cli/user/uploads/:share_code", delete(handlers::cli::cli_delete_upload))
+        .route("/cli/user/uploads/:share_code/downloads", get(handlers::cli::cli_share_logs))
+        .route("/cli/user/downloads", get(handlers::cli::cli_download_history))
         .layer(middleware::from_fn_with_state(
             cli_rate_limiter,
             crate::middleware::rate_limiter::cli_rate_limit_middleware,

@@ -669,6 +669,41 @@ pub async fn batch_create_download_logs(
     Ok(())
 }
 
+pub async fn find_download_logs_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<(DownloadLog, String, String, i64)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT dl.*, fs.share_code, fs.file_name, fs.file_size
+        FROM download_logs dl
+        INNER JOIN file_shares fs ON fs.id = dl.file_share_id
+        WHERE fs.user_id = ?
+        ORDER BY dl.downloaded_at DESC
+        LIMIT ? OFFSET ?
+        "#,
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let share_code: String = row.try_get("share_code")?;
+            let file_name: String = row.try_get("file_name")?;
+            let file_size: i64 = row.try_get("file_size")?;
+            let log = DownloadLog::from_row(&row)?;
+            Ok((log, share_code, file_name, file_size))
+        })
+        .collect()
+}
+
 pub async fn find_download_logs_with_downloader_name_by_file_share(
     pool: &MySqlPool,
     file_share_id: &str,

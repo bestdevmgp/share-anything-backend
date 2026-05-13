@@ -14,7 +14,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::personal_token_auth::PersonalTokenUser,
     models::{
-        bad_request, internal_error, not_found, unauthorized, AppError,
+        bad_request, forbidden, internal_error, not_found, unauthorized, AppError,
         ExpirationPeriod, CreateDownloadLogDto,
         CliUploadResponse, CliFileInfoResponse, CliFileDetail, CliFileListResponse,
         CliP2PCreateRequest, CliP2PCreateResponse,
@@ -718,6 +718,121 @@ pub async fn cli_upload_history(
     Ok(PrettyJson(serde_json::json!({
         "uploads": uploads,
         "count": uploads.len(),
+    })))
+}
+
+pub async fn cli_share_logs(
+    State(state): State<CliState>,
+    token_user: axum::extract::Extension<PersonalTokenUser>,
+    Path(share_code): Path<String>,
+) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let file_shares = repository::find_file_shares_by_code(&state.db, &share_code)
+        .await
+        .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
+
+    if file_shares.is_empty() {
+        return Err(not_found("공유 코드를 찾을 수 없습니다"));
+    }
+
+    for fs in &file_shares {
+        if fs.user_id.as_ref() != Some(&token_user.user_id) {
+            return Err(forbidden("이 공유에 대한 권한이 없습니다"));
+        }
+    }
+
+    let mut downloads: Vec<serde_json::Value> = Vec::new();
+    for fs in &file_shares {
+        let rows = repository::find_download_logs_with_downloader_name_by_file_share(&state.db, &fs.id)
+            .await
+            .map_err(|e| internal_error(format!("Failed to fetch logs: {}", e)))?;
+        for (log, downloader_name) in rows {
+            downloads.push(serde_json::json!({
+                "file_name": fs.file_name,
+                "downloader_name": downloader_name,
+                "ip_address": log.ip_address,
+                "device_platform": log.device_platform.unwrap_or_else(|| "Unknown".to_string()),
+                "downloaded_at": log.downloaded_at.format("%Y-%m-%d %H:%M").to_string(),
+            }));
+        }
+    }
+
+    downloads.sort_by(|a, b| {
+        b["downloaded_at"]
+            .as_str()
+            .unwrap_or("")
+            .cmp(a["downloaded_at"].as_str().unwrap_or(""))
+    });
+
+    Ok(PrettyJson(serde_json::json!({
+        "share_code": share_code,
+        "downloads": downloads,
+        "count": downloads.len(),
+    })))
+}
+
+pub async fn cli_delete_upload(
+    State(state): State<CliState>,
+    token_user: axum::extract::Extension<PersonalTokenUser>,
+    Path(share_code): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let file_shares = repository::find_file_shares_by_code(&state.db, &share_code)
+        .await
+        .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
+
+    if file_shares.is_empty() {
+        return Err(not_found("공유 코드를 찾을 수 없습니다"));
+    }
+
+    for fs in &file_shares {
+        if fs.user_id.as_ref() != Some(&token_user.user_id) {
+            return Err(forbidden("이 공유에 대한 권한이 없습니다"));
+        }
+    }
+
+    for fs in &file_shares {
+        if !fs.storage_key.is_empty() {
+            state
+                .storage
+                .delete_file(&fs.storage_key)
+                .await
+                .map_err(|e| internal_error(format!("스토리지 삭제 실패: {}", e)))?;
+        }
+        repository::delete_file_share(&state.db, &fs.id)
+            .await
+            .map_err(|e| internal_error(format!("DB 삭제 실패: {}", e)))?;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn cli_download_history(
+    State(state): State<CliState>,
+    token_user: axum::extract::Extension<PersonalTokenUser>,
+    Query(query): Query<CliUploadHistoryQuery>,
+) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let limit = query.limit.unwrap_or(20).min(100);
+    let offset = query.offset.unwrap_or(0);
+
+    let logs = repository::find_download_logs_by_user(&state.db, &token_user.user_id, limit, offset)
+        .await
+        .map_err(|e| internal_error(format!("Failed to fetch download history: {}", e)))?;
+
+    let downloads: Vec<serde_json::Value> = logs
+        .iter()
+        .map(|(log, share_code, file_name, file_size)| {
+            serde_json::json!({
+                "share_code": share_code,
+                "file_name": file_name,
+                "file_size": file_size,
+                "ip_address": log.ip_address,
+                "downloaded_at": log.downloaded_at.format("%Y-%m-%d %H:%M").to_string(),
+            })
+        })
+        .collect();
+
+    Ok(PrettyJson(serde_json::json!({
+        "downloads": downloads,
+        "count": downloads.len(),
     })))
 }
 
