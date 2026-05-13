@@ -1042,17 +1042,21 @@ pub async fn revoke_personal_token(
     Ok(result.rows_affected())
 }
 
-pub async fn update_personal_token_last_used(
+pub async fn update_personal_token_last_used_with_platform(
     pool: &MySqlPool,
     id: &str,
+    platform: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        r#"UPDATE personal_tokens SET last_used_at = UTC_TIMESTAMP() WHERE id = ?"#,
+        r#"UPDATE personal_tokens
+           SET last_used_at = UTC_TIMESTAMP(),
+               last_platform = COALESCE(?, last_platform)
+           WHERE id = ?"#,
     )
+    .bind(platform)
     .bind(id)
     .execute(pool)
     .await?;
-
     Ok(())
 }
 

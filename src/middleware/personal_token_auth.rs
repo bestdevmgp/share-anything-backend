@@ -10,6 +10,23 @@ use crate::{
     models::{unauthorized, AppError},
 };
 
+fn extract_cli_platform(user_agent: &str) -> Option<String> {
+    if !user_agent.starts_with("share-cli/") {
+        return None;
+    }
+    let start = user_agent.find('(')?;
+    let end = user_agent.find(')')?;
+    if start >= end {
+        return None;
+    }
+    let info = user_agent[start + 1..end].trim();
+    if info.is_empty() {
+        None
+    } else {
+        Some(info.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PersonalTokenUser {
     pub user_id: String,
@@ -52,13 +69,25 @@ pub async fn cli_auth(
         let token_id = token_record.id.clone();
         let db = state.db.clone();
 
+        let platform = request
+            .headers()
+            .get("User-Agent")
+            .and_then(|v| v.to_str().ok())
+            .and_then(extract_cli_platform);
+
         request.extensions_mut().insert(PersonalTokenUser {
             user_id: token_record.user_id,
             personal_token_id: token_id.clone(),
         });
 
         tokio::spawn(async move {
-            if let Err(e) = repository::update_personal_token_last_used(&db, &token_id).await {
+            if let Err(e) = repository::update_personal_token_last_used_with_platform(
+                &db,
+                &token_id,
+                platform.as_deref(),
+            )
+            .await
+            {
                 tracing::warn!(error = %e, "Failed to update personal token last_used_at");
             }
         });

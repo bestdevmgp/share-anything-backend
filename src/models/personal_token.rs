@@ -10,6 +10,7 @@ pub struct PersonalToken {
     pub token_prefix: String,
     pub name: String,
     pub last_used_at: Option<DateTime<Utc>>,
+    pub last_platform: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

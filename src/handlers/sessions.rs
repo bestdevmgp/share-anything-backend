@@ -42,9 +42,13 @@ pub async fn list_sessions(
 
     for t in cli_sessions {
         if let Some(last_used_at) = t.last_used_at {
+            let label = match &t.last_platform {
+                Some(p) if !p.is_empty() => format!("CLI on {}", p),
+                _ => "CLI".to_string(),
+            };
             response.push(SessionResponse {
                 jti: t.id,
-                device_label: Some(t.name),
+                device_label: Some(label),
                 ip_address: String::from("-"),
                 location: None,
                 last_seen_at: last_used_at,
