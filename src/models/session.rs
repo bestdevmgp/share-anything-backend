@@ -56,6 +56,7 @@ pub struct SessionResponse {
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]
     pub created_at: DateTime<Utc>,
     pub is_current: bool,
+    pub kind: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

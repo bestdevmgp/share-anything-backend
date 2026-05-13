@@ -1155,6 +1155,25 @@ pub async fn find_sessions_by_user(
     .await
 }
 
+pub async fn find_active_cli_sessions_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<PersonalToken>, sqlx::Error> {
+    sqlx::query_as::<_, PersonalToken>(
+        r#"
+        SELECT * FROM personal_tokens
+        WHERE user_id = ?
+          AND revoked_at IS NULL
+          AND last_used_at IS NOT NULL
+          AND last_used_at > UTC_TIMESTAMP() - INTERVAL 5 MINUTE
+        ORDER BY last_used_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn delete_session(
     pool: &MySqlPool,
     user_id: &str,

@@ -24,8 +24,9 @@ pub async fn list_sessions(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<Vec<SessionResponse>>, AppError> {
     let sessions = repository::find_sessions_by_user(&state.db, &claims.sub).await?;
+    let cli_sessions = repository::find_active_cli_sessions_by_user(&state.db, &claims.sub).await?;
 
-    let response: Vec<SessionResponse> = sessions
+    let mut response: Vec<SessionResponse> = sessions
         .into_iter()
         .map(|s| SessionResponse {
             is_current: s.jti == claims.jti,
@@ -35,8 +36,26 @@ pub async fn list_sessions(
             location: s.location,
             last_seen_at: s.last_seen_at,
             created_at: s.created_at,
+            kind: "web".to_string(),
         })
         .collect();
+
+    for t in cli_sessions {
+        if let Some(last_used_at) = t.last_used_at {
+            response.push(SessionResponse {
+                jti: t.id,
+                device_label: Some(t.name),
+                ip_address: String::from("-"),
+                location: None,
+                last_seen_at: last_used_at,
+                created_at: t.created_at,
+                is_current: false,
+                kind: "cli".to_string(),
+            });
+        }
+    }
+
+    response.sort_by(|a, b| b.last_seen_at.cmp(&a.last_seen_at));
 
     Ok(Json(response))
 }
@@ -50,7 +69,11 @@ pub async fn terminate_session(
         return Err(bad_request("현재 사용 중인 세션은 종료할 수 없습니다"));
     }
     let rows = repository::delete_session(&state.db, &claims.sub, &jti).await?;
-    if rows == 0 {
+    if rows > 0 {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+    let cli_rows = repository::revoke_personal_token(&state.db, &jti, &claims.sub).await?;
+    if cli_rows == 0 {
         return Err(not_found("세션을 찾을 수 없습니다"));
     }
     Ok(StatusCode::NO_CONTENT)
