@@ -3,13 +3,23 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, ToSchema)]
-#[sqlx(type_name = "VARCHAR", rename_all = "lowercase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[serde(rename_all = "lowercase")]
 #[schema(example = "pending")]
 pub enum ApplicationStatus {
     Pending,
     Approved,
     Rejected,
+}
+
+impl ApplicationStatus {
+    pub fn from_db(s: &str) -> Self {
+        match s {
+            "approved" => Self::Approved,
+            "rejected" => Self::Rejected,
+            _ => Self::Pending,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
@@ -24,7 +34,8 @@ pub struct ApiKeyApplication {
     pub service_url: String,
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
-    pub status: ApplicationStatus,
+    #[schema(example = "pending")]
+    pub status: String,
     #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
     pub reject_reason: Option<String>,
     #[schema(example = "tok_abc123")]
@@ -95,7 +106,7 @@ impl From<ApiKeyApplication> for ApplicationResponse {
             service_name: app.service_name,
             service_url: app.service_url,
             purpose: app.purpose,
-            status: app.status,
+            status: ApplicationStatus::from_db(&app.status),
             reject_reason: app.reject_reason,
             api_key_id: app.api_key_id,
             created_at: app.created_at,

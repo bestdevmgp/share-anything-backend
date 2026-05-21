@@ -12,7 +12,7 @@ use crate::{
     db::{repository, DbPool},
     models::{
         api_key_application::{
-            ApiKeyApplication, ApiKeyResponse, ApplicationStatus, RejectRequest,
+            ApiKeyApplication, ApiKeyResponse, RejectRequest,
         },
         internal_error, not_found, unauthorized, AppError,
         personal_token::Scope,
@@ -126,7 +126,7 @@ pub async fn admin_approve(
         .map_err(|e| internal_error(format!("DB error: {}", e)))?
         .ok_or_else(|| not_found("신청을 찾을 수 없습니다"))?;
 
-    if app.status != ApplicationStatus::Pending {
+    if app.status != "pending" {
         return Err(AppError::Conflict("이미 처리된 신청입니다".to_string()));
     }
 
@@ -213,7 +213,7 @@ pub async fn admin_reject(
         .map_err(|e| internal_error(format!("DB error: {}", e)))?
         .ok_or_else(|| not_found("신청을 찾을 수 없습니다"))?;
 
-    if app.status != ApplicationStatus::Pending {
+    if app.status != "pending" {
         return Err(AppError::Conflict("이미 처리된 신청입니다".to_string()));
     }
 
