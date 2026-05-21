@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     db::{repository, DbPool},
-    models::{unauthorized, AppError},
+    models::{personal_token::Scope, unauthorized, AppError},
 };
 
 fn extract_cli_platform(user_agent: &str) -> Option<String> {
@@ -31,6 +31,7 @@ fn extract_cli_platform(user_agent: &str) -> Option<String> {
 pub struct PersonalTokenUser {
     pub user_id: String,
     pub personal_token_id: String,
+    pub scopes: Vec<Scope>,
 }
 
 #[derive(Clone)]
@@ -46,10 +47,10 @@ pub async fn cli_auth(
     if let Some(token_header) = request.headers().get("X-Personal-Token") {
         let token = token_header
             .to_str()
-            .map_err(|_| unauthorized("잘못된 인증 헤더입니다"))?;
+            .map_err(|_| unauthorized("Invalid auth header."))?;
 
         if !token.starts_with("sa_") {
-            return Err(unauthorized("유효하지 않은 토큰 형식입니다"));
+            return Err(unauthorized("Invalid token format. Expected 'sa_' prefix."));
         }
 
         let mut hasher = Sha256::new();
@@ -58,11 +59,11 @@ pub async fn cli_auth(
 
         let token_record = repository::find_personal_token_by_hash(&state.db, &token_hash)
             .await?
-            .ok_or_else(|| unauthorized("유효하지 않은 토큰입니다"))?;
+            .ok_or_else(|| unauthorized("Invalid Personal Token."))?;
 
         if let Some(expires_at) = token_record.expires_at {
             if expires_at < chrono::Utc::now() {
-                return Err(unauthorized("만료된 토큰입니다"));
+                return Err(unauthorized("Personal Token has expired."));
             }
         }
 
@@ -78,6 +79,7 @@ pub async fn cli_auth(
         request.extensions_mut().insert(PersonalTokenUser {
             user_id: token_record.user_id,
             personal_token_id: token_id.clone(),
+            scopes: Scope::parse_list(&token_record.scopes),
         });
 
         tokio::spawn(async move {

@@ -268,6 +268,12 @@ pub fn create_router(
         ))
         .with_state(personal_token_state);
 
+    let cli_auth_state = CliAuthState {
+        db: db.clone(),
+    };
+
+    let cli_rate_limiter = CliRateLimiter::new();
+
     let cli_device_auth_state = handlers::cli_auth::CliAuthHandlerState {
         db: db.clone(),
         config: config.clone(),
@@ -296,22 +302,10 @@ pub fn create_router(
         storage: storage.clone(),
     };
 
-    let cli_auth_state = CliAuthState {
-        db: db.clone(),
-    };
-
-    let cli_rate_limiter = CliRateLimiter::new();
-
-    let cli_routes = Router::new()
-        .route("/cli/upload", post(handlers::cli::cli_upload))
-        .route("/cli/upload/multipart/init", post(handlers::cli::cli_multipart_init))
-        .route("/cli/upload/multipart/presign-parts", post(handlers::cli::cli_presign_parts))
-        .route("/cli/upload/multipart/complete", post(handlers::cli::cli_complete_multipart))
-        .route("/cli/download/:code", get(handlers::cli::cli_download))
-        .route("/cli/download/:code/info", get(handlers::cli::cli_download_info))
+    let cli_special_routes = Router::new()
         .route("/cli/p2p/create", post(handlers::cli::cli_p2p_create))
-        .route("/cli/files/:code", get(handlers::cli::cli_file_list))
-        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
+        .route("/cli/download/:code/info", get(handlers::cli::cli_download_info))
+        .route("/cli/me", get(handlers::cli::cli_me))
         .layer(middleware::from_fn_with_state(
             cli_rate_limiter.clone(),
             crate::middleware::rate_limiter::cli_rate_limit_middleware,
@@ -320,23 +314,18 @@ pub fn create_router(
             cli_auth_state.clone(),
             cli_auth,
         ))
-        .with_state(cli_state.clone());
-
-    let cli_auth_routes = Router::new()
-        .route("/cli/me", get(handlers::cli::cli_me))
-        .route("/cli/user/uploads", get(handlers::cli::cli_upload_history))
-        .route("/cli/user/uploads/:share_code", delete(handlers::cli::cli_delete_upload))
-        .route("/cli/user/uploads/:share_code/downloads", get(handlers::cli::cli_share_logs))
-        .route("/cli/user/downloads", get(handlers::cli::cli_download_history))
-        .layer(middleware::from_fn_with_state(
-            cli_rate_limiter,
-            crate::middleware::rate_limiter::cli_rate_limit_middleware,
-        ))
-        .layer(middleware::from_fn_with_state(
-            cli_auth_state,
-            cli_auth,
-        ))
         .with_state(cli_state);
+
+    let v1_state = crate::api::v1::V1State {
+        config: config.clone(),
+        db: db.clone(),
+        storage: storage.clone(),
+    };
+    let v1_router = crate::api::v1::router(
+        v1_state,
+        cli_auth_state,
+        cli_rate_limiter,
+    );
 
     let install_route = Router::new()
         .route("/install", get(handlers::cli::cli_install_script));
@@ -360,10 +349,10 @@ pub fn create_router(
         .merge(device_confirm_routes)
         .merge(quick_access_routes)
         .merge(personal_token_routes)
-        .merge(cli_routes)
-        .merge(cli_auth_routes)
         .merge(cli_device_auth_routes)
         .merge(cli_device_auth_complete_routes)
+        .merge(cli_special_routes)
+        .merge(v1_router)
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)

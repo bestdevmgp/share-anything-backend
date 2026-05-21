@@ -958,14 +958,15 @@ pub async fn create_personal_token(
     token_hash: &str,
     token_prefix: &str,
     name: &str,
+    scopes: &str,
     expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<PersonalToken, sqlx::Error> {
     let now = Utc::now();
 
     sqlx::query(
         r#"
-        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, scopes, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(id)
@@ -973,13 +974,16 @@ pub async fn create_personal_token(
     .bind(token_hash)
     .bind(token_prefix)
     .bind(name)
+    .bind(scopes)
     .bind(expires_at)
     .bind(now)
     .execute(pool)
     .await?;
 
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT * FROM personal_tokens WHERE id = ?"#,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens WHERE id = ?"#,
     )
     .bind(id)
     .fetch_one(pool)
@@ -991,7 +995,9 @@ pub async fn find_personal_token_by_hash(
     token_hash: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT * FROM personal_tokens WHERE token_hash = ? AND revoked_at IS NULL"#,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens WHERE token_hash = ? AND revoked_at IS NULL"#,
     )
     .bind(token_hash)
     .fetch_optional(pool)
@@ -1003,7 +1009,9 @@ pub async fn find_personal_token_by_id(
     id: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT * FROM personal_tokens WHERE id = ?"#,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens WHERE id = ?"#,
     )
     .bind(id)
     .fetch_optional(pool)
@@ -1015,11 +1023,11 @@ pub async fn find_personal_tokens_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"
-        SELECT * FROM personal_tokens
-        WHERE user_id = ? AND revoked_at IS NULL
-        ORDER BY created_at DESC
-        "#,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens
+           WHERE user_id = ? AND revoked_at IS NULL
+           ORDER BY created_at DESC"#,
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -1199,14 +1207,14 @@ pub async fn find_active_cli_sessions_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"
-        SELECT * FROM personal_tokens
-        WHERE user_id = ?
-          AND revoked_at IS NULL
-          AND last_used_at IS NOT NULL
-          AND last_used_at > UTC_TIMESTAMP() - INTERVAL 5 MINUTE
-        ORDER BY last_used_at DESC
-        "#,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens
+           WHERE user_id = ?
+             AND revoked_at IS NULL
+             AND last_used_at IS NOT NULL
+             AND last_used_at > UTC_TIMESTAMP() - INTERVAL 5 MINUTE
+           ORDER BY last_used_at DESC"#,
     )
     .bind(user_id)
     .fetch_all(pool)

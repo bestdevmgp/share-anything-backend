@@ -1,6 +1,6 @@
 use axum::{
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -8,7 +8,7 @@ use axum::{
 use dashmap::DashMap;
 use serde_json::json;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 pub struct RateLimiter {
@@ -140,22 +140,48 @@ impl RateLimiter {
     }
 }
 
+/// Bucket classification for §6.2 per-token rate limits.
+#[derive(Debug, Clone, Copy)]
+pub enum Bucket {
+    Read,
+    Upload,
+    Download,
+}
+
+impl Bucket {
+    fn limit(&self) -> u32 {
+        match self {
+            Bucket::Read => 500,
+            Bucket::Upload => 80,
+            Bucket::Download => 150,
+        }
+    }
+}
+
+/// Rate-limit state returned in both allowed and denied cases, used to populate
+/// the X-RateLimit-* response headers.
+#[derive(Debug, Clone, Copy)]
+pub struct RateLimitStatus {
+    pub limit: u32,
+    pub remaining: u32,
+    pub reset_unix: u64,
+}
+
+// TODO: rename to V1RateLimiter
 #[derive(Clone)]
 pub struct CliRateLimiter {
-    guest_upload_counts: Arc<DashMap<String, RequestRecord>>,
-    apikey_upload_counts: Arc<DashMap<String, RequestRecord>>,
-    guest_download_counts: Arc<DashMap<String, RequestRecord>>,
-    apikey_download_counts: Arc<DashMap<String, RequestRecord>>,
+    read: Arc<DashMap<String, RequestRecord>>,
+    upload: Arc<DashMap<String, RequestRecord>>,
+    download: Arc<DashMap<String, RequestRecord>>,
     blocked_ips: Arc<DashMap<String, Instant>>,
 }
 
 impl CliRateLimiter {
     pub fn new() -> Self {
         let limiter = Self {
-            guest_upload_counts: Arc::new(DashMap::new()),
-            apikey_upload_counts: Arc::new(DashMap::new()),
-            guest_download_counts: Arc::new(DashMap::new()),
-            apikey_download_counts: Arc::new(DashMap::new()),
+            read: Arc::new(DashMap::new()),
+            upload: Arc::new(DashMap::new()),
+            download: Arc::new(DashMap::new()),
             blocked_ips: Arc::new(DashMap::new()),
         };
 
@@ -167,15 +193,25 @@ impl CliRateLimiter {
         limiter
     }
 
-    pub fn check_cli_rate_limit(
-        &self,
-        key: &str,
-        is_upload: bool,
-        is_authenticated: bool,
-    ) -> Result<(), String> {
+    /// Check the rate limit for the given key and bucket.
+    ///
+    /// Returns `Ok(status)` when the request is allowed, `Err(status)` when denied.
+    /// The `RateLimitStatus` contains the information needed for X-RateLimit-* headers
+    /// in both cases.
+    pub fn check(&self, key: &str, bucket: Bucket) -> Result<RateLimitStatus, RateLimitStatus> {
         if let Some(blocked_until) = self.blocked_ips.get(key) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                return Err("Too many requests. Please try again later".to_string());
+                // Return a denied status with zeroed remaining and a reset in 10 minutes.
+                let reset_unix = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    + 600;
+                return Err(RateLimitStatus {
+                    limit: bucket.limit(),
+                    remaining: 0,
+                    reset_unix,
+                });
             } else {
                 self.blocked_ips.remove(key);
             }
@@ -183,15 +219,18 @@ impl CliRateLimiter {
 
         let now = Instant::now();
         let window = Duration::from_secs(3600);
+        let max_requests = bucket.limit();
 
-        let (map, max_requests) = match (is_upload, is_authenticated) {
-            (true, false) => (&self.guest_upload_counts, 10u32),
-            (true, true) => (&self.apikey_upload_counts, 50u32),
-            (false, false) => (&self.guest_download_counts, 30u32),
-            (false, true) => (&self.apikey_download_counts, 100u32),
+        let map = match bucket {
+            Bucket::Read => &self.read,
+            Bucket::Upload => &self.upload,
+            Bucket::Download => &self.download,
         };
 
-        let mut should_allow = true;
+        let mut allowed = true;
+        let mut current_count = 0u32;
+        let mut window_start = now;
+
         map.entry(key.to_string())
             .and_modify(|record| {
                 if now.duration_since(record.window_start) > window {
@@ -200,23 +239,47 @@ impl CliRateLimiter {
                 } else {
                     record.count += 1;
                     if record.count > max_requests {
-                        should_allow = false;
+                        allowed = false;
                     }
                 }
+                current_count = record.count;
+                window_start = record.window_start;
             })
-            .or_insert_with(|| RequestRecord {
-                count: 1,
-                window_start: now,
+            .or_insert_with(|| {
+                current_count = 1;
+                window_start = now;
+                RequestRecord {
+                    count: 1,
+                    window_start: now,
+                }
             });
 
-        if !should_allow {
-            return Err(format!(
-                "Rate limit exceeded. Maximum {} requests per hour",
-                max_requests
-            ));
-        }
+        // Compute seconds remaining in the current window, then derive a wall-clock reset timestamp.
+        let elapsed_secs = now.duration_since(window_start).as_secs();
+        let seconds_remaining = 3600u64.saturating_sub(elapsed_secs);
+        let reset_unix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .saturating_add(seconds_remaining);
 
-        Ok(())
+        let remaining = if allowed {
+            max_requests.saturating_sub(current_count)
+        } else {
+            0
+        };
+
+        let status = RateLimitStatus {
+            limit: max_requests,
+            remaining,
+            reset_unix,
+        };
+
+        if allowed {
+            Ok(status)
+        } else {
+            Err(status)
+        }
     }
 
     async fn cli_cleanup_task(&self) {
@@ -226,12 +289,7 @@ impl CliRateLimiter {
             let now = Instant::now();
             let max_age = Duration::from_secs(7200);
 
-            for map in [
-                &self.guest_upload_counts,
-                &self.apikey_upload_counts,
-                &self.guest_download_counts,
-                &self.apikey_download_counts,
-            ] {
+            for map in [&self.read, &self.upload, &self.download] {
                 map.retain(|_, record| now.duration_since(record.window_start) < max_age);
             }
 
@@ -247,32 +305,78 @@ pub async fn cli_rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    let ip = extract_ip(&headers);
     let path = request.uri().path().to_string();
-    let is_upload = path.contains("/upload") || path.contains("/multipart");
+    let method = request.method().clone();
+
+    // §6.2 bucket classification
+    let bucket = if method == axum::http::Method::POST && path.starts_with("/v1/uploads") {
+        Bucket::Upload
+    } else if method == axum::http::Method::GET
+        && path.starts_with("/v1/shares/")
+        && path.ends_with("/download")
+    {
+        Bucket::Download
+    } else {
+        Bucket::Read
+    };
 
     let token_user = request
         .extensions()
         .get::<crate::middleware::personal_token_auth::PersonalTokenUser>();
 
-    let (key, is_authenticated) = if let Some(user) = token_user {
-        (user.user_id.clone(), true)
-    } else {
-        (ip, false)
+    // Key by authenticated user id; fall back to IP for defensive coverage
+    // (no anonymous v1 paths exist today, but this avoids a panic if one is added).
+    let key = match token_user {
+        Some(u) => u.user_id.clone(),
+        None => extract_ip(&headers),
     };
 
-    if let Err(error_message) = cli_rate_limiter.check_cli_rate_limit(&key, is_upload, is_authenticated) {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({
-                "error": "RATE_LIMIT_EXCEEDED",
-                "message": error_message
-            })),
-        )
-            .into_response();
+    match cli_rate_limiter.check(&key, bucket) {
+        Err(status) => {
+            let body = json!({
+                "error": {
+                    "code": "too_many_requests",
+                    "message": format!(
+                        "Rate limit exceeded. Maximum {} requests per hour",
+                        status.limit
+                    ),
+                    "request_id": null
+                }
+            });
+            let mut response = (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+            let h = response.headers_mut();
+            h.insert(
+                HeaderName::from_static("x-ratelimit-limit"),
+                HeaderValue::from(status.limit),
+            );
+            h.insert(
+                HeaderName::from_static("x-ratelimit-remaining"),
+                HeaderValue::from(status.remaining),
+            );
+            h.insert(
+                HeaderName::from_static("x-ratelimit-reset"),
+                HeaderValue::from(status.reset_unix),
+            );
+            response
+        }
+        Ok(status) => {
+            let mut response = next.run(request).await;
+            let h = response.headers_mut();
+            h.insert(
+                HeaderName::from_static("x-ratelimit-limit"),
+                HeaderValue::from(status.limit),
+            );
+            h.insert(
+                HeaderName::from_static("x-ratelimit-remaining"),
+                HeaderValue::from(status.remaining),
+            );
+            h.insert(
+                HeaderName::from_static("x-ratelimit-reset"),
+                HeaderValue::from(status.reset_unix),
+            );
+            response
+        }
     }
-
-    next.run(request).await
 }
 
 fn extract_ip(headers: &HeaderMap) -> String {

@@ -139,6 +139,7 @@ pub async fn complete_session(
         &token_hash,
         token_prefix,
         "CLI Token",
+        "read,upload,delete",
         None,
     )
     .await

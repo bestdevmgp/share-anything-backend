@@ -11,7 +11,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        personal_token::{PersonalTokenResponse, CreatePersonalTokenRequest, CreatePersonalTokenResponse},
+        personal_token::{CreatePersonalTokenRequest, CreatePersonalTokenResponse, PersonalTokenResponse, Scope},
         bad_request, internal_error, not_found, AppError,
     },
 };
@@ -36,11 +36,17 @@ pub async fn create_personal_token(
     Json(request): Json<CreatePersonalTokenRequest>,
 ) -> Result<Json<CreatePersonalTokenResponse>, AppError> {
     let user_id = &claims.sub;
-    let name = request.name.unwrap_or_else(|| "CLI Token".to_string());
+    let name = request.name.unwrap_or_else(|| "API Token".to_string());
 
     if name.len() > 255 {
-        return Err(bad_request("키 이름은 255자 이하여야 합니다"));
+        return Err(bad_request("토큰 이름은 255자 이하여야 합니다"));
     }
+
+    let scopes = request
+        .scopes
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| vec![Scope::Read, Scope::Upload, Scope::Delete]);
+    let scopes_csv = Scope::format_list(&scopes);
 
     let raw_token = generate_personal_token();
     let token_prefix = &raw_token[..8];
@@ -49,9 +55,9 @@ pub async fn create_personal_token(
     hasher.update(raw_token.as_bytes());
     let token_hash = hex::encode(hasher.finalize());
 
-    let expires_at = request.expires_in_days.map(|days| {
-        chrono::Utc::now() + chrono::Duration::days(days)
-    });
+    let expires_at = request
+        .expires_in_days
+        .map(|days| chrono::Utc::now() + chrono::Duration::days(days));
 
     let id = Uuid::new_v4().to_string();
 
@@ -62,16 +68,19 @@ pub async fn create_personal_token(
         &token_hash,
         token_prefix,
         &name,
+        &scopes_csv,
         expires_at,
     )
     .await
     .map_err(|e| internal_error(format!("Personal Token 생성 실패: {}", e)))?;
 
+    let token_scopes = personal_token.scopes_vec();
     Ok(Json(CreatePersonalTokenResponse {
         id: personal_token.id,
         personal_token: raw_token,
         token_prefix: personal_token.token_prefix,
         name: personal_token.name,
+        scopes: token_scopes,
         expires_at: personal_token.expires_at,
         created_at: personal_token.created_at,
     }))
@@ -87,13 +96,17 @@ pub async fn list_personal_tokens(
 
     let response: Vec<PersonalTokenResponse> = tokens
         .into_iter()
-        .map(|t| PersonalTokenResponse {
-            id: t.id,
-            token_prefix: t.token_prefix,
-            name: t.name,
-            last_used_at: t.last_used_at,
-            expires_at: t.expires_at,
-            created_at: t.created_at,
+        .map(|t| {
+            let scopes = t.scopes_vec();
+            PersonalTokenResponse {
+                id: t.id,
+                token_prefix: t.token_prefix,
+                name: t.name,
+                scopes,
+                last_used_at: t.last_used_at,
+                expires_at: t.expires_at,
+                created_at: t.created_at,
+            }
         })
         .collect();
 

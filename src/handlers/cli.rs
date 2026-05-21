@@ -221,8 +221,8 @@ pub async fn cli_upload(
         uploaded_files.push(file_share.file_name);
     }
 
-    let download_url = format!("{}/cli/download/{}", state.config.server.base_url, share_code);
-    let curl_command = format!("curl -OJ {}", download_url);
+    let download_url = format!("{}/v1/shares/{}/download", state.config.server.base_url, share_code);
+    let curl_command = format!("curl -OJ -H \"X-Personal-Token: $TOKEN\" {}", download_url);
 
     Ok(PrettyJson(CliUploadResponse {
         share_code,
@@ -400,12 +400,22 @@ pub async fn cli_multipart_init(
 
 pub async fn cli_presign_parts(
     State(state): State<CliState>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Json(request): Json<CliPresignPartsRequest>,
 ) -> Result<Json<CliPresignPartsResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
-        .ok_or_else(|| bad_request("Invalid upload session"))?;
+        .ok_or_else(|| not_found("Upload session not found."))?;
+
+    let token_user = token_user.map(|ext| ext.0);
+    let token_user_id = token_user.as_ref().map(|u| u.user_id.as_str());
+
+    if let Some(uid) = token_user_id {
+        if session.user_id.as_deref() != Some(uid) {
+            return Err(forbidden("Upload session does not belong to the authenticated user."));
+        }
+    }
 
     if session.completed {
         return Err(bad_request("Upload session already completed"));
@@ -440,12 +450,22 @@ pub async fn cli_presign_parts(
 
 pub async fn cli_complete_multipart(
     State(state): State<CliState>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Json(request): Json<CliCompleteMultipartRequest>,
 ) -> Result<PrettyJson<CliUploadResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
-        .ok_or_else(|| bad_request("Invalid upload session"))?;
+        .ok_or_else(|| not_found("Upload session not found."))?;
+
+    let token_user = token_user.map(|ext| ext.0);
+    let token_user_id = token_user.as_ref().map(|u| u.user_id.as_str());
+
+    if let Some(uid) = token_user_id {
+        if session.user_id.as_deref() != Some(uid) {
+            return Err(forbidden("Upload session does not belong to the authenticated user."));
+        }
+    }
 
     if session.share_code != request.share_code {
         return Err(bad_request("Share code mismatch"));
@@ -506,10 +526,10 @@ pub async fn cli_complete_multipart(
         .map_err(|_| internal_error("Failed to complete upload session"))?;
 
     let download_url = format!(
-        "{}/cli/download/{}",
+        "{}/v1/shares/{}/download",
         state.config.server.base_url, session.share_code
     );
-    let curl_command = format!("curl -OJ {}", download_url);
+    let curl_command = format!("curl -OJ -H \"X-Personal-Token: $TOKEN\" {}", download_url);
 
     Ok(PrettyJson(CliUploadResponse {
         share_code: session.share_code,
