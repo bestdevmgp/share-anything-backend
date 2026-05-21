@@ -1338,6 +1338,108 @@ impl EmailService {
         .unwrap_or_default()
     }
 
+    pub fn send_application_approved(
+        self: &Arc<Self>,
+        to_email: &str,
+        applicant_name: &str,
+        service_name: &str,
+    ) {
+        if !self.is_enabled() {
+            return;
+        }
+        let this = Arc::clone(self);
+        let to_email = to_email.to_string();
+        let applicant_name = applicant_name.to_string();
+        let service_name = service_name.to_string();
+
+        tokio::spawn(async move {
+            if let Err(e) = this
+                .do_send_application_approved(&to_email, &applicant_name, &service_name)
+                .await
+            {
+                tracing::warn!("Failed to send API key approval email: {}", e);
+            }
+        });
+    }
+
+    async fn do_send_application_approved(
+        &self,
+        to_email: &str,
+        applicant_name: &str,
+        service_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
+        let to: Mailbox = to_email.parse()?;
+
+        let subject = "[ShareAnything] API Key Application Approved";
+        let body = format!(
+            "안녕하세요, {}님!\n\n\"{}\" 서비스에 대한 API Key 신청이 승인되었습니다.\n\nShareAnything 설정 페이지에서 API Key를 확인하세요:\n{}/settings\n\n감사합니다,\nShareAnything 팀",
+            applicant_name, service_name, self.frontend_url
+        );
+
+        let message = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .header(ContentType::TEXT_PLAIN)
+            .body(body)?;
+
+        self.transport.as_ref().unwrap().send(message).await?;
+        Ok(())
+    }
+
+    pub fn send_application_rejected(
+        self: &Arc<Self>,
+        to_email: &str,
+        applicant_name: &str,
+        service_name: &str,
+        reason: &str,
+    ) {
+        if !self.is_enabled() {
+            return;
+        }
+        let this = Arc::clone(self);
+        let to_email = to_email.to_string();
+        let applicant_name = applicant_name.to_string();
+        let service_name = service_name.to_string();
+        let reason = reason.to_string();
+
+        tokio::spawn(async move {
+            if let Err(e) = this
+                .do_send_application_rejected(&to_email, &applicant_name, &service_name, &reason)
+                .await
+            {
+                tracing::warn!("Failed to send API key rejection email: {}", e);
+            }
+        });
+    }
+
+    async fn do_send_application_rejected(
+        &self,
+        to_email: &str,
+        applicant_name: &str,
+        service_name: &str,
+        reason: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
+        let to: Mailbox = to_email.parse()?;
+
+        let subject = "[ShareAnything] API Key Application Rejected";
+        let body = format!(
+            "안녕하세요, {}님!\n\n\"{}\" 서비스에 대한 API Key 신청이 반려되었습니다.\n\n반려 사유:\n{}\n\n문의 사항이 있으시면 support@share.mingyu.dev로 연락해 주세요.\n\n감사합니다,\nShareAnything 팀",
+            applicant_name, service_name, reason
+        );
+
+        let message = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .header(ContentType::TEXT_PLAIN)
+            .body(body)?;
+
+        self.transport.as_ref().unwrap().send(message).await?;
+        Ok(())
+    }
 }
 
 fn file_type_label(file_type: &str) -> (&'static str, &'static str, &'static str) {

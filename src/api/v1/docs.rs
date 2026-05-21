@@ -85,6 +85,8 @@ const SCALAR_HTML: &str = r#"<!DOCTYPE html>
     <title>ShareAnything API Reference</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="https://share.mingyu.dev/favicon.svg" />
+    <link rel="apple-touch-icon" href="https://share.mingyu.dev/apple-touch-icon.png" />
   </head>
   <body>
     <script

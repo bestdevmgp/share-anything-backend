@@ -46,6 +46,8 @@ pub struct PersonalToken {
     pub token_hash: String,
     pub token_prefix: String,
     pub name: String,
+    pub kind: String,
+    pub application_id: Option<i64>,
     pub scopes: String,
     pub last_used_at: Option<DateTime<Utc>>,
     pub last_platform: Option<String>,
@@ -60,14 +62,20 @@ impl PersonalToken {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PersonalTokenResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
+    #[schema(example = "sk_a1b2c")]
     pub token_prefix: String,
+    #[schema(example = "My Token")]
     pub name: String,
     pub scopes: Vec<Scope>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
     pub last_used_at: Option<DateTime<Utc>>,
+    #[schema(example = "2027-05-21T14:30:00Z")]
     pub expires_at: Option<DateTime<Utc>>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
     pub created_at: DateTime<Utc>,
 }
 

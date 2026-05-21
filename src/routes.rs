@@ -268,6 +268,36 @@ pub fn create_router(
         ))
         .with_state(personal_token_state);
 
+    let api_key_state = handlers::api_key::ApiKeyState {
+        db: db.clone(),
+        discord: discord.clone(),
+        email: email.clone(),
+        frontend_url: config.server.frontend_url.clone(),
+    };
+
+    let api_key_routes = Router::new()
+        .route("/user/api-keys/applications", post(handlers::api_key::apply).get(handlers::api_key::list_my_applications))
+        .route("/user/api-keys/applications/:id", get(handlers::api_key::get_my_application))
+        .route("/user/api-keys", get(handlers::api_key::list_my_api_keys))
+        .route("/user/api-keys/:id", delete(handlers::api_key::revoke_api_key))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            require_auth,
+        ))
+        .with_state(api_key_state);
+
+    let admin_state = handlers::admin::AdminState {
+        db: db.clone(),
+        email: email.clone(),
+        discord: discord.clone(),
+    };
+
+    let admin_routes = Router::new()
+        .route("/admin/api-keys/applications", get(handlers::admin::admin_list_applications))
+        .route("/admin/api-keys/applications/:id/approve", post(handlers::admin::admin_approve))
+        .route("/admin/api-keys/applications/:id/reject", post(handlers::admin::admin_reject))
+        .with_state(admin_state);
+
     let cli_auth_state = CliAuthState {
         db: db.clone(),
     };
@@ -349,6 +379,8 @@ pub fn create_router(
         .merge(device_confirm_routes)
         .merge(quick_access_routes)
         .merge(personal_token_routes)
+        .merge(api_key_routes)
+        .merge(admin_routes)
         .merge(cli_device_auth_routes)
         .merge(cli_device_auth_complete_routes)
         .merge(cli_special_routes)
@@ -357,6 +389,9 @@ pub fn create_router(
         .merge(p2p_routes)
         .merge(turn_routes)
         .merge(og_routes)
+        .layer(axum::middleware::from_fn(
+            crate::middleware::swagger_basic_auth::swagger_basic_auth,
+        ))
         .layer(axum::middleware::from_fn(
             crate::middleware::discord_error::discord_error_middleware,
         ))

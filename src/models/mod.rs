@@ -5,6 +5,7 @@ pub mod email_auth;
 pub mod error;
 pub mod signaling;
 pub mod personal_token;
+pub mod api_key_application;
 pub mod cli_auth;
 pub mod p2p;
 pub mod download;
@@ -13,6 +14,8 @@ pub mod turn;
 pub mod cli;
 pub mod auth;
 pub mod session;
+
+pub use api_key_application::ApiKeyApplication;
 
 pub use user::*;
 pub use file_share::*;

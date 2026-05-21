@@ -49,6 +49,14 @@ impl Modify for SecurityAddon {
         crate::handlers::user::get_download_logs,
         crate::handlers::user::delete_file_share,
         crate::handlers::user::delete_all_file_shares,
+        crate::handlers::api_key::apply,
+        crate::handlers::api_key::list_my_applications,
+        crate::handlers::api_key::get_my_application,
+        crate::handlers::api_key::list_my_api_keys,
+        crate::handlers::api_key::revoke_api_key,
+        crate::handlers::admin::admin_list_applications,
+        crate::handlers::admin::admin_approve,
+        crate::handlers::admin::admin_reject,
     ),
     components(
         schemas(
@@ -69,6 +77,14 @@ impl Modify for SecurityAddon {
             FileInfoResponse,
             VerifyPasswordRequest,
             UploadHistoryResponse,
+            crate::models::api_key_application::ApplicationStatus,
+            crate::models::api_key_application::ApiKeyApplication,
+            crate::models::api_key_application::CreateApplicationRequest,
+            crate::models::api_key_application::ApplicationResponse,
+            crate::models::api_key_application::RejectRequest,
+            crate::models::api_key_application::ApiKeyResponse,
+            crate::models::personal_token::PersonalTokenResponse,
+            crate::models::personal_token::Scope,
         )
     ),
     modifiers(&SecurityAddon),
@@ -77,6 +93,8 @@ impl Modify for SecurityAddon {
         (name = "upload", description = "File upload endpoints"),
         (name = "download", description = "File download endpoints"),
         (name = "user", description = "User-specific endpoints (requires authentication)"),
+        (name = "api-keys", description = "User-facing API key application and key management"),
+        (name = "admin", description = "Admin actions (requires X-Admin-Password header)"),
     ),
     info(
         title = "Share Anything API",

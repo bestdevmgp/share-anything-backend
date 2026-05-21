@@ -1,0 +1,105 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use utoipa::ToSchema;
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, ToSchema)]
+#[sqlx(type_name = "VARCHAR", rename_all = "lowercase")]
+#[schema(example = "pending")]
+pub enum ApplicationStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, ToSchema)]
+pub struct ApiKeyApplication {
+    #[schema(example = 42)]
+    pub id: i64,
+    #[schema(example = "user_abc123")]
+    pub user_id: String,
+    #[schema(example = "MyDrive Cloud Backup")]
+    pub service_name: String,
+    #[schema(example = "https://mydrive.example.com")]
+    pub service_url: String,
+    #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
+    pub purpose: String,
+    pub status: ApplicationStatus,
+    #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
+    pub reject_reason: Option<String>,
+    #[schema(example = "tok_abc123")]
+    pub api_key_id: Option<String>,
+    #[schema(example = "203.0.113.5")]
+    pub applicant_ip: Option<String>,
+    #[schema(example = "web")]
+    pub applicant_platform: Option<String>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
+    pub created_at: DateTime<Utc>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
+    pub reviewed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateApplicationRequest {
+    #[schema(example = "MyDrive Cloud Backup")]
+    pub service_name: String,
+    #[schema(example = "https://mydrive.example.com")]
+    pub service_url: String,
+    #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
+    pub purpose: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApplicationResponse {
+    #[schema(example = 42)]
+    pub id: i64,
+    #[schema(example = "MyDrive Cloud Backup")]
+    pub service_name: String,
+    #[schema(example = "https://mydrive.example.com")]
+    pub service_url: String,
+    #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
+    pub purpose: String,
+    pub status: ApplicationStatus,
+    #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
+    pub reject_reason: Option<String>,
+    #[schema(example = "tok_abc123")]
+    pub api_key_id: Option<String>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
+    pub created_at: DateTime<Utc>,
+    #[schema(example = "2026-05-21T14:30:00Z")]
+    pub reviewed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RejectRequest {
+    #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
+    pub reject_reason: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApiKeyResponse {
+    #[schema(example = "sk_5UqEU7qHLkMi6aLAAmcrpNo4wS7p8pi3SYnv3dQa")]
+    pub api_key: String,
+    #[schema(example = "sk_a1b2c3")]
+    pub key_prefix: String,
+    #[schema(example = "API Key for MyDrive Cloud Backup")]
+    pub name: String,
+    #[schema(example = "2026-05-21T14:30:00Z")]
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<ApiKeyApplication> for ApplicationResponse {
+    fn from(app: ApiKeyApplication) -> Self {
+        Self {
+            id: app.id,
+            service_name: app.service_name,
+            service_url: app.service_url,
+            purpose: app.purpose,
+            status: app.status,
+            reject_reason: app.reject_reason,
+            api_key_id: app.api_key_id,
+            created_at: app.created_at,
+            reviewed_at: app.reviewed_at,
+        }
+    }
+}

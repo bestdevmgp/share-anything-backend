@@ -68,6 +68,8 @@ pub async fn create_personal_token(
         &token_hash,
         token_prefix,
         &name,
+        "pat",
+        None,
         &scopes_csv,
         expires_at,
     )

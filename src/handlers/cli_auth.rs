@@ -139,6 +139,8 @@ pub async fn complete_session(
         &token_hash,
         token_prefix,
         "CLI Token",
+        "pat",
+        None,
         "read,upload,delete",
         None,
     )

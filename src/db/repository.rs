@@ -958,6 +958,8 @@ pub async fn create_personal_token(
     token_hash: &str,
     token_prefix: &str,
     name: &str,
+    kind: &str,
+    application_id: Option<i64>,
     scopes: &str,
     expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<PersonalToken, sqlx::Error> {
@@ -965,8 +967,8 @@ pub async fn create_personal_token(
 
     sqlx::query(
         r#"
-        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, scopes, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, kind, application_id, scopes, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(id)
@@ -974,6 +976,8 @@ pub async fn create_personal_token(
     .bind(token_hash)
     .bind(token_prefix)
     .bind(name)
+    .bind(kind)
+    .bind(application_id)
     .bind(scopes)
     .bind(expires_at)
     .bind(now)
@@ -981,7 +985,7 @@ pub async fn create_personal_token(
     .await?;
 
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE id = ?"#,
     )
@@ -995,7 +999,7 @@ pub async fn find_personal_token_by_hash(
     token_hash: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE token_hash = ? AND revoked_at IS NULL"#,
     )
@@ -1009,7 +1013,7 @@ pub async fn find_personal_token_by_id(
     id: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE id = ?"#,
     )
@@ -1023,7 +1027,7 @@ pub async fn find_personal_tokens_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens
            WHERE user_id = ? AND revoked_at IS NULL
@@ -1207,7 +1211,7 @@ pub async fn find_active_cli_sessions_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens
            WHERE user_id = ?
@@ -1366,4 +1370,166 @@ pub async fn delete_trusted_device_by_device_id(
             .execute(pool)
             .await?;
     Ok(result.rows_affected())
+}
+
+pub async fn create_application(
+    pool: &MySqlPool,
+    user_id: &str,
+    service_name: &str,
+    service_url: &str,
+    purpose: &str,
+    ip: Option<&str>,
+    platform: Option<&str>,
+) -> Result<crate::models::ApiKeyApplication, sqlx::Error> {
+    let result = sqlx::query(
+        r#"INSERT INTO api_key_applications
+           (user_id, service_name, service_url, purpose, status, applicant_ip, applicant_platform)
+           VALUES (?, ?, ?, ?, 'pending', ?, ?)"#,
+    )
+    .bind(user_id)
+    .bind(service_name)
+    .bind(service_url)
+    .bind(purpose)
+    .bind(ip)
+    .bind(platform)
+    .execute(pool)
+    .await?;
+
+    let id = result.last_insert_id() as i64;
+    find_application_by_id(pool, id)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)
+}
+
+pub async fn find_application_by_id(
+    pool: &MySqlPool,
+    id: i64,
+) -> Result<Option<crate::models::ApiKeyApplication>, sqlx::Error> {
+    sqlx::query_as::<_, crate::models::ApiKeyApplication>(
+        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+                  created_at, reviewed_at
+           FROM api_key_applications WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn find_applications_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
+    sqlx::query_as::<_, crate::models::ApiKeyApplication>(
+        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+                  created_at, reviewed_at
+           FROM api_key_applications WHERE user_id = ?
+           ORDER BY created_at DESC"#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn find_pending_applications(
+    pool: &MySqlPool,
+) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
+    sqlx::query_as::<_, crate::models::ApiKeyApplication>(
+        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+                  created_at, reviewed_at
+           FROM api_key_applications WHERE status = 'pending'
+           ORDER BY created_at ASC"#,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn approve_application(
+    pool: &MySqlPool,
+    id: i64,
+    api_key_token_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE api_key_applications
+           SET status = 'approved', api_key_id = ?, reviewed_at = UTC_TIMESTAMP()
+           WHERE id = ?"#,
+    )
+    .bind(api_key_token_id)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn reject_application(
+    pool: &MySqlPool,
+    id: i64,
+    reason: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE api_key_applications
+           SET status = 'rejected', reject_reason = ?, reviewed_at = UTC_TIMESTAMP()
+           WHERE id = ?"#,
+    )
+    .bind(reason)
+    .bind(id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Returns true if the user already has a pending application or submitted one in the last 24h.
+pub async fn check_user_recent_application(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let count: (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM api_key_applications
+           WHERE user_id = ?
+             AND (status = 'pending'
+                  OR created_at > UTC_TIMESTAMP() - INTERVAL 1 DAY)"#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(count.0 > 0)
+}
+
+pub async fn list_applications_by_status(
+    pool: &MySqlPool,
+    status: Option<&str>,
+) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
+    match status {
+        Some(s) => {
+            sqlx::query_as::<_, crate::models::ApiKeyApplication>(
+                r#"SELECT id, user_id, service_name, service_url, purpose, status,
+                          reject_reason, api_key_id, applicant_ip, applicant_platform,
+                          created_at, reviewed_at
+                   FROM api_key_applications WHERE status = ?
+                   ORDER BY created_at DESC"#,
+            )
+            .bind(s)
+            .fetch_all(pool)
+            .await
+        }
+        None => find_pending_applications(pool).await,
+    }
+}
+
+pub async fn find_api_keys_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<PersonalToken>, sqlx::Error> {
+    sqlx::query_as::<_, PersonalToken>(
+        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM personal_tokens
+           WHERE user_id = ? AND kind = 'api_key' AND revoked_at IS NULL
+           ORDER BY created_at DESC"#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
 }

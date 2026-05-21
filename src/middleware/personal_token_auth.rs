@@ -49,8 +49,8 @@ pub async fn cli_auth(
             .to_str()
             .map_err(|_| unauthorized("Invalid auth header."))?;
 
-        if !token.starts_with("sa_") {
-            return Err(unauthorized("Invalid token format. Expected 'sa_' prefix."));
+        if !token.starts_with("sa_") && !token.starts_with("sk_") {
+            return Err(unauthorized("Invalid token format. Expected 'sa_' or 'sk_' prefix."));
         }
 
         let mut hasher = Sha256::new();

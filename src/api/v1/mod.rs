@@ -61,7 +61,7 @@ pub fn router(
         .route("/v1/me/uploads/:code/downloads", get(handlers::history::list_share_downloads))
         .route("/v1/me/downloads", get(handlers::history::list_my_downloads))
         .route("/v1/openapi.json", get(docs::openapi_json))
-        .route("/docs", get(docs::scalar_html))
+        .route("/reference", get(docs::scalar_html))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(cli_rate_limiter, cli_rate_limit_middleware))
         .layer(middleware::from_fn_with_state(cli_auth_state, cli_auth))
