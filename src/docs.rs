@@ -52,6 +52,7 @@ impl Modify for SecurityAddon {
         crate::handlers::api_key::apply,
         crate::handlers::api_key::list_my_applications,
         crate::handlers::api_key::get_my_application,
+        crate::handlers::api_key::cancel_application,
         crate::handlers::api_key::list_my_api_keys,
         crate::handlers::api_key::revoke_api_key,
         crate::handlers::admin::admin_list_applications,

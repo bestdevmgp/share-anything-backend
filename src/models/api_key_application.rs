@@ -12,6 +12,7 @@ pub enum ApplicationStatus {
     Pending,
     Approved,
     Rejected,
+    Cancelled,
 }
 
 impl ApplicationStatus {
@@ -19,6 +20,7 @@ impl ApplicationStatus {
         match s {
             "approved" => Self::Approved,
             "rejected" => Self::Rejected,
+            "cancelled" => Self::Cancelled,
             _ => Self::Pending,
         }
     }
@@ -63,6 +65,9 @@ pub struct CreateApplicationRequest {
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
     pub scopes: Option<Vec<Scope>>,
+    /// Client timezone offset in minutes from UTC. Positive east of UTC (e.g. KST = 540).
+    #[schema(example = 540)]
+    pub tz_offset_minutes: i32,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

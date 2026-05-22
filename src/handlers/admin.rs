@@ -130,7 +130,6 @@ pub async fn admin_approve(
         return Err(AppError::Conflict("이미 처리된 신청입니다".to_string()));
     }
 
-    // Generate API Key
     let raw_key = generate_api_key();
     let key_prefix = raw_key[..8].to_string();
 
@@ -163,7 +162,6 @@ pub async fn admin_approve(
         .await
         .map_err(|e| internal_error(format!("Failed to approve application: {}", e)))?;
 
-    // Send approval email
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &app.user_id).await {
         state
             .email
@@ -223,7 +221,6 @@ pub async fn admin_reject(
         .await
         .map_err(|e| internal_error(format!("Failed to reject application: {}", e)))?;
 
-    // Send rejection email
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &app.user_id).await {
         state.email.send_application_rejected(
             &user.email,

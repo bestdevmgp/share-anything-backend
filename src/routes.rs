@@ -278,7 +278,7 @@ pub fn create_router(
 
     let api_key_routes = Router::new()
         .route("/user/api-keys/applications", post(handlers::api_key::apply).get(handlers::api_key::list_my_applications))
-        .route("/user/api-keys/applications/:id", get(handlers::api_key::get_my_application))
+        .route("/user/api-keys/applications/:id", get(handlers::api_key::get_my_application).delete(handlers::api_key::cancel_application))
         .route("/user/api-keys", get(handlers::api_key::list_my_api_keys))
         .route("/user/api-keys/:id", delete(handlers::api_key::revoke_api_key))
         .layer(middleware::from_fn_with_state(

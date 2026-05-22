@@ -38,7 +38,8 @@ fn extract_ip(headers: &HeaderMap) -> Option<String> {
 /// Submit an API key application
 ///
 /// Creates a new application for an API key tied to a third-party service.
-/// Rate-limited to one application per user per 24 hours. Requires JWT authentication.
+/// Blocked if there is already a pending application, or if one was already submitted today
+/// (in the user's local calendar day as determined by `tz_offset_minutes`). Requires JWT authentication.
 #[utoipa::path(
     post,
     path = "/user/api-keys/applications",
@@ -48,7 +49,8 @@ fn extract_ip(headers: &HeaderMap) -> Option<String> {
         (status = 200, description = "Application submitted successfully", body = ApplicationResponse),
         (status = 400, description = "Validation error (invalid service name, URL, or purpose too short)"),
         (status = 401, description = "Unauthorized - authentication required"),
-        (status = 429, description = "Rate limit exceeded - one application per 24 hours"),
+        (status = 409, description = "Conflict - already has a pending application under review"),
+        (status = 429, description = "Rate limit exceeded - one application per calendar day"),
     ),
     security(
         ("bearer_auth" = [])
@@ -60,12 +62,10 @@ pub async fn apply(
     headers: HeaderMap,
     Json(req): Json<CreateApplicationRequest>,
 ) -> Result<Json<ApplicationResponse>, AppError> {
-    // Validate service_name
     if req.service_name.is_empty() || req.service_name.len() > 255 {
         return Err(bad_request("서비스 이름은 1~255자 이내여야 합니다"));
     }
 
-    // Validate service_url
     if !req.service_url.starts_with("http://") && !req.service_url.starts_with("https://") {
         return Err(bad_request("서비스 URL은 http:// 또는 https://로 시작해야 합니다"));
     }
@@ -73,7 +73,6 @@ pub async fn apply(
         return Err(bad_request("서비스 URL은 512자 이내여야 합니다"));
     }
 
-    // Validate purpose
     if req.purpose.len() < 30 {
         return Err(bad_request("사용 목적은 30자 이상 입력해야 합니다"));
     }
@@ -83,25 +82,36 @@ pub async fn apply(
         .unwrap_or_else(|| vec![Scope::Read, Scope::Upload, Scope::Delete]);
     let scopes_csv = Scope::format_list(&scopes);
 
-    // Rate limit: 1 application per user per 24h
-    let has_recent = repository::check_user_recent_application(&state.db, &claims.sub)
+    let has_pending = repository::check_user_pending_application(&state.db, &claims.sub)
         .await
-        .map_err(|e| internal_error(format!("Rate limit check failed: {}", e)))?;
+        .map_err(|e| internal_error(format!("Pending check failed: {}", e)))?;
 
-    if has_recent {
+    if has_pending {
+        return Err(AppError::Conflict(
+            "이미 검토 중인 신청이 있습니다".to_string(),
+        ));
+    }
+
+    let today_count = repository::count_user_applications_today(
+        &state.db,
+        &claims.sub,
+        req.tz_offset_minutes,
+    )
+    .await
+    .map_err(|e| internal_error(format!("Daily limit check failed: {}", e)))?;
+
+    if today_count > 0 {
         return Err(AppError::TooManyRequests(
             "하루에 한 번만 신청할 수 있습니다".to_string(),
         ));
     }
 
-    // Extract metadata
     let ip = extract_ip(&headers);
     let platform = headers
         .get("User-Agent")
         .and_then(|v| v.to_str().ok())
         .map(crate::utils::parse_device_platform);
 
-    // Create application
     let application = repository::create_application(
         &state.db,
         &claims.sub,
@@ -115,7 +125,6 @@ pub async fn apply(
     .await
     .map_err(|e| internal_error(format!("Application creation failed: {}", e)))?;
 
-    // Notify Discord
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &claims.sub).await {
         state
             .discord
@@ -258,5 +267,33 @@ pub async fn revoke_api_key(
         return Err(not_found("API Key를 찾을 수 없습니다"));
     }
 
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Cancel a pending API key application
+///
+/// Cancels the specified pending application belonging to the authenticated user.
+/// Only applications in `pending` status can be cancelled. Returns 204 on success.
+#[utoipa::path(
+    delete,
+    path = "/user/api-keys/applications/{id}",
+    tag = "api-keys",
+    params(("id" = i64, Path, description = "Application ID to cancel")),
+    responses(
+        (status = 204, description = "Application cancelled successfully"),
+        (status = 401, description = "Unauthorized - authentication required"),
+        (status = 404, description = "Application not found or does not belong to you"),
+        (status = 409, description = "Application is not in pending status and cannot be cancelled"),
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn cancel_application(
+    State(state): State<ApiKeyState>,
+    claims: axum::extract::Extension<Claims>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, AppError> {
+    repository::cancel_application_by_user(&state.db, id, &claims.sub).await?;
     Ok(StatusCode::NO_CONTENT)
 }

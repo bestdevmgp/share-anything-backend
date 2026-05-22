@@ -167,7 +167,6 @@ pub struct RateLimitStatus {
     pub reset_unix: u64,
 }
 
-// TODO: rename to V1RateLimiter
 #[derive(Clone)]
 pub struct CliRateLimiter {
     read: Arc<DashMap<String, RequestRecord>>,
@@ -201,7 +200,6 @@ impl CliRateLimiter {
     pub fn check(&self, key: &str, bucket: Bucket) -> Result<RateLimitStatus, RateLimitStatus> {
         if let Some(blocked_until) = self.blocked_ips.get(key) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                // Return a denied status with zeroed remaining and a reset in 10 minutes.
                 let reset_unix = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
@@ -254,7 +252,6 @@ impl CliRateLimiter {
                 }
             });
 
-        // Compute seconds remaining in the current window, then derive a wall-clock reset timestamp.
         let elapsed_secs = now.duration_since(window_start).as_secs();
         let seconds_remaining = 3600u64.saturating_sub(elapsed_secs);
         let reset_unix = SystemTime::now()
@@ -308,7 +305,6 @@ pub async fn cli_rate_limit_middleware(
     let path = request.uri().path().to_string();
     let method = request.method().clone();
 
-    // §6.2 bucket classification
     let bucket = if method == axum::http::Method::POST && path.starts_with("/v1/uploads") {
         Bucket::Upload
     } else if method == axum::http::Method::GET
@@ -324,8 +320,6 @@ pub async fn cli_rate_limit_middleware(
         .extensions()
         .get::<crate::middleware::personal_token_auth::PersonalTokenUser>();
 
-    // Key by authenticated user id; fall back to IP for defensive coverage
-    // (no anonymous v1 paths exist today, but this avoids a panic if one is added).
     let key = match token_user {
         Some(u) => u.user_id.clone(),
         None => extract_ip(&headers),

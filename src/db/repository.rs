@@ -1477,21 +1477,65 @@ pub async fn reject_application(
     Ok(())
 }
 
-/// Returns true if the user already has a pending application or submitted one in the last 24h.
-pub async fn check_user_recent_application(
+/// Returns true if the user already has a pending application awaiting review.
+pub async fn check_user_pending_application(
     pool: &MySqlPool,
     user_id: &str,
 ) -> Result<bool, sqlx::Error> {
     let count: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM api_key_applications
-           WHERE user_id = ?
-             AND (status = 'pending'
-                  OR created_at > UTC_TIMESTAMP() - INTERVAL 1 DAY)"#,
+           WHERE user_id = ? AND status = 'pending'"#,
     )
     .bind(user_id)
     .fetch_one(pool)
     .await?;
     Ok(count.0 > 0)
+}
+
+/// Returns true if the user has already submitted an application today
+/// in their local calendar day (determined by `tz_offset_minutes` from UTC).
+pub async fn count_user_applications_today(
+    pool: &MySqlPool,
+    user_id: &str,
+    tz_offset_minutes: i32,
+) -> Result<i64, sqlx::Error> {
+    let count: (i64,) = sqlx::query_as(
+        r#"SELECT COUNT(*) FROM api_key_applications
+           WHERE user_id = ?
+             AND status != 'cancelled'
+             AND DATE(created_at + INTERVAL ? MINUTE) = DATE(UTC_TIMESTAMP() + INTERVAL ? MINUTE)"#,
+    )
+    .bind(user_id)
+    .bind(tz_offset_minutes)
+    .bind(tz_offset_minutes)
+    .fetch_one(pool)
+    .await?;
+    Ok(count.0)
+}
+
+/// Cancels a pending application owned by the given user.
+/// Returns Ok(()) on success, Err(AppError::NotFound) if the application does not exist,
+/// does not belong to the user, or is not in pending status.
+pub async fn cancel_application_by_user(
+    pool: &MySqlPool,
+    application_id: i64,
+    user_id: &str,
+) -> Result<(), crate::models::AppError> {
+    let result = sqlx::query(
+        r#"UPDATE api_key_applications
+           SET status = 'cancelled'
+           WHERE id = ? AND user_id = ? AND status = 'pending'"#,
+    )
+    .bind(application_id)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|e| crate::models::internal_error(format!("Cancel application failed: {}", e)))?;
+
+    if result.rows_affected() == 0 {
+        return Err(crate::models::not_found("신청을 찾을 수 없습니다"));
+    }
+    Ok(())
 }
 
 pub async fn list_applications_by_status(
@@ -1514,8 +1558,6 @@ pub async fn list_applications_by_status(
         None => find_pending_applications(pool).await,
     }
 }
-
-// ── api_keys table ──────────────────────────────────────────────────────────
 
 pub async fn create_api_key(
     pool: &MySqlPool,
