@@ -92,7 +92,7 @@ const SCALAR_HTML: &str = r#"<!DOCTYPE html>
     <script
       id="api-reference"
       data-url="/v1/openapi.json"
-      data-configuration='{"hiddenClients":[],"layout":"modern","defaultHttpClient":{"targetKey":"shell","clientKey":"curl"},"authentication":{"preferredSecurityScheme":"api_key","securitySchemes":{"api_key":{"name":"X-API-Key","in":"header","value":"YOUR_API_KEY"}}}}'
+      data-configuration='{"hiddenClients":[],"layout":"modern","defaultHttpClient":{"targetKey":"shell","clientKey":"curl"},"authentication":{"preferredSecurityScheme":"api_key"}}'
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
