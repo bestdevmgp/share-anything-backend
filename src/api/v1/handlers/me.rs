@@ -67,7 +67,7 @@ pub async fn get_me(
     let db_user = repository::find_user_by_id(&state.db, &user.user_id)
         .await
         .map_err(|_| PublicApiError::Internal)?
-        .ok_or_else(|| PublicApiError::Unauthorized("Token is associated with a deleted user.".into()))?;
+        .ok_or_else(|| PublicApiError::Unauthorized("Token is associated with a deleted user".into()))?;
 
     Ok(Json(MeResponse {
         user_id: db_user.id,

@@ -36,7 +36,7 @@ pub struct AdminListQuery {
 fn verify_admin_password(headers: &HeaderMap) -> Result<(), AppError> {
     let expected = std::env::var("ADMIN_PASSWORD").unwrap_or_default();
     if expected.is_empty() {
-        return Err(unauthorized("Admin password not configured."));
+        return Err(unauthorized("Admin password not configured"));
     }
 
     let provided = headers
@@ -52,7 +52,7 @@ fn verify_admin_password(headers: &HeaderMap) -> Result<(), AppError> {
             .fold(0u8, |acc, (a, b)| acc | (a ^ b))
             != 0
     {
-        return Err(unauthorized("Invalid admin password."));
+        return Err(unauthorized("Invalid admin password"));
     }
 
     Ok(())

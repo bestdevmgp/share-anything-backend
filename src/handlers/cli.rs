@@ -406,14 +406,14 @@ pub async fn cli_presign_parts(
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
-        .ok_or_else(|| not_found("Upload session not found."))?;
+        .ok_or_else(|| not_found("Upload session not found"))?;
 
     let token_user = token_user.map(|ext| ext.0);
     let token_user_id = token_user.as_ref().map(|u| u.user_id.as_str());
 
     if let Some(uid) = token_user_id {
         if session.user_id.as_deref() != Some(uid) {
-            return Err(forbidden("Upload session does not belong to the authenticated user."));
+            return Err(forbidden("Upload session does not belong to the authenticated user"));
         }
     }
 
@@ -456,14 +456,14 @@ pub async fn cli_complete_multipart(
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to get upload session"))?
-        .ok_or_else(|| not_found("Upload session not found."))?;
+        .ok_or_else(|| not_found("Upload session not found"))?;
 
     let token_user = token_user.map(|ext| ext.0);
     let token_user_id = token_user.as_ref().map(|u| u.user_id.as_str());
 
     if let Some(uid) = token_user_id {
         if session.user_id.as_deref() != Some(uid) {
-            return Err(forbidden("Upload session does not belong to the authenticated user."));
+            return Err(forbidden("Upload session does not belong to the authenticated user"));
         }
     }
 
@@ -751,12 +751,12 @@ pub async fn cli_share_logs(
         .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("공유 코드를 찾을 수 없습니다"));
+        return Err(not_found("Share code not found"));
     }
 
     for fs in &file_shares {
         if fs.user_id.as_ref() != Some(&token_user.user_id) {
-            return Err(forbidden("이 공유에 대한 권한이 없습니다"));
+            return Err(forbidden("You do not have permission to access this share"));
         }
     }
 
@@ -800,12 +800,12 @@ pub async fn cli_delete_upload(
         .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("공유 코드를 찾을 수 없습니다"));
+        return Err(not_found("Share code not found"));
     }
 
     for fs in &file_shares {
         if fs.user_id.as_ref() != Some(&token_user.user_id) {
-            return Err(forbidden("이 공유에 대한 권한이 없습니다"));
+            return Err(forbidden("You do not have permission to access this share"));
         }
     }
 
@@ -815,11 +815,11 @@ pub async fn cli_delete_upload(
                 .storage
                 .delete_file(&fs.storage_key)
                 .await
-                .map_err(|e| internal_error(format!("스토리지 삭제 실패: {}", e)))?;
+                .map_err(|e| internal_error(format!("Failed to delete from storage: {}", e)))?;
         }
         repository::delete_file_share(&state.db, &fs.id)
             .await
-            .map_err(|e| internal_error(format!("DB 삭제 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Failed to delete from DB: {}", e)))?;
     }
 
     Ok(StatusCode::NO_CONTENT)

@@ -99,12 +99,12 @@ impl IntoResponse for PublicApiError {
 impl From<AppError> for PublicApiError {
     fn from(e: AppError) -> Self {
         match e {
-            AppError::BadRequest(_) => PublicApiError::BadRequest("Bad request.".into()),
-            AppError::Unauthorized(_) => PublicApiError::Unauthorized("Authentication required.".into()),
-            AppError::Forbidden(_) => PublicApiError::Forbidden("Forbidden.".into()),
-            AppError::NotFound(_) => PublicApiError::NotFound("Resource not found.".into()),
-            AppError::Conflict(_) => PublicApiError::Conflict("Conflict.".into()),
-            AppError::Gone(_) => PublicApiError::Gone("Resource is no longer available.".into()),
+            AppError::BadRequest(_) => PublicApiError::BadRequest("Bad request".into()),
+            AppError::Unauthorized(_) => PublicApiError::Unauthorized("Authentication required".into()),
+            AppError::Forbidden(_) => PublicApiError::Forbidden("Forbidden".into()),
+            AppError::NotFound(_) => PublicApiError::NotFound("Resource not found".into()),
+            AppError::Conflict(_) => PublicApiError::Conflict("Conflict".into()),
+            AppError::Gone(_) => PublicApiError::Gone("Resource is no longer available".into()),
             AppError::TooManyRequests(_) => PublicApiError::TooManyRequests,
             AppError::Internal(_) | AppError::Database(_) | AppError::Http(_) => {
                 tracing::error!(error = ?e, "v1 internal error");

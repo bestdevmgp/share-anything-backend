@@ -25,7 +25,7 @@ pub async fn v1_auth(
     if let Some(token_header) = request.headers().get("X-API-Key") {
         let token = token_header
             .to_str()
-            .map_err(|_| unauthorized("Invalid auth header."))?;
+            .map_err(|_| unauthorized("Invalid auth header"))?;
 
         if !token.starts_with("sk_") {
             return Err(unauthorized(
@@ -39,16 +39,16 @@ pub async fn v1_auth(
 
         let api_key = repository::find_api_key_by_hash(&state.db, &token_hash)
             .await?
-            .ok_or_else(|| unauthorized("Invalid API Key."))?;
+            .ok_or_else(|| unauthorized("Invalid API Key"))?;
 
         if let Some(expires_at) = api_key.expires_at {
             if expires_at < chrono::Utc::now() {
-                return Err(unauthorized("API Key has expired."));
+                return Err(unauthorized("API Key has expired"));
             }
         }
 
         if api_key.revoked_at.is_some() {
-            return Err(unauthorized("API Key has been revoked."));
+            return Err(unauthorized("API Key has been revoked"));
         }
 
         let scopes = repository::find_scopes_by_api_key(&state.db, &api_key.id).await?;

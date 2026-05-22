@@ -72,8 +72,8 @@ impl AppError {
             | Self::Gone(m)
             | Self::TooManyRequests(m)
             | Self::Internal(m) => m.clone(),
-            Self::Database(_) => "데이터베이스 오류가 발생했습니다".to_string(),
-            Self::Http(_) => "외부 요청 중 오류가 발생했습니다".to_string(),
+            Self::Database(_) => "An internal database error occurred.".to_string(),
+            Self::Http(_) => "An external request failed.".to_string(),
         }
     }
 }
@@ -114,16 +114,16 @@ pub fn internal_error(message: impl Into<String>) -> AppError {
 impl From<StatusCode> for AppError {
     fn from(status: StatusCode) -> Self {
         match status {
-            StatusCode::BAD_REQUEST => AppError::BadRequest("잘못된 요청입니다".into()),
-            StatusCode::UNAUTHORIZED => AppError::Unauthorized("인증이 필요합니다".into()),
-            StatusCode::FORBIDDEN => AppError::Forbidden("접근 권한이 없습니다".into()),
-            StatusCode::NOT_FOUND => AppError::NotFound("찾을 수 없습니다".into()),
-            StatusCode::CONFLICT => AppError::Conflict("충돌이 발생했습니다".into()),
-            StatusCode::GONE => AppError::Gone("만료되었거나 더 이상 사용할 수 없습니다".into()),
+            StatusCode::BAD_REQUEST => AppError::BadRequest("Bad request".into()),
+            StatusCode::UNAUTHORIZED => AppError::Unauthorized("Authentication required".into()),
+            StatusCode::FORBIDDEN => AppError::Forbidden("Forbidden".into()),
+            StatusCode::NOT_FOUND => AppError::NotFound("Not found".into()),
+            StatusCode::CONFLICT => AppError::Conflict("Conflict".into()),
+            StatusCode::GONE => AppError::Gone("Gone".into()),
             StatusCode::TOO_MANY_REQUESTS => {
-                AppError::TooManyRequests("요청이 너무 많습니다".into())
+                AppError::TooManyRequests("Too many requests".into())
             }
-            _ => AppError::Internal(format!("서버 오류 ({})", status.as_u16())),
+            _ => AppError::Internal(format!("Server error ({})", status.as_u16())),
         }
     }
 }

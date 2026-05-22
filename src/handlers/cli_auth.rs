@@ -40,7 +40,7 @@ pub async fn create_session(
 
     repository::create_cli_auth_session(&state.db, &session_id, expires_at)
         .await
-        .map_err(|e| internal_error(format!("CLI 인증 세션 생성 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to create CLI auth session: {}", e)))?;
 
     let login_url = format!(
         "{}/cli-signin/{}",
@@ -60,8 +60,8 @@ pub async fn check_status(
 ) -> Result<Json<CliAuthStatusResponse>, AppError> {
     let session = repository::find_cli_auth_session(&state.db, &session_id)
         .await
-        .map_err(|e| internal_error(format!("CLI 인증 세션 조회 실패: {}", e)))?
-        .ok_or_else(|| not_found("CLI 인증 세션을 찾을 수 없습니다"))?;
+        .map_err(|e| internal_error(format!("Failed to look up CLI auth session: {}", e)))?
+        .ok_or_else(|| not_found("CLI auth session not found"))?;
 
     let (status, token_value, user_name, expires_at) = session;
 
@@ -77,7 +77,7 @@ pub async fn check_status(
         let personal_token = if token_value.is_some() {
             let cleared = repository::clear_cli_auth_session_token(&state.db, &session_id)
                 .await
-                .map_err(|e| internal_error(format!("CLI 인증 토큰 삭제 실패: {}", e)))?;
+                .map_err(|e| internal_error(format!("Failed to clear CLI auth token: {}", e)))?;
             if cleared > 0 {
                 token_value
             } else {
@@ -110,17 +110,17 @@ pub async fn complete_session(
 
     let session = repository::find_cli_auth_session(&state.db, &session_id)
         .await
-        .map_err(|e| internal_error(format!("CLI 인증 세션 조회 실패: {}", e)))?
-        .ok_or_else(|| not_found("CLI 인증 세션을 찾을 수 없습니다"))?;
+        .map_err(|e| internal_error(format!("Failed to look up CLI auth session: {}", e)))?
+        .ok_or_else(|| not_found("CLI auth session not found"))?;
 
     let (status, _, _, expires_at) = session;
 
     if expires_at < chrono::Utc::now() {
-        return Err(bad_request("CLI 인증 세션이 만료되었습니다"));
+        return Err(bad_request("CLI auth session has expired"));
     }
 
     if status != "pending" {
-        return Err(bad_request("CLI 인증 세션이 이미 처리되었습니다"));
+        return Err(bad_request("CLI auth session has already been processed"));
     }
 
     let raw_token = generate_personal_token();
@@ -142,7 +142,7 @@ pub async fn complete_session(
         None,
     )
     .await
-    .map_err(|e| internal_error(format!("Personal Token 생성 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to create personal token: {}", e)))?;
 
     let rows = repository::complete_cli_auth_session(
         &state.db,
@@ -152,10 +152,10 @@ pub async fn complete_session(
         &raw_token,
     )
     .await
-    .map_err(|e| internal_error(format!("CLI 인증 세션 완료 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to complete CLI auth session: {}", e)))?;
 
     if rows == 0 {
-        return Err(bad_request("CLI 인증 세션을 완료할 수 없습니다"));
+        return Err(bad_request("Failed to complete CLI auth session"));
     }
 
     Ok(Json(serde_json::json!({

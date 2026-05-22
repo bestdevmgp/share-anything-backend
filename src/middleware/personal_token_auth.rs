@@ -47,10 +47,10 @@ pub async fn cli_auth(
     if let Some(token_header) = request.headers().get("X-Personal-Token") {
         let token = token_header
             .to_str()
-            .map_err(|_| unauthorized("Invalid auth header."))?;
+            .map_err(|_| unauthorized("Invalid auth header"))?;
 
         if !token.starts_with("sa_") && !token.starts_with("sk_") {
-            return Err(unauthorized("Invalid token format. Expected 'sa_' or 'sk_' prefix."));
+            return Err(unauthorized("Invalid token format. Expected 'sa_' or 'sk_' prefix"));
         }
 
         let mut hasher = Sha256::new();
@@ -59,11 +59,11 @@ pub async fn cli_auth(
 
         let token_record = repository::find_personal_token_by_hash(&state.db, &token_hash)
             .await?
-            .ok_or_else(|| unauthorized("Invalid Personal Token."))?;
+            .ok_or_else(|| unauthorized("Invalid Personal Token"))?;
 
         if let Some(expires_at) = token_record.expires_at {
             if expires_at < chrono::Utc::now() {
-                return Err(unauthorized("Personal Token has expired."));
+                return Err(unauthorized("Personal Token has expired"));
             }
         }
 
