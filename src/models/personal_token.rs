@@ -46,20 +46,11 @@ pub struct PersonalToken {
     pub token_hash: String,
     pub token_prefix: String,
     pub name: String,
-    pub kind: String,
-    pub application_id: Option<i64>,
-    pub scopes: String,
     pub last_used_at: Option<DateTime<Utc>>,
     pub last_platform: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
-}
-
-impl PersonalToken {
-    pub fn scopes_vec(&self) -> Vec<Scope> {
-        Scope::parse_list(&self.scopes)
-    }
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -70,7 +61,6 @@ pub struct PersonalTokenResponse {
     pub token_prefix: String,
     #[schema(example = "My Token")]
     pub name: String,
-    pub scopes: Vec<Scope>,
     #[schema(example = "2026-05-21T14:30:00Z")]
     pub last_used_at: Option<DateTime<Utc>>,
     #[schema(example = "2027-05-21T14:30:00Z")]
@@ -85,7 +75,6 @@ pub struct CreatePersonalTokenResponse {
     pub personal_token: String,
     pub token_prefix: String,
     pub name: String,
-    pub scopes: Vec<Scope>,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
@@ -93,7 +82,6 @@ pub struct CreatePersonalTokenResponse {
 #[derive(Debug, Deserialize)]
 pub struct CreatePersonalTokenRequest {
     pub name: Option<String>,
-    pub scopes: Option<Vec<Scope>>,
     pub expires_in_days: Option<i64>,
 }
 

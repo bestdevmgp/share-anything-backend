@@ -76,19 +76,19 @@ impl From<CliUploadResponse> for V1UploadResponse {
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `upload` scope checked.",
+            description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Upload quota exceeded. Inspect the `Retry-After` header for the number of \
                            seconds until the quota window resets.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn post_upload(
     State(state): State<V1State>,
@@ -155,19 +155,19 @@ pub async fn post_upload(
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `upload` scope checked.",
+            description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Upload quota exceeded. Inspect the `Retry-After` header for the number of \
                            seconds until the quota window resets.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn post_multipart_init(
     State(state): State<V1State>,
@@ -225,19 +225,19 @@ pub async fn post_multipart_init(
                            response to pass to the `/complete` endpoint.",
             body = CliPresignPartsResponse),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \
-                           (1) `error.code = insufficient_scope` — the token lacks the `upload` scope. \
+                           (1) `error.code = insufficient_scope` — the API key does not have the `upload` scope. \
                            (2) `error.code = forbidden` — the session belongs to a different user.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
             description = "The `upload_session_id` does not exist or has already been completed/expired.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn post_multipart_parts(
     State(state): State<V1State>,
@@ -302,12 +302,12 @@ pub async fn post_multipart_parts(
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \
-                           (1) `error.code = insufficient_scope` — the token lacks the `upload` scope. \
+                           (1) `error.code = insufficient_scope` — the API key does not have the `upload` scope. \
                            (2) `error.code = forbidden` — the session belongs to a different user.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
@@ -319,7 +319,7 @@ pub async fn post_multipart_parts(
                            Use the share code from the original response.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn post_multipart_complete(
     State(state): State<V1State>,

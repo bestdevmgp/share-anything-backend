@@ -100,6 +100,7 @@ impl DiscordNotifier {
         let service_name = application.service_name.clone();
         let service_url = application.service_url.clone();
         let purpose = application.purpose.clone();
+        let scopes = application.scopes.clone();
         let ip = application.applicant_ip.clone().unwrap_or_else(|| "N/A".to_string());
         let platform = application.applicant_platform.clone().unwrap_or_else(|| "N/A".to_string());
         let created_at = application.created_at.to_rfc3339();
@@ -108,7 +109,7 @@ impl DiscordNotifier {
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .send_application_embed(id, &user_id, &name, &email, &service_name, &service_url, &purpose, &ip, &platform, &created_at)
+                .send_application_embed(id, &user_id, &name, &email, &service_name, &service_url, &purpose, &scopes, &ip, &platform, &created_at)
                 .await
             {
                 tracing::warn!("Discord API key application notification failed: {}", e);
@@ -125,6 +126,7 @@ impl DiscordNotifier {
         service_name: &str,
         service_url: &str,
         purpose: &str,
+        scopes: &str,
         ip: &str,
         platform: &str,
         created_at: &str,
@@ -141,6 +143,7 @@ impl DiscordNotifier {
                     { "name": "서비스", "value": service_name, "inline": true },
                     { "name": "URL", "value": service_url, "inline": true },
                     { "name": "사용 목적", "value": purpose, "inline": false },
+                    { "name": "요청 스코프", "value": scopes, "inline": true },
                     { "name": "신청 IP", "value": ip, "inline": true },
                     { "name": "Platform", "value": platform, "inline": true },
                     { "name": "신청 시간", "value": created_at, "inline": true }

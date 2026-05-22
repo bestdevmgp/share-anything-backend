@@ -2,16 +2,16 @@ use axum::{response::Html, Json};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
-struct PersonalTokenSecurity;
+struct ApiKeySecurity;
 
-impl Modify for PersonalTokenSecurity {
+impl Modify for ApiKeySecurity {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
             components.add_security_scheme(
-                "personal_token",
+                "api_key",
                 SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
-                    "X-Personal-Token",
-                    "Tokens start with `sa_` followed by 40 alphanumeric characters.",
+                    "X-API-Key",
+                    "API keys start with sk_ followed by 40 alphanumeric characters.",
                 ))),
             );
         }
@@ -55,7 +55,7 @@ impl Modify for PersonalTokenSecurity {
             crate::api::v1::handlers::shares::DownloadQuery,
         )
     ),
-    modifiers(&PersonalTokenSecurity),
+    modifiers(&ApiKeySecurity),
     tags(
         (name = "me", description = "Authenticated principal"),
         (name = "uploads", description = "Create and manage uploads"),
@@ -65,7 +65,7 @@ impl Modify for PersonalTokenSecurity {
     info(
         title = "ShareAnything Public API",
         version = "1.0.0",
-        description = "Programmatic access to ShareAnything. Authenticate with a Personal Access Token in the 'X-Personal-Token' header. Issue tokens at [Settings → Personal Tokens](https://share.mingyu.dev/settings?tab=personal-tokens).",
+        description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
         contact(name = "ShareAnything", email = "shareanything@mingyu.dev"),
         license(name = "Proprietary"),
     ),
@@ -92,7 +92,7 @@ const SCALAR_HTML: &str = r#"<!DOCTYPE html>
     <script
       id="api-reference"
       data-url="/v1/openapi.json"
-      data-configuration='{"hiddenClients":[],"layout":"modern","defaultHttpClient":{"targetKey":"shell","clientKey":"curl"}}'
+      data-configuration='{"hiddenClients":[],"layout":"modern","defaultHttpClient":{"targetKey":"shell","clientKey":"curl"},"authentication":{"preferredSecurityScheme":"api_key","securitySchemes":{"api_key":{"name":"X-API-Key","in":"header","value":"YOUR_API_KEY"}}}}'
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>

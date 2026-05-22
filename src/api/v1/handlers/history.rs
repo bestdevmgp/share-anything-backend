@@ -43,15 +43,15 @@ use crate::utils::PrettyJson;
                            Response shape: `{ items: [...], total: N, limit: 20, offset: 0 }`. \
                            Each item includes `share_code`, `expires_at`, file metadata, and `download_count`."),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `read` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `read` scope checked.",
+            description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn list_my_uploads(
     State(state): State<V1State>,
@@ -100,19 +100,19 @@ pub async fn list_my_uploads(
     responses(
         (status = 204, description = "Share permanently deleted. Response body is empty."),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `delete` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `delete` scope checked.",
+            description = "API key does not have the `delete` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `delete` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
             description = "Share does not exist or belongs to a different user. \
                            The API intentionally returns `404` in both cases to prevent share-code enumeration.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn delete_my_upload(
     State(state): State<V1State>,
@@ -162,19 +162,19 @@ pub async fn delete_my_upload(
             description = "Array of download log entries for this share, newest first. \
                            Each entry contains `downloaded_at`, `ip_address`, `platform`, and `downloader_name` (nullable)."),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `read` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `read` scope checked.",
+            description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
             description = "Share does not exist or belongs to a different user. \
                            Both cases return `404` to prevent share-code enumeration.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn list_share_downloads(
     State(state): State<V1State>,
@@ -206,7 +206,7 @@ pub async fn list_share_downloads(
 /// earlier, or audit your own download history.
 ///
 /// **Behaviour notes:**
-/// - Only downloads made while **authenticated** (i.e. using a Personal Token or a session cookie)
+/// - Only downloads made while **authenticated** (i.e. using an API key or a session cookie)
 ///   appear in this list. Anonymous downloads are not attributed.
 /// - If you downloaded the same share multiple times, each download appears as a separate entry.
 /// - Pagination is zero-indexed (`offset = 0`, `limit = 20` for the first page). The response
@@ -224,15 +224,15 @@ pub async fn list_share_downloads(
                            Response shape: `{ items: [...], total: N, limit: 20, offset: 0 }`. \
                            Each item includes `share_code`, `downloaded_at`, and basic file metadata."),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `read` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `read` scope checked.",
+            description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn list_my_downloads(
     State(state): State<V1State>,

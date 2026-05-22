@@ -136,28 +136,30 @@ pub async fn admin_approve(
 
     let mut hasher = Sha256::new();
     hasher.update(raw_key.as_bytes());
-    let token_hash = hex::encode(hasher.finalize());
+    let key_hash = hex::encode(hasher.finalize());
 
-    let token_id = Uuid::new_v4().to_string();
-    let token_name = format!("API Key for {}", app.service_name);
-    let scopes_csv = Scope::format_list(&[Scope::Read, Scope::Upload, Scope::Delete]);
+    let key_id = Uuid::new_v4().to_string();
+    let key_name = format!("API Key for {}", app.service_name);
 
-    repository::create_personal_token(
+    repository::create_api_key(
         &state.db,
-        &token_id,
+        &key_id,
         &app.user_id,
-        &token_hash,
+        id,
+        &key_hash,
         &key_prefix,
-        &token_name,
-        "api_key",
-        Some(id),
-        &scopes_csv,
+        &key_name,
         None,
     )
     .await
-    .map_err(|e| internal_error(format!("Failed to create API key token: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to create API key: {}", e)))?;
 
-    repository::approve_application(&state.db, id, &token_id)
+    let scopes: Vec<Scope> = Scope::parse_list(&app.scopes);
+    repository::insert_key_scopes(&state.db, &key_id, &scopes)
+        .await
+        .map_err(|e| internal_error(format!("Failed to insert key scopes: {}", e)))?;
+
+    repository::approve_application(&state.db, id, &key_id)
         .await
         .map_err(|e| internal_error(format!("Failed to approve application: {}", e)))?;
 
@@ -178,7 +180,7 @@ pub async fn admin_approve(
     Ok(Json(ApiKeyResponse {
         api_key: raw_key,
         key_prefix,
-        name: token_name,
+        name: key_name,
         created_at,
     }))
 }

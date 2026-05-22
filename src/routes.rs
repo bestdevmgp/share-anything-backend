@@ -16,6 +16,7 @@ use crate::{
     handlers,
     middleware::auth::{optional_auth, require_auth, AuthState},
     middleware::personal_token_auth::{cli_auth, CliAuthState},
+    middleware::v1_auth::V1AuthState,
     middleware::rate_limiter::{RateLimiter, CliRateLimiter},
     services::{
         auth::AuthService, geolocation::GeolocationService,
@@ -351,9 +352,13 @@ pub fn create_router(
         db: db.clone(),
         storage: storage.clone(),
     };
+    let v1_auth_state = V1AuthState {
+        db: db.clone(),
+    };
+
     let v1_router = crate::api::v1::router(
         v1_state,
-        cli_auth_state,
+        v1_auth_state,
         cli_rate_limiter,
     );
 

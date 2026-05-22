@@ -85,6 +85,7 @@ impl Modify for SecurityAddon {
             crate::models::api_key_application::ApiKeyResponse,
             crate::models::personal_token::PersonalTokenResponse,
             crate::models::personal_token::Scope,
+            crate::models::api_key::ApiKeyListItem,
         )
     ),
     modifiers(&SecurityAddon),

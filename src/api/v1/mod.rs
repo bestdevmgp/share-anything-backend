@@ -8,7 +8,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     db::DbPool,
-    middleware::personal_token_auth::CliAuthState,
+    middleware::v1_auth::V1AuthState,
     middleware::rate_limiter::CliRateLimiter,
     services::StorageService,
 };
@@ -23,15 +23,15 @@ pub struct V1State {
 
 pub fn router(
     state: V1State,
-    cli_auth_state: CliAuthState,
+    v1_auth_state: V1AuthState,
     cli_rate_limiter: CliRateLimiter,
 ) -> Router {
     use axum::routing::{delete, get, post};
     use axum::middleware;
-    use crate::middleware::personal_token_auth::cli_auth;
+    use crate::middleware::v1_auth::v1_auth;
     use crate::middleware::rate_limiter::cli_rate_limit_middleware;
 
-    // Spec §6.4: /v1/* allows open CORS because auth is header-based (PAT cannot be
+    // Spec §6.4: /v1/* allows open CORS because auth is header-based (API key cannot be
     // exfiltrated via CSRF). This permissive CorsLayer is applied as the outermost layer
     // on the v1 sub-router so it handles OPTIONS preflights before the global strict CORS
     // at the top-level router has a chance to override them.
@@ -41,7 +41,7 @@ pub fn router(
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers([
             HeaderName::from_static("content-type"),
-            HeaderName::from_static("x-personal-token"),
+            HeaderName::from_static("x-api-key"),
             HeaderName::from_static("authorization"),
         ])
         .expose_headers([
@@ -64,7 +64,7 @@ pub fn router(
         .route("/reference", get(docs::scalar_html))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(cli_rate_limiter, cli_rate_limit_middleware))
-        .layer(middleware::from_fn_with_state(cli_auth_state, cli_auth))
+        .layer(middleware::from_fn_with_state(v1_auth_state, v1_auth))
         .layer(v1_cors)
         .with_state(state)
 }

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
+use crate::models::personal_token::Scope;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[schema(example = "pending")]
@@ -34,6 +36,8 @@ pub struct ApiKeyApplication {
     pub service_url: String,
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
+    #[schema(example = "read,upload,delete")]
+    pub scopes: String,
     #[schema(example = "pending")]
     pub status: String,
     #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
@@ -58,6 +62,7 @@ pub struct CreateApplicationRequest {
     pub service_url: String,
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
+    pub scopes: Option<Vec<Scope>>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -70,6 +75,7 @@ pub struct ApplicationResponse {
     pub service_url: String,
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
+    pub scopes: Vec<Scope>,
     pub status: ApplicationStatus,
     #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
     pub reject_reason: Option<String>,
@@ -106,6 +112,7 @@ impl From<ApiKeyApplication> for ApplicationResponse {
             service_name: app.service_name,
             service_url: app.service_url,
             purpose: app.purpose,
+            scopes: Scope::parse_list(&app.scopes),
             status: ApplicationStatus::from_db(&app.status),
             reject_reason: app.reject_reason,
             api_key_id: app.api_key_id,

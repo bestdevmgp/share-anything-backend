@@ -26,17 +26,17 @@ pub struct MeResponse {
 
 /// Get authenticated principal
 ///
-/// Returns the user account and Personal Access Token details for the token used in this request.
+/// Returns the user account and API Key details for the key used in this request.
 ///
-/// **Use case:** Send this as a first call after obtaining a token to confirm it is valid and to
+/// **Use case:** Send this as a first call after obtaining an API key to confirm it is valid and to
 /// discover its granted scopes before issuing other API calls.
 ///
 /// **Behaviour notes:**
-/// - The `token_id` is a stable ULID that uniquely identifies the PAT — use it to label log lines.
-/// - `scopes` reflects only the permissions granted to this specific token; the user may have other
-///   tokens with different scope sets.
+/// - The `token_id` is a stable UUID that uniquely identifies the API Key — use it to label log lines.
+/// - `scopes` reflects only the permissions granted to this specific key; the user may have other
+///   keys with different scope sets.
 /// - If the underlying user account has been deleted (e.g. after OAuth account removal) this endpoint
-///   returns `401` even though the token signature is valid.
+///   returns `401` even though the key signature is valid.
 ///
 /// **Required scope:** `read`
 #[utoipa::path(
@@ -46,16 +46,16 @@ pub struct MeResponse {
     responses(
         (status = 200, description = "Authenticated principal", body = MeResponse),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, \
+            description = "API Key is missing, malformed (must start with `sk_`), revoked, \
                            expired, or associated with a deleted user account. \
-                           Re-issue a token in the web dashboard.",
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token exists and is valid but does not carry the `read` scope. \
-                           Issue a new token with the `read` scope checked.",
+            description = "API key exists and is valid but does not carry the `read` scope. \
+                           Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn get_me(
     State(state): State<V1State>,

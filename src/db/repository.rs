@@ -1,5 +1,6 @@
 use crate::models::*;
-use crate::models::personal_token::PersonalToken;
+use crate::models::personal_token::{PersonalToken, Scope};
+use crate::models::api_key::ApiKey;
 use crate::models::session::{CreateSessionDto, Session, TrustedDevice};
 use chrono::Utc;
 use sqlx::{FromRow, MySqlPool};
@@ -348,7 +349,7 @@ pub async fn find_file_shares_with_download_count_by_user(
         SELECT fs.*, COALESCE(COUNT(dl.id), 0) AS download_count
         FROM file_shares fs
         LEFT JOIN download_logs dl ON dl.file_share_id = fs.id
-        WHERE fs.user_id = ? AND fs.is_quick_access = false
+        WHERE fs.user_id = ? AND fs.is_quick_access = false AND fs.transfer_type != 'p2p'
         GROUP BY fs.id
         ORDER BY fs.created_at DESC
         LIMIT ? OFFSET ?
@@ -378,7 +379,7 @@ pub async fn find_file_shares_by_user(
     sqlx::query_as::<_, FileShare>(
         r#"
         SELECT * FROM file_shares
-        WHERE user_id = ? AND is_quick_access = false
+        WHERE user_id = ? AND is_quick_access = false AND transfer_type != 'p2p'
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
         "#,
@@ -958,17 +959,14 @@ pub async fn create_personal_token(
     token_hash: &str,
     token_prefix: &str,
     name: &str,
-    kind: &str,
-    application_id: Option<i64>,
-    scopes: &str,
     expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<PersonalToken, sqlx::Error> {
     let now = Utc::now();
 
     sqlx::query(
         r#"
-        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, kind, application_id, scopes, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO personal_tokens (id, user_id, token_hash, token_prefix, name, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(id)
@@ -976,16 +974,13 @@ pub async fn create_personal_token(
     .bind(token_hash)
     .bind(token_prefix)
     .bind(name)
-    .bind(kind)
-    .bind(application_id)
-    .bind(scopes)
     .bind(expires_at)
     .bind(now)
     .execute(pool)
     .await?;
 
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE id = ?"#,
     )
@@ -999,7 +994,7 @@ pub async fn find_personal_token_by_hash(
     token_hash: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE token_hash = ? AND revoked_at IS NULL"#,
     )
@@ -1013,7 +1008,7 @@ pub async fn find_personal_token_by_id(
     id: &str,
 ) -> Result<Option<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens WHERE id = ?"#,
     )
@@ -1027,7 +1022,7 @@ pub async fn find_personal_tokens_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens
            WHERE user_id = ? AND revoked_at IS NULL
@@ -1211,7 +1206,7 @@ pub async fn find_active_cli_sessions_by_user(
     user_id: &str,
 ) -> Result<Vec<PersonalToken>, sqlx::Error> {
     sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+        r#"SELECT id, user_id, token_hash, token_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
            FROM personal_tokens
            WHERE user_id = ?
@@ -1378,18 +1373,20 @@ pub async fn create_application(
     service_name: &str,
     service_url: &str,
     purpose: &str,
+    scopes: &str,
     ip: Option<&str>,
     platform: Option<&str>,
 ) -> Result<crate::models::ApiKeyApplication, sqlx::Error> {
     let result = sqlx::query(
         r#"INSERT INTO api_key_applications
-           (user_id, service_name, service_url, purpose, status, applicant_ip, applicant_platform)
-           VALUES (?, ?, ?, ?, 'pending', ?, ?)"#,
+           (user_id, service_name, service_url, purpose, scopes, status, applicant_ip, applicant_platform)
+           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)"#,
     )
     .bind(user_id)
     .bind(service_name)
     .bind(service_url)
     .bind(purpose)
+    .bind(scopes)
     .bind(ip)
     .bind(platform)
     .execute(pool)
@@ -1406,7 +1403,7 @@ pub async fn find_application_by_id(
     id: i64,
 ) -> Result<Option<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
                   reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE id = ?"#,
@@ -1421,7 +1418,7 @@ pub async fn find_applications_by_user(
     user_id: &str,
 ) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
                   reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE user_id = ?
@@ -1436,7 +1433,7 @@ pub async fn find_pending_applications(
     pool: &MySqlPool,
 ) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, status,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
                   reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE status = 'pending'
@@ -1504,7 +1501,7 @@ pub async fn list_applications_by_status(
     match status {
         Some(s) => {
             sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-                r#"SELECT id, user_id, service_name, service_url, purpose, status,
+                r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
                           reject_reason, api_key_id, applicant_ip, applicant_platform,
                           created_at, reviewed_at
                    FROM api_key_applications WHERE status = ?
@@ -1518,18 +1515,141 @@ pub async fn list_applications_by_status(
     }
 }
 
+// ── api_keys table ──────────────────────────────────────────────────────────
+
+pub async fn create_api_key(
+    pool: &MySqlPool,
+    id: &str,
+    user_id: &str,
+    application_id: i64,
+    key_hash: &str,
+    key_prefix: &str,
+    name: &str,
+    expires_at: Option<chrono::DateTime<Utc>>,
+) -> Result<ApiKey, sqlx::Error> {
+    let now = Utc::now();
+
+    sqlx::query(
+        r#"
+        INSERT INTO api_keys (id, user_id, application_id, key_hash, key_prefix, name, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(application_id)
+    .bind(key_hash)
+    .bind(key_prefix)
+    .bind(name)
+    .bind(expires_at)
+    .bind(now)
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM api_keys WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn find_api_key_by_hash(
+    pool: &MySqlPool,
+    hash: &str,
+) -> Result<Option<ApiKey>, sqlx::Error> {
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
+                  last_used_at, last_platform, expires_at, revoked_at, created_at
+           FROM api_keys WHERE key_hash = ?"#,
+    )
+    .bind(hash)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn find_api_keys_by_user(
     pool: &MySqlPool,
     user_id: &str,
-) -> Result<Vec<PersonalToken>, sqlx::Error> {
-    sqlx::query_as::<_, PersonalToken>(
-        r#"SELECT id, user_id, token_hash, token_prefix, name, kind, application_id, scopes,
+) -> Result<Vec<ApiKey>, sqlx::Error> {
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
                   last_used_at, last_platform, expires_at, revoked_at, created_at
-           FROM personal_tokens
-           WHERE user_id = ? AND kind = 'api_key' AND revoked_at IS NULL
+           FROM api_keys
+           WHERE user_id = ? AND revoked_at IS NULL
            ORDER BY created_at DESC"#,
     )
     .bind(user_id)
     .fetch_all(pool)
     .await
+}
+
+pub async fn revoke_api_key(
+    pool: &MySqlPool,
+    id: &str,
+    user_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE api_keys SET revoked_at = UTC_TIMESTAMP() WHERE id = ? AND user_id = ?"#,
+    )
+    .bind(id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+pub async fn update_api_key_last_used_with_platform(
+    pool: &MySqlPool,
+    key_id: &str,
+    platform: Option<&str>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE api_keys
+           SET last_used_at = UTC_TIMESTAMP(),
+               last_platform = COALESCE(?, last_platform)
+           WHERE id = ?"#,
+    )
+    .bind(platform)
+    .bind(key_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn insert_key_scopes(
+    pool: &MySqlPool,
+    api_key_id: &str,
+    scopes: &[Scope],
+) -> Result<(), sqlx::Error> {
+    for scope in scopes {
+        sqlx::query(
+            r#"INSERT IGNORE INTO key_scopes (api_key_id, scope) VALUES (?, ?)"#,
+        )
+        .bind(api_key_id)
+        .bind(scope.as_str())
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn find_scopes_by_api_key(
+    pool: &MySqlPool,
+    api_key_id: &str,
+) -> Result<Vec<Scope>, sqlx::Error> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT scope FROM key_scopes WHERE api_key_id = ?"#,
+    )
+    .bind(api_key_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|(s,)| Scope::parse(&s))
+        .collect())
 }

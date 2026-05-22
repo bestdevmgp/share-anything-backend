@@ -79,7 +79,7 @@ pub async fn cli_auth(
         request.extensions_mut().insert(PersonalTokenUser {
             user_id: token_record.user_id,
             personal_token_id: token_id.clone(),
-            scopes: Scope::parse_list(&token_record.scopes),
+            scopes: vec![],
         });
 
         tokio::spawn(async move {

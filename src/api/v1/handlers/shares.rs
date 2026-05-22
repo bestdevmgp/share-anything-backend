@@ -41,12 +41,12 @@ use crate::utils::PrettyJson;
     responses(
         (status = 200, description = "Share metadata and file list", body = CliFileListResponse),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
-            description = "Token does not have the `read` scope (`error.code` will be `insufficient_scope`). \
-                           Issue a new token with the `read` scope checked.",
+            description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
+                           Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
             description = "No share exists for this code. Codes are case-sensitive; double-check capitalisation.",
@@ -56,7 +56,7 @@ use crate::utils::PrettyJson;
                            has already been downloaded once and consumed.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn get_share(
     State(state): State<V1State>,
@@ -117,12 +117,12 @@ pub struct DownloadQuery {
                                       `Content-Disposition` carries the suggested filename. \
                                       For multi-file whole-share downloads the content type is `application/zip`."),
         (status = 401,
-            description = "Personal Token is missing, malformed (must start with `sa_`), revoked, or expired. \
-                           Re-issue a token in the web dashboard.",
+            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \
-                           (1) `error.code = insufficient_scope` — the token lacks the `read` scope; issue a new token. \
+                           (1) `error.code = insufficient_scope` — the API key does not have the `read` scope; issue a new API key with the `read` scope checked. \
                            (2) `error.code = forbidden` — the share is password-protected and the `password` \
                            query parameter was missing or incorrect; retry with the correct password.",
             body = crate::api::v1::error::PublicErrorEnvelope),
@@ -136,7 +136,7 @@ pub struct DownloadQuery {
                            concurrent caller receives a `200`.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
-    security(("personal_token" = []))
+    security(("api_key" = []))
 )]
 pub async fn get_share_download(
     State(state): State<V1State>,

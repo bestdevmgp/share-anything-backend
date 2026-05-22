@@ -8,7 +8,7 @@ pub fn require_token<'a>(
     token
         .map(|ext| &ext.0)
         .ok_or_else(|| PublicApiError::Unauthorized(
-            "Missing or invalid Personal Token. Set the 'X-Personal-Token' header.".into(),
+            "Missing or invalid API Key. Set the 'X-API-Key' header.".into(),
         ))
 }
 

@@ -5,6 +5,7 @@ pub mod email_auth;
 pub mod error;
 pub mod signaling;
 pub mod personal_token;
+pub mod api_key;
 pub mod api_key_application;
 pub mod cli_auth;
 pub mod p2p;

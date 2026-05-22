@@ -9,9 +9,10 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
+        api_key::ApiKeyListItem,
         api_key_application::{ApplicationResponse, CreateApplicationRequest},
         bad_request, internal_error, not_found, AppError,
-        personal_token::PersonalTokenResponse,
+        personal_token::Scope,
     },
     services::{discord::DiscordNotifier, email::EmailService},
 };
@@ -77,6 +78,11 @@ pub async fn apply(
         return Err(bad_request("사용 목적은 30자 이상 입력해야 합니다"));
     }
 
+    let scopes = req
+        .scopes
+        .unwrap_or_else(|| vec![Scope::Read, Scope::Upload, Scope::Delete]);
+    let scopes_csv = Scope::format_list(&scopes);
+
     // Rate limit: 1 application per user per 24h
     let has_recent = repository::check_user_recent_application(&state.db, &claims.sub)
         .await
@@ -102,6 +108,7 @@ pub async fn apply(
         &req.service_name,
         &req.service_url,
         &req.purpose,
+        &scopes_csv,
         ip.as_deref(),
         platform.as_deref(),
     )
@@ -186,7 +193,7 @@ pub async fn get_my_application(
     path = "/user/api-keys",
     tag = "api-keys",
     responses(
-        (status = 200, description = "List of API keys (prefixes only; full key is never returned after issuance)", body = Vec<PersonalTokenResponse>),
+        (status = 200, description = "List of API keys (prefixes only; full key is never returned after issuance)", body = Vec<ApiKeyListItem>),
         (status = 401, description = "Unauthorized - authentication required"),
     ),
     security(
@@ -196,26 +203,26 @@ pub async fn get_my_application(
 pub async fn list_my_api_keys(
     State(state): State<ApiKeyState>,
     claims: axum::extract::Extension<Claims>,
-) -> Result<Json<Vec<PersonalTokenResponse>>, AppError> {
-    let tokens = repository::find_api_keys_by_user(&state.db, &claims.sub)
+) -> Result<Json<Vec<ApiKeyListItem>>, AppError> {
+    let keys = repository::find_api_keys_by_user(&state.db, &claims.sub)
         .await
         .map_err(|e| internal_error(format!("Failed to list API keys: {}", e)))?;
 
-    let response = tokens
-        .into_iter()
-        .map(|t| {
-            let scopes = t.scopes_vec();
-            PersonalTokenResponse {
-                id: t.id,
-                token_prefix: t.token_prefix,
-                name: t.name,
-                scopes,
-                last_used_at: t.last_used_at,
-                expires_at: t.expires_at,
-                created_at: t.created_at,
-            }
-        })
-        .collect();
+    let mut response = Vec::with_capacity(keys.len());
+    for key in keys {
+        let scopes = repository::find_scopes_by_api_key(&state.db, &key.id)
+            .await
+            .map_err(|e| internal_error(format!("Failed to fetch scopes: {}", e)))?;
+        response.push(ApiKeyListItem {
+            id: key.id,
+            key_prefix: key.key_prefix,
+            name: key.name,
+            scopes,
+            last_used_at: key.last_used_at,
+            expires_at: key.expires_at,
+            created_at: key.created_at,
+        });
+    }
 
     Ok(Json(response))
 }
@@ -243,7 +250,7 @@ pub async fn revoke_api_key(
     claims: axum::extract::Extension<Claims>,
     Path(token_id): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    let rows = repository::revoke_personal_token(&state.db, &token_id, &claims.sub)
+    let rows = repository::revoke_api_key(&state.db, &token_id, &claims.sub)
         .await
         .map_err(|e| internal_error(format!("API Key revocation failed: {}", e)))?;
 
