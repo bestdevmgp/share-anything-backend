@@ -28,6 +28,19 @@ pub struct QuickAccessState {
     pub storage: StorageService,
 }
 
+/// Initialize a Quick Access multipart upload session.
+#[utoipa::path(
+    post,
+    path = "/user/quick-access/init",
+    tag = "quick-access",
+    request_body = QuickAccessUploadRequest,
+    responses(
+        (status = 200, description = "Upload session initialized", body = InitMultipartUploadResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn init_quick_access_upload(
     State(state): State<QuickAccessState>,
     request: Request,
@@ -120,6 +133,17 @@ pub async fn init_quick_access_upload(
     }))
 }
 
+/// List Quick Access files owned by the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/user/quick-access",
+    tag = "quick-access",
+    responses(
+        (status = 200, description = "Quick Access files listed", body = QuickAccessListResponse),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_quick_access_files(
     State(state): State<QuickAccessState>,
     request: Request,
@@ -153,6 +177,22 @@ pub async fn list_quick_access_files(
     Ok(Json(QuickAccessListResponse { files }))
 }
 
+/// Delete a Quick Access file by ID.
+#[utoipa::path(
+    delete,
+    path = "/user/quick-access/{file_id}",
+    tag = "quick-access",
+    params(
+        ("file_id" = String, Path, description = "Quick Access file ID")
+    ),
+    responses(
+        (status = 204, description = "File deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "File not found")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
@@ -191,6 +231,22 @@ pub async fn delete_quick_access_file(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Get a short-lived presigned preview URL for a Quick Access file.
+#[utoipa::path(
+    get,
+    path = "/user/quick-access/preview/{file_id}",
+    tag = "quick-access",
+    params(
+        ("file_id" = String, Path, description = "Quick Access file ID")
+    ),
+    responses(
+        (status = 200, description = "Preview URL generated"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "File not found or expired")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn preview_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
@@ -238,6 +294,22 @@ pub async fn preview_quick_access_file(
     })))
 }
 
+/// Create a temporary public share link for a Quick Access file (expires in 30 minutes).
+#[utoipa::path(
+    post,
+    path = "/user/quick-access/share/{file_id}",
+    tag = "quick-access",
+    params(
+        ("file_id" = String, Path, description = "Quick Access file ID")
+    ),
+    responses(
+        (status = 200, description = "Share code created"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "File not found or expired")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn share_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,
@@ -287,6 +359,22 @@ pub async fn share_quick_access_file(
     })))
 }
 
+/// Download a Quick Access file (returns a presigned download URL and deletes the file).
+#[utoipa::path(
+    get,
+    path = "/user/quick-access/download/{file_id}",
+    tag = "quick-access",
+    params(
+        ("file_id" = String, Path, description = "Quick Access file ID")
+    ),
+    responses(
+        (status = 200, description = "Download URL returned — file will be deleted after download"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "File not found or expired")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn download_quick_access_file(
     State(state): State<QuickAccessState>,
     Path(file_id): Path<String>,

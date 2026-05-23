@@ -1374,19 +1374,21 @@ pub async fn create_application(
     service_url: &str,
     purpose: &str,
     scopes: &str,
+    requested_expires_at: Option<chrono::DateTime<Utc>>,
     ip: Option<&str>,
     platform: Option<&str>,
 ) -> Result<crate::models::ApiKeyApplication, sqlx::Error> {
     let result = sqlx::query(
         r#"INSERT INTO api_key_applications
-           (user_id, service_name, service_url, purpose, scopes, status, applicant_ip, applicant_platform)
-           VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)"#,
+           (user_id, service_name, service_url, purpose, scopes, requested_expires_at, status, applicant_ip, applicant_platform)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)"#,
     )
     .bind(user_id)
     .bind(service_name)
     .bind(service_url)
     .bind(purpose)
     .bind(scopes)
+    .bind(requested_expires_at)
     .bind(ip)
     .bind(platform)
     .execute(pool)
@@ -1403,8 +1405,8 @@ pub async fn find_application_by_id(
     id: i64,
 ) -> Result<Option<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
-                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, requested_expires_at,
+                  status, reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE id = ?"#,
     )
@@ -1418,8 +1420,8 @@ pub async fn find_applications_by_user(
     user_id: &str,
 ) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
-                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, requested_expires_at,
+                  status, reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE user_id = ?
            ORDER BY created_at DESC"#,
@@ -1433,8 +1435,8 @@ pub async fn find_pending_applications(
     pool: &MySqlPool,
 ) -> Result<Vec<crate::models::ApiKeyApplication>, sqlx::Error> {
     sqlx::query_as::<_, crate::models::ApiKeyApplication>(
-        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, status,
-                  reject_reason, api_key_id, applicant_ip, applicant_platform,
+        r#"SELECT id, user_id, service_name, service_url, purpose, scopes, requested_expires_at,
+                  status, reject_reason, api_key_id, applicant_ip, applicant_platform,
                   created_at, reviewed_at
            FROM api_key_applications WHERE status = 'pending'
            ORDER BY created_at ASC"#,

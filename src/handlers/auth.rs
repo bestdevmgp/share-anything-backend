@@ -494,6 +494,18 @@ fn build_email_auth_data(
     }
 }
 
+/// Send a magic-link authentication email.
+#[utoipa::path(
+    post,
+    path = "/auth/email/send",
+    tag = "email-auth",
+    request_body = EmailSendRequest,
+    responses(
+        (status = 200, description = "Magic link sent", body = EmailSendResponse),
+        (status = 400, description = "Invalid email"),
+        (status = 429, description = "Rate limited — recent session already exists")
+    )
+)]
 pub async fn email_send(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -542,6 +554,21 @@ pub async fn email_send(
     }))
 }
 
+/// Verify a magic-link token from the email.
+///
+/// If the request comes from the same device that initiated the flow, returns an auth token directly.
+/// Otherwise marks the session as verified and returns a verification code.
+#[utoipa::path(
+    post,
+    path = "/auth/email/verify",
+    tag = "email-auth",
+    request_body = EmailVerifyRequest,
+    responses(
+        (status = 200, description = "Token verified", body = EmailVerifyResponse),
+        (status = 404, description = "Session not found"),
+        (status = 410, description = "Session already used or expired")
+    )
+)]
 pub async fn email_verify(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -592,6 +619,19 @@ pub async fn email_verify(
     }
 }
 
+/// Verify the 6-digit code shown after magic-link verification on a different device.
+#[utoipa::path(
+    post,
+    path = "/auth/email/verify-code",
+    tag = "email-auth",
+    request_body = EmailVerifyCodeRequest,
+    responses(
+        (status = 200, description = "Code verified — returns auth token", body = EmailVerifyCodeResponse),
+        (status = 401, description = "Incorrect code"),
+        (status = 404, description = "Session not found"),
+        (status = 410, description = "Session expired")
+    )
+)]
 pub async fn email_verify_code(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -636,6 +676,21 @@ pub async fn email_verify_code(
     }))
 }
 
+/// Poll the status of an email auth session.
+///
+/// Returns the current status (`pending`, `verified`, `completed`) and an auth token once completed.
+#[utoipa::path(
+    get,
+    path = "/auth/email/status/{session_id}",
+    tag = "email-auth",
+    params(
+        ("session_id" = String, Path, description = "Email auth session ID")
+    ),
+    responses(
+        (status = 200, description = "Session status", body = EmailStatusResponse),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn email_status(
     State(state): State<AppState>,
     headers: HeaderMap,

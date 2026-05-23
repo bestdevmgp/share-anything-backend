@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CliAuthSessionResponse {
     pub session_id: String,
     pub login_url: String,
     pub expires_in_seconds: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CliAuthStatusResponse {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]

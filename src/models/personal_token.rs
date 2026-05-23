@@ -69,7 +69,7 @@ pub struct PersonalTokenResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CreatePersonalTokenResponse {
     pub id: String,
     pub personal_token: String,
@@ -79,7 +79,7 @@ pub struct CreatePersonalTokenResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePersonalTokenRequest {
     pub name: Option<String>,
     pub expires_in_days: Option<i64>,

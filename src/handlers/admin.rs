@@ -82,6 +82,7 @@ fn generate_api_key() -> String {
         (status = 200, description = "List of all applications", body = Vec<ApiKeyApplication>),
         (status = 401, description = "Missing or wrong X-Admin-Password header"),
     ),
+    security(("admin_password" = []))
 )]
 pub async fn admin_list_applications(
     State(state): State<AdminState>,
@@ -113,6 +114,7 @@ pub async fn admin_list_applications(
         (status = 404, description = "Application not found"),
         (status = 409, description = "Application already processed"),
     ),
+    security(("admin_password" = []))
 )]
 pub async fn admin_approve(
     State(state): State<AdminState>,
@@ -148,7 +150,7 @@ pub async fn admin_approve(
         &key_hash,
         &key_prefix,
         &key_name,
-        None,
+        app.requested_expires_at,
     )
     .await
     .map_err(|e| internal_error(format!("Failed to create API key: {}", e)))?;
@@ -199,6 +201,7 @@ pub async fn admin_approve(
         (status = 404, description = "Application not found"),
         (status = 409, description = "Application already processed"),
     ),
+    security(("admin_password" = []))
 )]
 pub async fn admin_reject(
     State(state): State<AdminState>,

@@ -32,6 +32,15 @@ fn generate_personal_token() -> String {
     format!("sa_{}", random_part)
 }
 
+/// Create a CLI device-pairing session and return a browser login URL.
+#[utoipa::path(
+    post,
+    path = "/cli/auth/session",
+    tag = "cli-auth",
+    responses(
+        (status = 200, description = "CLI auth session created", body = CliAuthSessionResponse)
+    )
+)]
 pub async fn create_session(
     State(state): State<CliAuthHandlerState>,
 ) -> Result<Json<CliAuthSessionResponse>, AppError> {
@@ -54,6 +63,21 @@ pub async fn create_session(
     }))
 }
 
+/// Poll the status of a CLI auth session.
+///
+/// Returns `pending`, `completed` (with a one-time personal token), or `expired`.
+#[utoipa::path(
+    get,
+    path = "/cli/auth/session/{session_id}/status",
+    tag = "cli-auth",
+    params(
+        ("session_id" = String, Path, description = "CLI auth session ID")
+    ),
+    responses(
+        (status = 200, description = "Session status", body = CliAuthStatusResponse),
+        (status = 404, description = "Session not found")
+    )
+)]
 pub async fn check_status(
     State(state): State<CliAuthHandlerState>,
     Path(session_id): Path<String>,
@@ -101,6 +125,24 @@ pub async fn check_status(
     }))
 }
 
+/// Complete a CLI auth session from the browser (requires JWT authentication).
+///
+/// Issues a personal token linked to the authenticated user and marks the session complete.
+#[utoipa::path(
+    post,
+    path = "/cli/auth/session/{session_id}/complete",
+    tag = "cli-auth",
+    params(
+        ("session_id" = String, Path, description = "CLI auth session ID")
+    ),
+    responses(
+        (status = 200, description = "Session completed successfully"),
+        (status = 400, description = "Session expired or already completed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Session not found")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn complete_session(
     State(state): State<CliAuthHandlerState>,
     claims: axum::extract::Extension<Claims>,

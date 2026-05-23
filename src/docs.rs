@@ -1,5 +1,5 @@
 use utoipa::OpenApi;
-use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, Http, HttpAuthScheme, SecurityScheme};
 use utoipa::Modify;
 
 use crate::models::{
@@ -7,6 +7,20 @@ use crate::models::{
     FileShareWithStats, MultipleFileUploadResponse, OAuthProvider, User, FileListResponse,
     FileInfoInGroup, DownloadFilesRequest, UploadHistoryResponse,
     FileInfoResponse, VerifyPasswordRequest, AuthResponse, UserResponse,
+    NotificationSettingsResponse, UpdateNotificationSettingsRequest, UpdateNameRequest, UpdateNameResponse,
+    session::{SessionResponse, TrustedDeviceResponse},
+    personal_token::{CreatePersonalTokenRequest, CreatePersonalTokenResponse},
+    email_auth::{EmailSendRequest, EmailSendResponse, EmailVerifyRequest, EmailVerifyResponse, EmailVerifyCodeRequest, EmailVerifyCodeResponse, EmailStatusResponse, EmailAuthData, EmailAuthUser},
+    cli_auth::{CliAuthSessionResponse, CliAuthStatusResponse},
+    cli::{CliFileInfoResponse, CliP2PFileInfo, CliP2PCreateRequest, CliP2PCreateResponse},
+    QuickAccessUploadRequest, QuickAccessFileResponse, QuickAccessListResponse,
+    PresignedUploadRequest, PresignedUploadResponse, PresignedUploadFileInfo, PresignedUploadUrl,
+    CompleteUploadRequest, CompleteUploadFile,
+    InitMultipartUploadRequest, InitMultipartUploadResponse, MultipartUploadFileInit, MultipartUploadFileInfo,
+    GetPartUrlsRequest, GetPartUrlsResponse, PartPresignedUrl, CompletedPart,
+    CompleteMultipartUploadRequest, CompleteMultipartFileInfo,
+    turn::{IceServer, TurnCredentialsResponse},
+    p2p::{P2pStatusQuery, P2pStatusResponse},
 };
 
 struct SecurityAddon;
@@ -17,7 +31,14 @@ impl Modify for SecurityAddon {
             components.add_security_scheme(
                 "bearer_auth",
                 SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
-            )
+            );
+            components.add_security_scheme(
+                "admin_password",
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
+                    "X-Admin-Password",
+                    "Admin password set in the ADMIN_PASSWORD environment variable.",
+                ))),
+            );
         }
     }
 }
@@ -25,6 +46,7 @@ impl Modify for SecurityAddon {
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        // auth — OAuth
         crate::handlers::auth::google_login,
         crate::handlers::auth::google_callback,
         crate::handlers::auth::google_callback_handler,
@@ -37,7 +59,23 @@ impl Modify for SecurityAddon {
         crate::handlers::auth::apple_login,
         crate::handlers::auth::apple_callback,
         crate::handlers::auth::apple_callback_handler,
+        // auth — device revoke
+        crate::handlers::device_confirm::revoke_device,
+        // email-auth
+        crate::handlers::auth::email_send,
+        crate::handlers::auth::email_verify,
+        crate::handlers::auth::email_verify_code,
+        crate::handlers::auth::email_status,
+        // upload
         crate::handlers::upload::upload_file,
+        crate::handlers::upload::create_p2p_session,
+        // presigned
+        crate::handlers::presigned::request_presigned_upload,
+        crate::handlers::presigned::complete_presigned_upload,
+        crate::handlers::presigned::init_multipart_upload,
+        crate::handlers::presigned::get_part_presigned_urls,
+        crate::handlers::presigned::complete_multipart_upload,
+        // download
         crate::handlers::download::get_file_list,
         crate::handlers::download::download_file,
         crate::handlers::download::download_single_file,
@@ -45,22 +83,60 @@ impl Modify for SecurityAddon {
         crate::handlers::download::download_multiple_files,
         crate::handlers::download::get_file_info,
         crate::handlers::download::verify_password,
+        crate::handlers::download::get_download_url,
+        // user
         crate::handlers::user::get_upload_history,
         crate::handlers::user::get_download_logs,
         crate::handlers::user::delete_file_share,
         crate::handlers::user::delete_all_file_shares,
+        crate::handlers::user::delete_account,
+        crate::handlers::user::get_notification_settings,
+        crate::handlers::user::update_notification_settings,
+        crate::handlers::user::update_name,
+        // sessions & trusted devices
+        crate::handlers::sessions::list_sessions,
+        crate::handlers::sessions::terminate_session,
+        crate::handlers::sessions::terminate_other_sessions,
+        crate::handlers::sessions::list_trusted_devices,
+        crate::handlers::sessions::delete_trusted_device,
+        // personal tokens
+        crate::handlers::personal_token::create_personal_token,
+        crate::handlers::personal_token::list_personal_tokens,
+        crate::handlers::personal_token::delete_personal_token,
+        // quick access
+        crate::handlers::quick_access::init_quick_access_upload,
+        crate::handlers::quick_access::list_quick_access_files,
+        crate::handlers::quick_access::delete_quick_access_file,
+        crate::handlers::quick_access::preview_quick_access_file,
+        crate::handlers::quick_access::share_quick_access_file,
+        crate::handlers::quick_access::download_quick_access_file,
+        // p2p
+        crate::handlers::p2p::check_uploader_status,
+        // turn
+        crate::handlers::turn::get_turn_credentials,
+        // api-keys (user-facing)
         crate::handlers::api_key::apply,
         crate::handlers::api_key::list_my_applications,
         crate::handlers::api_key::get_my_application,
         crate::handlers::api_key::cancel_application,
         crate::handlers::api_key::list_my_api_keys,
         crate::handlers::api_key::revoke_api_key,
+        // admin
         crate::handlers::admin::admin_list_applications,
         crate::handlers::admin::admin_approve,
         crate::handlers::admin::admin_reject,
+        // cli tool routes
+        crate::handlers::cli::cli_me,
+        crate::handlers::cli::cli_download_info,
+        crate::handlers::cli::cli_p2p_create,
+        // cli device pairing
+        crate::handlers::cli_auth::create_session,
+        crate::handlers::cli_auth::check_status,
+        crate::handlers::cli_auth::complete_session,
     ),
     components(
         schemas(
+            // core
             User,
             OAuthProvider,
             FileShare,
@@ -78,25 +154,91 @@ impl Modify for SecurityAddon {
             FileInfoResponse,
             VerifyPasswordRequest,
             UploadHistoryResponse,
+            // user settings
+            NotificationSettingsResponse,
+            UpdateNotificationSettingsRequest,
+            UpdateNameRequest,
+            UpdateNameResponse,
+            // sessions
+            SessionResponse,
+            TrustedDeviceResponse,
+            // personal tokens
+            CreatePersonalTokenRequest,
+            CreatePersonalTokenResponse,
+            crate::models::personal_token::PersonalTokenResponse,
+            crate::models::personal_token::Scope,
+            // email auth
+            EmailSendRequest,
+            EmailSendResponse,
+            EmailVerifyRequest,
+            EmailVerifyResponse,
+            EmailVerifyCodeRequest,
+            EmailVerifyCodeResponse,
+            EmailStatusResponse,
+            EmailAuthData,
+            EmailAuthUser,
+            // cli auth
+            CliAuthSessionResponse,
+            CliAuthStatusResponse,
+            // cli tool
+            CliFileInfoResponse,
+            CliP2PFileInfo,
+            CliP2PCreateRequest,
+            CliP2PCreateResponse,
+            // presigned upload
+            PresignedUploadRequest,
+            PresignedUploadFileInfo,
+            PresignedUploadUrl,
+            PresignedUploadResponse,
+            CompleteUploadRequest,
+            CompleteUploadFile,
+            InitMultipartUploadRequest,
+            MultipartUploadFileInfo,
+            MultipartUploadFileInit,
+            InitMultipartUploadResponse,
+            GetPartUrlsRequest,
+            PartPresignedUrl,
+            GetPartUrlsResponse,
+            CompletedPart,
+            CompleteMultipartUploadRequest,
+            CompleteMultipartFileInfo,
+            // quick access
+            QuickAccessUploadRequest,
+            QuickAccessFileResponse,
+            QuickAccessListResponse,
+            // p2p
+            P2pStatusQuery,
+            P2pStatusResponse,
+            // turn
+            IceServer,
+            TurnCredentialsResponse,
+            // api-keys
             crate::models::api_key_application::ApplicationStatus,
             crate::models::api_key_application::ApiKeyApplication,
             crate::models::api_key_application::CreateApplicationRequest,
             crate::models::api_key_application::ApplicationResponse,
             crate::models::api_key_application::RejectRequest,
             crate::models::api_key_application::ApiKeyResponse,
-            crate::models::personal_token::PersonalTokenResponse,
-            crate::models::personal_token::Scope,
             crate::models::api_key::ApiKeyListItem,
         )
     ),
     modifiers(&SecurityAddon),
     tags(
-        (name = "auth", description = "Authentication endpoints (Google, Naver, Apple, Kakao OAuth)"),
-        (name = "upload", description = "File upload endpoints"),
+        (name = "auth", description = "Authentication endpoints (Google, Naver, Apple, Kakao OAuth) and device revoke"),
+        (name = "email-auth", description = "Email magic-link authentication flow"),
+        (name = "upload", description = "File upload endpoints (multipart form and P2P session creation)"),
+        (name = "presigned", description = "Presigned S3 upload endpoints (single-part and multipart)"),
         (name = "download", description = "File download endpoints"),
-        (name = "user", description = "User-specific endpoints (requires authentication)"),
+        (name = "user", description = "User-specific endpoints (requires JWT authentication)"),
+        (name = "sessions", description = "Session management and trusted device endpoints (requires JWT authentication)"),
+        (name = "personal-tokens", description = "Personal access token management (requires JWT authentication)"),
+        (name = "quick-access", description = "Quick Access file management (requires JWT authentication)"),
+        (name = "p2p", description = "P2P transfer status endpoints"),
+        (name = "turn", description = "TURN/ICE credential endpoints for WebRTC"),
         (name = "api-keys", description = "User-facing API key application and key management"),
         (name = "admin", description = "Admin actions (requires X-Admin-Password header)"),
+        (name = "cli", description = "CLI tool endpoints (authenticated via X-Personal-Token header)"),
+        (name = "cli-auth", description = "CLI device pairing / authentication flow"),
     ),
     info(
         title = "Share Anything API",

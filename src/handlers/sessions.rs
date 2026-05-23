@@ -19,6 +19,17 @@ pub struct SessionsState {
     pub db: DbPool,
 }
 
+/// List all active sessions (web and CLI) for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/user/sessions",
+    tag = "sessions",
+    responses(
+        (status = 200, description = "Sessions listed successfully", body = Vec<SessionResponse>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_sessions(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
@@ -64,6 +75,22 @@ pub async fn list_sessions(
     Ok(Json(response))
 }
 
+/// Terminate a specific session by JTI (or CLI token ID).
+#[utoipa::path(
+    delete,
+    path = "/user/sessions/{jti}",
+    tag = "sessions",
+    params(
+        ("jti" = String, Path, description = "Session JTI or CLI token ID")
+    ),
+    responses(
+        (status = 204, description = "Session terminated"),
+        (status = 400, description = "Cannot terminate current session"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Session not found")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn terminate_session(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
@@ -83,6 +110,17 @@ pub async fn terminate_session(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Terminate all sessions other than the current one.
+#[utoipa::path(
+    delete,
+    path = "/user/sessions",
+    tag = "sessions",
+    responses(
+        (status = 204, description = "Other sessions terminated"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn terminate_other_sessions(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
@@ -91,6 +129,17 @@ pub async fn terminate_other_sessions(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// List trusted devices for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/user/trusted-devices",
+    tag = "sessions",
+    responses(
+        (status = 200, description = "Trusted devices listed", body = Vec<TrustedDeviceResponse>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_trusted_devices(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,
@@ -112,6 +161,21 @@ pub async fn list_trusted_devices(
     Ok(Json(response))
 }
 
+/// Remove a trusted device by ID.
+#[utoipa::path(
+    delete,
+    path = "/user/trusted-devices/{id}",
+    tag = "sessions",
+    params(
+        ("id" = String, Path, description = "Trusted device ID")
+    ),
+    responses(
+        (status = 204, description = "Trusted device removed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Trusted device not found")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_trusted_device(
     State(state): State<SessionsState>,
     Extension(claims): Extension<Claims>,

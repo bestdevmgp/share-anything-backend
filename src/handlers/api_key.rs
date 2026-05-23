@@ -119,6 +119,7 @@ pub async fn apply(
         &req.service_url,
         &req.purpose,
         &scopes_csv,
+        req.requested_expires_at,
         ip.as_deref(),
         platform.as_deref(),
     )

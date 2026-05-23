@@ -69,6 +69,21 @@ pub struct ConfirmQuery {
     pub token: String,
 }
 
+/// Revoke a device session via a signed token link (sent by email).
+///
+/// Validates the signed device-revoke JWT, deletes the session and trusted device,
+/// then redirects to the frontend result page.
+#[utoipa::path(
+    get,
+    path = "/auth/device/revoke",
+    tag = "auth",
+    params(
+        ("token" = String, Query, description = "Signed device-revoke JWT")
+    ),
+    responses(
+        (status = 302, description = "Redirect to frontend result page")
+    )
+)]
 pub async fn revoke_device(
     State(state): State<DeviceConfirmState>,
     Query(query): Query<ConfirmQuery>,

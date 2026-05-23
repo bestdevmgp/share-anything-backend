@@ -243,6 +243,19 @@ pub async fn delete_all_file_shares(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Update the authenticated user's display name.
+#[utoipa::path(
+    put,
+    path = "/user/name",
+    tag = "user",
+    request_body = UpdateNameRequest,
+    responses(
+        (status = 200, description = "Name updated successfully", body = UpdateNameResponse),
+        (status = 400, description = "Invalid name (empty or too long)"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_name(
     State(state): State<UserState>,
     request: Request,
@@ -272,6 +285,17 @@ pub async fn update_name(
     Ok(Json(UpdateNameResponse { name }))
 }
 
+/// Delete the authenticated user's account (soft delete).
+#[utoipa::path(
+    delete,
+    path = "/user/account",
+    tag = "user",
+    responses(
+        (status = 204, description = "Account deleted successfully"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_account(
     State(state): State<UserState>,
     request: Request,
@@ -292,6 +316,17 @@ pub async fn delete_account(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Get the authenticated user's notification settings.
+#[utoipa::path(
+    get,
+    path = "/user/settings",
+    tag = "user",
+    responses(
+        (status = 200, description = "Notification settings retrieved", body = NotificationSettingsResponse),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_notification_settings(
     State(state): State<UserState>,
     request: Request,
@@ -315,6 +350,18 @@ pub async fn get_notification_settings(
     }))
 }
 
+/// Update the authenticated user's notification settings.
+#[utoipa::path(
+    put,
+    path = "/user/settings",
+    tag = "user",
+    request_body = UpdateNotificationSettingsRequest,
+    responses(
+        (status = 200, description = "Notification settings updated", body = NotificationSettingsResponse),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_notification_settings(
     State(state): State<UserState>,
     request: Request,

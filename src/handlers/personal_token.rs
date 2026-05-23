@@ -30,6 +30,19 @@ fn generate_personal_token() -> String {
     format!("sa_{}", random_part)
 }
 
+/// Create a new personal access token for the authenticated user.
+#[utoipa::path(
+    post,
+    path = "/user/personal-tokens",
+    tag = "personal-tokens",
+    request_body = CreatePersonalTokenRequest,
+    responses(
+        (status = 200, description = "Personal token created", body = CreatePersonalTokenResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_personal_token(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
@@ -77,6 +90,17 @@ pub async fn create_personal_token(
     }))
 }
 
+/// List all personal access tokens for the authenticated user.
+#[utoipa::path(
+    get,
+    path = "/user/personal-tokens",
+    tag = "personal-tokens",
+    responses(
+        (status = 200, description = "Personal tokens listed", body = Vec<PersonalTokenResponse>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_personal_tokens(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,
@@ -100,6 +124,21 @@ pub async fn list_personal_tokens(
     Ok(Json(response))
 }
 
+/// Revoke a personal access token by ID.
+#[utoipa::path(
+    delete,
+    path = "/user/personal-tokens/{token_id}",
+    tag = "personal-tokens",
+    params(
+        ("token_id" = String, Path, description = "Personal token ID")
+    ),
+    responses(
+        (status = 204, description = "Token revoked"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Token not found")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_personal_token(
     State(state): State<PersonalTokenState>,
     claims: axum::extract::Extension<Claims>,

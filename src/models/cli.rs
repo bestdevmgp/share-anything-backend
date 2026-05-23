@@ -13,7 +13,7 @@ pub struct CliUploadResponse {
     pub expires_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CliFileInfoResponse {
     pub share_code: String,
     pub files: Vec<CliFileDetail>,
@@ -46,7 +46,7 @@ pub struct CliFileListResponse {
     pub expires_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CliP2PFileInfo {
     pub name: String,
     pub size: i64,
@@ -54,13 +54,13 @@ pub struct CliP2PFileInfo {
     pub content_type: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CliP2PCreateRequest {
     pub files: Vec<CliP2PFileInfo>,
     pub password: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CliP2PCreateResponse {
     pub share_code: String,
     pub files: Vec<String>,

@@ -232,6 +232,20 @@ pub async fn cli_upload(
     }))
 }
 
+/// Create a P2P file share session via the CLI tool.
+///
+/// Registers file metadata and returns a share code for WebRTC-based peer-to-peer transfer.
+/// Requires `X-Personal-Token` header for authentication.
+#[utoipa::path(
+    post,
+    path = "/cli/p2p/create",
+    tag = "cli",
+    request_body = CliP2PCreateRequest,
+    responses(
+        (status = 200, description = "P2P session created", body = CliP2PCreateResponse),
+        (status = 400, description = "Invalid request")
+    )
+)]
 pub async fn cli_p2p_create(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
@@ -644,6 +658,21 @@ pub async fn cli_download(
     Ok(response)
 }
 
+/// Get file metadata for a share code (used by the CLI before downloading).
+///
+/// Requires `X-Personal-Token` header for authentication.
+#[utoipa::path(
+    get,
+    path = "/cli/download/{code}/info",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code")
+    ),
+    responses(
+        (status = 200, description = "File info returned", body = CliFileInfoResponse),
+        (status = 404, description = "File not found or expired")
+    )
+)]
 pub async fn cli_download_info(
     State(state): State<CliState>,
     Path(code): Path<String>,
@@ -856,6 +885,19 @@ pub async fn cli_download_history(
     })))
 }
 
+/// Get the authenticated CLI user's profile and token usage info.
+///
+/// Requires `X-Personal-Token` header for authentication.
+#[utoipa::path(
+    get,
+    path = "/cli/me",
+    tag = "cli",
+    responses(
+        (status = 200, description = "User profile returned"),
+        (status = 401, description = "Unauthorized — missing or invalid personal token"),
+        (status = 404, description = "User not found")
+    )
+)]
 pub async fn cli_me(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,

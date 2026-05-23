@@ -35,6 +35,20 @@ pub struct PresignedState {
 
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
 
+/// Request presigned PUT URLs for single-part uploads directly to S3.
+#[utoipa::path(
+    post,
+    path = "/file/presign",
+    tag = "presigned",
+    request_body = PresignedUploadRequest,
+    responses(
+        (status = 200, description = "Presigned URLs generated", body = PresignedUploadResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Authentication required for some options"),
+        (status = 403, description = "Turnstile verification failed")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn request_presigned_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
@@ -155,6 +169,17 @@ pub async fn request_presigned_upload(
     }))
 }
 
+/// Complete a presigned single-part upload and finalize the file share record.
+#[utoipa::path(
+    post,
+    path = "/file/complete",
+    tag = "presigned",
+    request_body = CompleteUploadRequest,
+    responses(
+        (status = 200, description = "Upload completed", body = MultipleFileUploadResponse),
+        (status = 400, description = "Invalid session or already completed")
+    )
+)]
 pub async fn complete_presigned_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteUploadRequest>,
@@ -268,6 +293,20 @@ pub async fn complete_presigned_upload(
     }))
 }
 
+/// Initialize a multipart upload session and create S3 multipart upload IDs.
+#[utoipa::path(
+    post,
+    path = "/file/multipart/init",
+    tag = "presigned",
+    request_body = InitMultipartUploadRequest,
+    responses(
+        (status = 200, description = "Multipart upload initialized", body = InitMultipartUploadResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 401, description = "Authentication required for some options"),
+        (status = 403, description = "Turnstile verification failed")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn init_multipart_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
@@ -396,6 +435,17 @@ pub async fn init_multipart_upload(
     }))
 }
 
+/// Get presigned URLs for individual multipart upload parts.
+#[utoipa::path(
+    post,
+    path = "/file/multipart/presign-parts",
+    tag = "presigned",
+    request_body = GetPartUrlsRequest,
+    responses(
+        (status = 200, description = "Part presigned URLs generated", body = GetPartUrlsResponse),
+        (status = 400, description = "Invalid or completed session")
+    )
+)]
 pub async fn get_part_presigned_urls(
     State(state): State<PresignedState>,
     Json(request): Json<GetPartUrlsRequest>,
@@ -442,6 +492,17 @@ pub async fn get_part_presigned_urls(
     }))
 }
 
+/// Complete a multipart upload and finalize all file share records.
+#[utoipa::path(
+    post,
+    path = "/file/multipart/complete",
+    tag = "presigned",
+    request_body = CompleteMultipartUploadRequest,
+    responses(
+        (status = 200, description = "Multipart upload completed", body = MultipleFileUploadResponse),
+        (status = 400, description = "Invalid session or already completed")
+    )
+)]
 pub async fn complete_multipart_upload(
     State(state): State<PresignedState>,
     Json(request): Json<CompleteMultipartUploadRequest>,

@@ -40,6 +40,8 @@ pub struct ApiKeyApplication {
     pub purpose: String,
     #[schema(example = "read,upload,delete")]
     pub scopes: String,
+    #[schema(example = "2027-05-30T00:00:00Z")]
+    pub requested_expires_at: Option<DateTime<Utc>>,
     #[schema(example = "pending")]
     pub status: String,
     #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
@@ -65,6 +67,8 @@ pub struct CreateApplicationRequest {
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
     pub scopes: Option<Vec<Scope>>,
+    #[schema(example = "2027-05-30T00:00:00Z")]
+    pub requested_expires_at: Option<DateTime<Utc>>,
     /// Client timezone offset in minutes from UTC. Positive east of UTC (e.g. KST = 540).
     #[schema(example = 540)]
     pub tz_offset_minutes: i32,
@@ -81,6 +85,8 @@ pub struct ApplicationResponse {
     #[schema(example = "We use ShareAnything to let our users share files larger than email allows...")]
     pub purpose: String,
     pub scopes: Vec<Scope>,
+    #[schema(example = "2027-05-30T00:00:00Z")]
+    pub requested_expires_at: Option<DateTime<Utc>>,
     pub status: ApplicationStatus,
     #[schema(example = "Service URL is not reachable; please provide a valid public URL.")]
     pub reject_reason: Option<String>,
@@ -118,6 +124,7 @@ impl From<ApiKeyApplication> for ApplicationResponse {
             service_url: app.service_url,
             purpose: app.purpose,
             scopes: Scope::parse_list(&app.scopes),
+            requested_expires_at: app.requested_expires_at,
             status: ApplicationStatus::from_db(&app.status),
             reject_reason: app.reject_reason,
             api_key_id: app.api_key_id,
