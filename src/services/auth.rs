@@ -176,6 +176,7 @@ impl AuthService {
             email: info.email,
             name: info.name,
             profile_image: info.profile_image,
+            notify_language: welcome_lang.to_string(),
         };
         let new_user = repository::create_user(&self.db, dto).await?;
 

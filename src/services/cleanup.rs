@@ -43,6 +43,14 @@ pub async fn start_cleanup_task(pool: DbPool, storage: StorageService, email_ser
         if let Err(e) = notify_expiring_api_keys(&pool, &email_service).await {
             error!("Failed to notify expiring API keys: {}", e);
         }
+
+        match repository::purge_expired_api_key_reveals(&pool).await {
+            Ok(n) if n > 0 => {
+                tracing::info!("Purged plaintext from {} expired API key reveal token(s)", n);
+            }
+            Ok(_) => {}
+            Err(e) => error!("Failed to purge expired API key reveals: {}", e),
+        }
     }
 }
 

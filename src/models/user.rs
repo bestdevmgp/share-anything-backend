@@ -130,6 +130,7 @@ pub struct CreateUserDto {
     pub email: String,
     pub name: String,
     pub profile_image: Option<String>,
+    pub notify_language: String,
 }
 
 #[derive(Debug, Deserialize)]

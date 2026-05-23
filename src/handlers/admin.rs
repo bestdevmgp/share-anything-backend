@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use rand::Rng;
+use rand::{Rng, RngCore};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -65,6 +65,12 @@ fn generate_api_key() -> String {
         .collect();
     let random_part: String = (0..40).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
     format!("sk_{}", random_part)
+}
+
+fn generate_reveal_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex::encode(bytes)
 }
 
 /// List all API key applications
@@ -164,10 +170,27 @@ pub async fn admin_approve(
         .await
         .map_err(|e| internal_error(format!("Failed to approve application: {}", e)))?;
 
+    let reveal_token = generate_reveal_token();
+    let reveal_expires_at = chrono::Utc::now() + chrono::Duration::days(7);
+    repository::create_api_key_reveal(
+        &state.db,
+        &reveal_token,
+        &key_id,
+        &app.user_id,
+        &raw_key,
+        reveal_expires_at,
+    )
+    .await
+    .map_err(|e| internal_error(format!("Failed to create reveal token: {}", e)))?;
+
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &app.user_id).await {
-        state
-            .email
-            .send_application_approved(&user.email, &user.name, &app.service_name);
+        state.email.send_application_approved(
+            &user.email,
+            &user.name,
+            &app.service_name,
+            &reveal_token,
+            &user.notify_language,
+        );
     }
 
     let created_at = repository::find_application_by_id(&state.db, id)
@@ -178,7 +201,6 @@ pub async fn admin_approve(
         .unwrap_or_else(chrono::Utc::now);
 
     Ok(Json(ApiKeyResponse {
-        api_key: raw_key,
         key_prefix,
         name: key_name,
         created_at,
@@ -230,6 +252,7 @@ pub async fn admin_reject(
             &user.name,
             &app.service_name,
             &body.reject_reason,
+            &user.notify_language,
         );
     }
 

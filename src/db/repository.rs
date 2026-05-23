@@ -17,8 +17,8 @@ pub async fn create_user(
 
     sqlx::query(
         r#"
-        INSERT INTO users (id, oauth_provider, oauth_id, email, name, profile_image, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, oauth_provider, oauth_id, email, name, profile_image, notify_language, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -27,6 +27,7 @@ pub async fn create_user(
     .bind(&dto.email)
     .bind(&dto.name)
     .bind(&dto.profile_image)
+    .bind(&dto.notify_language)
     .bind(now)
     .bind(now)
     .execute(pool)
@@ -1600,6 +1601,20 @@ pub async fn create_api_key(
     .await
 }
 
+pub async fn find_api_key_by_id(
+    pool: &MySqlPool,
+    id: &str,
+) -> Result<Option<ApiKey>, sqlx::Error> {
+    sqlx::query_as::<_, ApiKey>(
+        r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
+                  last_used_at, last_platform, expires_at, revoked_at, expiration_notified_at, created_at
+           FROM api_keys WHERE id = ?"#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn find_api_key_by_hash(
     pool: &MySqlPool,
     hash: &str,
@@ -1762,4 +1777,85 @@ pub async fn find_scopes_by_api_key(
         .into_iter()
         .filter_map(|(s,)| Scope::parse(&s))
         .collect())
+}
+
+pub async fn create_api_key_reveal(
+    pool: &MySqlPool,
+    token: &str,
+    api_key_id: &str,
+    user_id: &str,
+    plaintext_key: &str,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO api_key_reveals (token, api_key_id, user_id, plaintext_key, expires_at, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)"#,
+    )
+    .bind(token)
+    .bind(api_key_id)
+    .bind(user_id)
+    .bind(plaintext_key)
+    .bind(expires_at)
+    .bind(Utc::now())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub struct ApiKeyRevealRow {
+    pub api_key_id: String,
+    pub user_id: String,
+    pub plaintext_key: Option<String>,
+    pub expires_at: chrono::DateTime<Utc>,
+    pub revealed_at: Option<chrono::DateTime<Utc>>,
+}
+
+pub async fn find_api_key_reveal_by_token(
+    pool: &MySqlPool,
+    token: &str,
+) -> Result<Option<ApiKeyRevealRow>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query(
+        r#"SELECT api_key_id, user_id, plaintext_key, expires_at, revealed_at
+           FROM api_key_reveals WHERE token = ?"#,
+    )
+    .bind(token)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| ApiKeyRevealRow {
+        api_key_id: r.try_get("api_key_id").unwrap_or_default(),
+        user_id: r.try_get("user_id").unwrap_or_default(),
+        plaintext_key: r.try_get("plaintext_key").ok(),
+        expires_at: r.try_get("expires_at").unwrap_or_else(|_| Utc::now()),
+        revealed_at: r.try_get("revealed_at").ok(),
+    }))
+}
+
+pub async fn mark_api_key_reveal_consumed(
+    pool: &MySqlPool,
+    token: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE api_key_reveals
+           SET plaintext_key = NULL, revealed_at = UTC_TIMESTAMP()
+           WHERE token = ? AND revealed_at IS NULL"#,
+    )
+    .bind(token)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn purge_expired_api_key_reveals(pool: &MySqlPool) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE api_key_reveals
+           SET plaintext_key = NULL
+           WHERE plaintext_key IS NOT NULL
+             AND revealed_at IS NULL
+             AND expires_at < UTC_TIMESTAMP()"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }

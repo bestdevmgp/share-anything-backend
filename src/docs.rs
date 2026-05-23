@@ -121,6 +121,7 @@ impl Modify for SecurityAddon {
         crate::handlers::api_key::cancel_application,
         crate::handlers::api_key::list_my_api_keys,
         crate::handlers::api_key::revoke_api_key,
+        crate::handlers::api_key::reveal_api_key,
         // admin
         crate::handlers::admin::admin_list_applications,
         crate::handlers::admin::admin_approve,
@@ -221,6 +222,7 @@ impl Modify for SecurityAddon {
             crate::models::api_key_application::RejectRequest,
             crate::models::api_key_application::ApiKeyResponse,
             crate::models::api_key::ApiKeyListItem,
+            crate::models::api_key::ApiKeyRevealResponse,
         )
     ),
     modifiers(&SecurityAddon),

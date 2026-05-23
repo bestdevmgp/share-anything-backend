@@ -281,6 +281,7 @@ pub fn create_router(
         .route("/user/api-keys/applications/:id", get(handlers::api_key::get_my_application).delete(handlers::api_key::cancel_application))
         .route("/user/api-keys", get(handlers::api_key::list_my_api_keys))
         .route("/user/api-keys/:id", delete(handlers::api_key::revoke_api_key))
+        .route("/user/api-keys/reveal/:token", get(handlers::api_key::reveal_api_key))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             require_auth,

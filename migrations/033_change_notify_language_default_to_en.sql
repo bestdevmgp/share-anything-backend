@@ -1,0 +1,2 @@
+ALTER TABLE users
+  MODIFY COLUMN notify_language VARCHAR(5) NOT NULL DEFAULT 'en';
