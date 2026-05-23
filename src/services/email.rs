@@ -162,27 +162,27 @@ fn get_api_key_approved_translations(lang: &str) -> &'static ApiKeyApprovedTrans
     }
 }
 
-fn api_key_approved_intro(lang: &str, service_name: &str) -> String {
+fn api_key_approved_intro(lang: &str, name: &str, service_name: &str) -> String {
     match lang {
         "en" => format!(
-            "Your OpenAPI Key for <strong>\"{}\"</strong> has been approved. Click the button below to view your API Key.",
-            service_name
+            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been approved.<br><br>Click the button below to view your API Key.",
+            name, service_name
         ),
         "ja" => format!(
-            "お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key が承認されました。下のボタンから API Key をご確認ください。",
-            service_name
+            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が承認されました。<br><br>下のボタンから API Key をご確認ください。",
+            name, service_name
         ),
         "zh-CN" => format!(
-            "您申请的「<strong>{}</strong>」OpenAPI Key 已通过。请点击下方按钮查看您的 API Key。",
-            service_name
+            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请已通过。<br><br>请点击下方按钮查看您的 API Key。",
+            name, service_name
         ),
         "zh-TW" => format!(
-            "您申請的「<strong>{}</strong>」OpenAPI Key 已核准。請點選下方按鈕查看您的 API Key。",
-            service_name
+            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請已核准。<br><br>請點選下方按鈕查看您的 API Key。",
+            name, service_name
         ),
         _ => format!(
-            "신청하신 \"<strong>{}</strong>\"의 OpenAPI Key가 승인되었습니다. 아래 버튼을 눌러 API Key를 확인하세요.",
-            service_name
+            "{}님, 신청하신 \"<strong>{}</strong>\"의 OpenAPI Key 발급 신청이 승인되었습니다.<br><br>아래 버튼을 눌러 API Key를 확인하세요.",
+            name, service_name
         ),
     }
 }
@@ -244,27 +244,27 @@ fn get_api_key_rejected_translations(lang: &str) -> &'static ApiKeyRejectedTrans
     }
 }
 
-fn api_key_rejected_intro(lang: &str, service_name: &str) -> String {
+fn api_key_rejected_intro(lang: &str, name: &str, service_name: &str) -> String {
     match lang {
         "en" => format!(
-            "Your OpenAPI Key for <strong>\"{}\"</strong> has been rejected. Please review the reason below and feel free to submit a new application.",
-            service_name
+            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been rejected.<br><br>Please review the reason below, make adjustments, and submit a new application.",
+            name, service_name
         ),
         "ja" => format!(
-            "お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key が却下されました。下記の理由をご確認のうえ、再度お申し込みいただけます。",
-            service_name
+            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が却下されました。<br><br>下記の理由をご確認のうえ、修正して再度お申し込みいただけます。",
+            name, service_name
         ),
         "zh-CN" => format!(
-            "您申请的「<strong>{}</strong>」OpenAPI Key 未通过。请参考下方原因后再次申请。",
-            service_name
+            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请未通过。<br><br>请参考下方原因修改后再次申请。",
+            name, service_name
         ),
         "zh-TW" => format!(
-            "您申請的「<strong>{}</strong>」OpenAPI Key 未通過。請參考下方原因後再次申請。",
-            service_name
+            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請未通過。<br><br>請參考下方原因修改後再次申請。",
+            name, service_name
         ),
         _ => format!(
-            "신청하신 \"<strong>{}</strong>\"의 OpenAPI Key가 반려되었습니다. 아래 반려 사유를 참고하여 재신청할 수 있습니다.",
-            service_name
+            "{}님, 신청하신 \"<strong>{}</strong>\"의 OpenAPI Key 발급 신청이 반려되었습니다.<br><br>아래 반려 사유를 참고하여 수정 후 재신청할 수 있습니다.",
+            name, service_name
         ),
     }
 }
@@ -1504,6 +1504,7 @@ impl EmailService {
     pub fn send_application_approved(
         self: &Arc<Self>,
         to_email: &str,
+        applicant_name: &str,
         service_name: &str,
         reveal_token: &str,
         lang: &str,
@@ -1513,13 +1514,14 @@ impl EmailService {
         }
         let this = Arc::clone(self);
         let to_email = to_email.to_string();
+        let applicant_name = applicant_name.to_string();
         let service_name = service_name.to_string();
         let reveal_token = reveal_token.to_string();
         let lang = lang.to_string();
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .do_send_application_approved(&to_email, &service_name, &reveal_token, &lang)
+                .do_send_application_approved(&to_email, &applicant_name, &service_name, &reveal_token, &lang)
                 .await
             {
                 tracing::warn!("Failed to send API key approval email: {}", e);
@@ -1530,6 +1532,7 @@ impl EmailService {
     async fn do_send_application_approved(
         &self,
         to_email: &str,
+        applicant_name: &str,
         service_name: &str,
         reveal_token: &str,
         lang: &str,
@@ -1539,7 +1542,7 @@ impl EmailService {
 
         let html_body = ApiKeyApprovedTemplate {
             html_lang: html_lang_attr(lang),
-            intro: api_key_approved_intro(lang, service_name),
+            intro: api_key_approved_intro(lang, applicant_name, service_name),
             reveal_url: format!("{}/api-keys/reveal/{}", self.frontend_url, reveal_token),
             frontend_url: &self.frontend_url,
             t: get_api_key_approved_translations(lang),
@@ -1757,6 +1760,7 @@ impl EmailService {
     pub fn send_application_rejected(
         self: &Arc<Self>,
         to_email: &str,
+        applicant_name: &str,
         service_name: &str,
         reason: &str,
         lang: &str,
@@ -1766,13 +1770,14 @@ impl EmailService {
         }
         let this = Arc::clone(self);
         let to_email = to_email.to_string();
+        let applicant_name = applicant_name.to_string();
         let service_name = service_name.to_string();
         let reason = reason.to_string();
         let lang = lang.to_string();
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .do_send_application_rejected(&to_email, &service_name, &reason, &lang)
+                .do_send_application_rejected(&to_email, &applicant_name, &service_name, &reason, &lang)
                 .await
             {
                 tracing::warn!("Failed to send API key rejection email: {}", e);
@@ -1783,6 +1788,7 @@ impl EmailService {
     async fn do_send_application_rejected(
         &self,
         to_email: &str,
+        applicant_name: &str,
         service_name: &str,
         reason: &str,
         lang: &str,
@@ -1792,7 +1798,7 @@ impl EmailService {
 
         let html_body = ApiKeyRejectedTemplate {
             html_lang: html_lang_attr(lang),
-            intro: api_key_rejected_intro(lang, service_name),
+            intro: api_key_rejected_intro(lang, applicant_name, service_name),
             reason,
             settings_url: format!("{}/settings?tab=api-keys", self.frontend_url),
             frontend_url: &self.frontend_url,

@@ -1505,7 +1505,7 @@ pub async fn count_user_applications_today(
     let count: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM api_key_applications
            WHERE user_id = ?
-             AND status != 'cancelled'
+             AND status NOT IN ('cancelled', 'rejected')
              AND DATE(created_at + INTERVAL ? MINUTE) = DATE(UTC_TIMESTAMP() + INTERVAL ? MINUTE)"#,
     )
     .bind(user_id)
