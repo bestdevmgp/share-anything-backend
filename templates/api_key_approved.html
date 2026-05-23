@@ -14,33 +14,10 @@
 
 <!-- Body -->
 <tr>
-<td style="padding:28px 0 24px;">
-  <p style="margin:0 0 24px;font-size:13px;color:#a1a1aa;">{{ t.tagline }}</p>
-  <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#18181b;">{{ greeting }}</h2>
-  <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#71717a;">
-    {{ t.intro|safe }}
+<td style="padding:32px 0 32px;">
+  <p style="margin:0 0 28px;font-size:16px;line-height:1.7;color:#18181b;">
+    {{ intro|safe }}
   </p>
-
-  <!-- Service info -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#f8fafc;border-radius:8px;border-left:3px solid #10b981;">
-        <p style="margin:0 0 4px;font-size:12px;color:#71717a;">{{ t.service_label }}</p>
-        <strong style="color:#18181b;font-size:14px;">{{ service_name }}</strong>
-      </td>
-    </tr>
-  </table>
-
-  <!-- Warning -->
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-    <tr>
-      <td style="padding:14px 16px;background-color:#fffbeb;border-radius:8px;border-left:3px solid #f59e0b;">
-        <p style="margin:0;font-size:13px;line-height:1.6;color:#78350f;">
-          {{ t.warning|safe }}
-        </p>
-      </td>
-    </tr>
-  </table>
 
   <!-- CTA Button -->
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

@@ -92,6 +92,8 @@ pub struct ApplicationResponse {
     pub reject_reason: Option<String>,
     #[schema(example = "tok_abc123")]
     pub api_key_id: Option<String>,
+    #[schema(example = "a1b2c3d4...")]
+    pub reveal_token: Option<String>,
     #[schema(example = "2026-05-21T14:30:00Z")]
     pub created_at: DateTime<Utc>,
     #[schema(example = "2026-05-21T14:30:00Z")]
@@ -126,6 +128,7 @@ impl From<ApiKeyApplication> for ApplicationResponse {
             status: ApplicationStatus::from_db(&app.status),
             reject_reason: app.reject_reason,
             api_key_id: app.api_key_id,
+            reveal_token: None,
             created_at: app.created_at,
             reviewed_at: app.reviewed_at,
         }

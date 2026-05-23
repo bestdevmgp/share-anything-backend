@@ -186,7 +186,6 @@ pub async fn admin_approve(
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &app.user_id).await {
         state.email.send_application_approved(
             &user.email,
-            &user.name,
             &app.service_name,
             &reveal_token,
             &user.notify_language,
@@ -249,7 +248,6 @@ pub async fn admin_reject(
     if let Ok(Some(user)) = repository::find_user_by_id(&state.db, &app.user_id).await {
         state.email.send_application_rejected(
             &user.email,
-            &user.name,
             &app.service_name,
             &body.reject_reason,
             &user.notify_language,

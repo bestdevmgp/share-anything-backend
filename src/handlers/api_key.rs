@@ -160,7 +160,17 @@ pub async fn list_my_applications(
         .await
         .map_err(|e| internal_error(format!("Failed to list applications: {}", e)))?;
 
-    Ok(Json(apps.into_iter().map(ApplicationResponse::from).collect()))
+    let mut response = Vec::with_capacity(apps.len());
+    for app in apps {
+        let mut item: ApplicationResponse = app.into();
+        if let Some(ref aid) = item.api_key_id {
+            item.reveal_token = repository::find_active_reveal_token_for_api_key(&state.db, aid)
+                .await
+                .map_err(|e| internal_error(format!("Failed to fetch reveal token: {}", e)))?;
+        }
+        response.push(item);
+    }
+    Ok(Json(response))
 }
 
 /// Get a specific API key application
@@ -194,7 +204,13 @@ pub async fn get_my_application(
         return Err(not_found("신청을 찾을 수 없습니다"));
     }
 
-    Ok(Json(app.into()))
+    let mut item: ApplicationResponse = app.into();
+    if let Some(ref aid) = item.api_key_id {
+        item.reveal_token = repository::find_active_reveal_token_for_api_key(&state.db, aid)
+            .await
+            .map_err(|e| internal_error(format!("Failed to fetch reveal token: {}", e)))?;
+    }
+    Ok(Json(item))
 }
 
 /// List my active API keys
@@ -225,6 +241,9 @@ pub async fn list_my_api_keys(
         let scopes = repository::find_scopes_by_api_key(&state.db, &key.id)
             .await
             .map_err(|e| internal_error(format!("Failed to fetch scopes: {}", e)))?;
+        let reveal_token = repository::find_active_reveal_token_for_api_key(&state.db, &key.id)
+            .await
+            .map_err(|e| internal_error(format!("Failed to fetch reveal token: {}", e)))?;
         response.push(ApiKeyListItem {
             id: key.id,
             key_prefix: key.key_prefix,
@@ -233,6 +252,7 @@ pub async fn list_my_api_keys(
             last_used_at: key.last_used_at,
             expires_at: key.expires_at,
             created_at: key.created_at,
+            reveal_token,
         });
     }
 

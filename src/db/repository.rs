@@ -1847,6 +1847,26 @@ pub async fn mark_api_key_reveal_consumed(
     Ok(result.rows_affected())
 }
 
+pub async fn find_active_reveal_token_for_api_key(
+    pool: &MySqlPool,
+    api_key_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query(
+        r#"SELECT token FROM api_key_reveals
+           WHERE api_key_id = ?
+             AND revealed_at IS NULL
+             AND plaintext_key IS NOT NULL
+             AND expires_at > UTC_TIMESTAMP()
+           ORDER BY created_at DESC
+           LIMIT 1"#,
+    )
+    .bind(api_key_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.and_then(|r| r.try_get::<String, _>("token").ok()))
+}
+
 pub async fn purge_expired_api_key_reveals(pool: &MySqlPool) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         r#"UPDATE api_key_reveals

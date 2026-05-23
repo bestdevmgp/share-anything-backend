@@ -120,18 +120,13 @@ fn welcome_greeting(lang: &str, name: &str) -> String {
 #[template(path = "api_key_approved.html")]
 struct ApiKeyApprovedTemplate<'a> {
     html_lang: &'a str,
-    greeting: String,
-    service_name: &'a str,
+    intro: String,
     reveal_url: String,
     frontend_url: &'a str,
     t: &'static ApiKeyApprovedTranslations,
 }
 
 struct ApiKeyApprovedTranslations {
-    tagline: &'static str,
-    intro: &'static str,
-    service_label: &'static str,
-    warning: &'static str,
     cta: &'static str,
     expiry_notice: &'static str,
     footer: &'static str,
@@ -140,50 +135,55 @@ struct ApiKeyApprovedTranslations {
 fn get_api_key_approved_translations(lang: &str) -> &'static ApiKeyApprovedTranslations {
     match lang {
         "en" => &ApiKeyApprovedTranslations {
-            tagline: "API Key approved",
-            intro: "Your API Key application has been <strong>approved</strong>.<br>Click the button below to view your API Key.",
-            service_label: "Service",
-            warning: "<strong>Important:</strong> Your API Key is shown <strong>only once</strong>. Please copy and store it in a safe place — you will not be able to view it again after closing the page.",
             cta: "View API Key",
             expiry_notice: "This link expires in 7 days.",
             footer: "This email is automatically sent when your API Key application is approved.",
         },
         "ja" => &ApiKeyApprovedTranslations {
-            tagline: "API Key 承認のお知らせ",
-            intro: "お申し込みいただいた API Key が<strong>承認</strong>されました。<br>下のボタンから API Key をご確認ください。",
-            service_label: "サービス",
-            warning: "<strong>ご注意:</strong> API Key は<strong>一度だけ</strong>表示されます。ページを閉じると再表示できませんので、必ずコピーして安全な場所に保管してください。",
             cta: "API Key を確認",
             expiry_notice: "このリンクは 7 日後に無効になります。",
             footer: "本メールは API Key 申請が承認された際に自動送信される通知メールです。",
         },
         "zh-CN" => &ApiKeyApprovedTranslations {
-            tagline: "API Key 已批准",
-            intro: "您的 API Key 申请已<strong>通过</strong>。<br>请点击下方按钮查看您的 API Key。",
-            service_label: "服务",
-            warning: "<strong>重要提示:</strong> 您的 API Key 仅显示<strong>一次</strong>,请妥善复制并保存到安全位置,关闭页面后将无法再次查看。",
             cta: "查看 API Key",
             expiry_notice: "此链接将在 7 天后失效。",
             footer: "此邮件在 API Key 申请获批时自动发送。",
         },
         "zh-TW" => &ApiKeyApprovedTranslations {
-            tagline: "API Key 已核准",
-            intro: "您的 API Key 申請已<strong>通過</strong>。<br>請點選下方按鈕查看您的 API Key。",
-            service_label: "服務",
-            warning: "<strong>重要提示:</strong> 您的 API Key 僅顯示<strong>一次</strong>,請務必複製並保存至安全位置,關閉頁面後將無法再次查看。",
             cta: "查看 API Key",
             expiry_notice: "此連結將在 7 天後失效。",
             footer: "此郵件在 API Key 申請獲核准時自動發送。",
         },
         _ => &ApiKeyApprovedTranslations {
-            tagline: "API Key 신청 승인 안내",
-            intro: "신청하신 API Key가 <strong>승인</strong>되었습니다.<br>아래 버튼을 눌러 API Key를 확인하세요.",
-            service_label: "서비스",
-            warning: "<strong>중요:</strong> API Key는 <strong>딱 한 번만</strong> 표시됩니다. 페이지를 닫으면 다시 확인할 수 없으니 반드시 복사하여 안전한 곳에 보관해 주세요.",
             cta: "API Key 확인하기",
             expiry_notice: "이 링크는 7일 후 만료됩니다.",
             footer: "본 메일은 API Key 신청 승인 시 자동으로 발송되는 알림 메일입니다.",
         },
+    }
+}
+
+fn api_key_approved_intro(lang: &str, service_name: &str) -> String {
+    match lang {
+        "en" => format!(
+            "Your OpenAPI Key for <strong>\"{}\"</strong> has been approved. Click the button below to view your API Key.",
+            service_name
+        ),
+        "ja" => format!(
+            "お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key が承認されました。下のボタンから API Key をご確認ください。",
+            service_name
+        ),
+        "zh-CN" => format!(
+            "您申请的「<strong>{}</strong>」OpenAPI Key 已通过。请点击下方按钮查看您的 API Key。",
+            service_name
+        ),
+        "zh-TW" => format!(
+            "您申請的「<strong>{}</strong>」OpenAPI Key 已核准。請點選下方按鈕查看您的 API Key。",
+            service_name
+        ),
+        _ => format!(
+            "신청하신 \"<strong>{}</strong>\"의 OpenAPI Key가 승인되었습니다. 아래 버튼을 눌러 API Key를 확인하세요.",
+            service_name
+        ),
     }
 }
 
@@ -197,22 +197,11 @@ fn api_key_approved_subject(lang: &str, service_name: &str) -> String {
     }
 }
 
-fn api_key_approved_greeting(lang: &str, name: &str) -> String {
-    match lang {
-        "en" => format!("Hi {},", name),
-        "ja" => format!("{}様", name),
-        "zh-CN" => format!("您好,{}", name),
-        "zh-TW" => format!("您好,{}", name),
-        _ => format!("{}님, 안녕하세요!", name),
-    }
-}
-
 #[derive(Template)]
 #[template(path = "api_key_rejected.html")]
 struct ApiKeyRejectedTemplate<'a> {
     html_lang: &'a str,
-    greeting: String,
-    service_name: &'a str,
+    intro: String,
     reason: &'a str,
     settings_url: String,
     frontend_url: &'a str,
@@ -220,11 +209,7 @@ struct ApiKeyRejectedTemplate<'a> {
 }
 
 struct ApiKeyRejectedTranslations {
-    tagline: &'static str,
-    intro: &'static str,
-    service_label: &'static str,
     reason_label: &'static str,
-    contact_hint: &'static str,
     cta: &'static str,
     footer: &'static str,
 }
@@ -232,50 +217,55 @@ struct ApiKeyRejectedTranslations {
 fn get_api_key_rejected_translations(lang: &str) -> &'static ApiKeyRejectedTranslations {
     match lang {
         "en" => &ApiKeyRejectedTranslations {
-            tagline: "API Key application rejected",
-            intro: "We're sorry. Your API Key application has been <strong>rejected</strong>.",
-            service_label: "Service",
             reason_label: "Reason",
-            contact_hint: "If you have any questions, please contact <a href=\"mailto:me@mingyu.dev\" style=\"color:#2563eb;text-decoration:none;\">me@mingyu.dev</a>.",
             cta: "View Applications",
             footer: "This email is automatically sent when an API Key application is rejected.",
         },
         "ja" => &ApiKeyRejectedTranslations {
-            tagline: "API Key 申請の却下のお知らせ",
-            intro: "申し訳ございません。お申し込みいただいた API Key 申請は<strong>却下</strong>されました。",
-            service_label: "サービス",
             reason_label: "却下理由",
-            contact_hint: "ご不明な点がございましたら <a href=\"mailto:me@mingyu.dev\" style=\"color:#2563eb;text-decoration:none;\">me@mingyu.dev</a> までお問い合わせください。",
             cta: "申請内容を確認",
             footer: "本メールは API Key 申請が却下された際に自動送信される通知メールです。",
         },
         "zh-CN" => &ApiKeyRejectedTranslations {
-            tagline: "API Key 申请未通过",
-            intro: "很抱歉,您的 API Key 申请<strong>未通过</strong>。",
-            service_label: "服务",
             reason_label: "未通过原因",
-            contact_hint: "如有任何疑问,请联系 <a href=\"mailto:me@mingyu.dev\" style=\"color:#2563eb;text-decoration:none;\">me@mingyu.dev</a>。",
             cta: "查看申请记录",
             footer: "此邮件在 API Key 申请未通过时自动发送。",
         },
         "zh-TW" => &ApiKeyRejectedTranslations {
-            tagline: "API Key 申請未通過",
-            intro: "很抱歉,您的 API Key 申請<strong>未通過</strong>。",
-            service_label: "服務",
             reason_label: "未通過原因",
-            contact_hint: "如有任何疑問,請聯絡 <a href=\"mailto:me@mingyu.dev\" style=\"color:#2563eb;text-decoration:none;\">me@mingyu.dev</a>。",
             cta: "查看申請記錄",
             footer: "此郵件在 API Key 申請未通過時自動發送。",
         },
         _ => &ApiKeyRejectedTranslations {
-            tagline: "API Key 신청 반려 안내",
-            intro: "죄송합니다. 신청하신 API Key가 <strong>반려</strong>되었습니다.",
-            service_label: "서비스",
             reason_label: "반려 사유",
-            contact_hint: "문의 사항이 있으시면 <a href=\"mailto:me@mingyu.dev\" style=\"color:#2563eb;text-decoration:none;\">me@mingyu.dev</a>로 연락해 주세요.",
             cta: "신청 내역 확인하기",
             footer: "본 메일은 API Key 신청 반려 시 자동으로 발송되는 알림 메일입니다.",
         },
+    }
+}
+
+fn api_key_rejected_intro(lang: &str, service_name: &str) -> String {
+    match lang {
+        "en" => format!(
+            "Your OpenAPI Key for <strong>\"{}\"</strong> has been rejected. Please review the reason below and feel free to submit a new application.",
+            service_name
+        ),
+        "ja" => format!(
+            "お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key が却下されました。下記の理由をご確認のうえ、再度お申し込みいただけます。",
+            service_name
+        ),
+        "zh-CN" => format!(
+            "您申请的「<strong>{}</strong>」OpenAPI Key 未通过。请参考下方原因后再次申请。",
+            service_name
+        ),
+        "zh-TW" => format!(
+            "您申請的「<strong>{}</strong>」OpenAPI Key 未通過。請參考下方原因後再次申請。",
+            service_name
+        ),
+        _ => format!(
+            "신청하신 \"<strong>{}</strong>\"의 OpenAPI Key가 반려되었습니다. 아래 반려 사유를 참고하여 재신청할 수 있습니다.",
+            service_name
+        ),
     }
 }
 
@@ -1514,7 +1504,6 @@ impl EmailService {
     pub fn send_application_approved(
         self: &Arc<Self>,
         to_email: &str,
-        applicant_name: &str,
         service_name: &str,
         reveal_token: &str,
         lang: &str,
@@ -1524,14 +1513,13 @@ impl EmailService {
         }
         let this = Arc::clone(self);
         let to_email = to_email.to_string();
-        let applicant_name = applicant_name.to_string();
         let service_name = service_name.to_string();
         let reveal_token = reveal_token.to_string();
         let lang = lang.to_string();
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .do_send_application_approved(&to_email, &applicant_name, &service_name, &reveal_token, &lang)
+                .do_send_application_approved(&to_email, &service_name, &reveal_token, &lang)
                 .await
             {
                 tracing::warn!("Failed to send API key approval email: {}", e);
@@ -1542,7 +1530,6 @@ impl EmailService {
     async fn do_send_application_approved(
         &self,
         to_email: &str,
-        applicant_name: &str,
         service_name: &str,
         reveal_token: &str,
         lang: &str,
@@ -1552,8 +1539,7 @@ impl EmailService {
 
         let html_body = ApiKeyApprovedTemplate {
             html_lang: html_lang_attr(lang),
-            greeting: api_key_approved_greeting(lang, applicant_name),
-            service_name,
+            intro: api_key_approved_intro(lang, service_name),
             reveal_url: format!("{}/api-keys/reveal/{}", self.frontend_url, reveal_token),
             frontend_url: &self.frontend_url,
             t: get_api_key_approved_translations(lang),
@@ -1771,7 +1757,6 @@ impl EmailService {
     pub fn send_application_rejected(
         self: &Arc<Self>,
         to_email: &str,
-        applicant_name: &str,
         service_name: &str,
         reason: &str,
         lang: &str,
@@ -1781,14 +1766,13 @@ impl EmailService {
         }
         let this = Arc::clone(self);
         let to_email = to_email.to_string();
-        let applicant_name = applicant_name.to_string();
         let service_name = service_name.to_string();
         let reason = reason.to_string();
         let lang = lang.to_string();
 
         tokio::spawn(async move {
             if let Err(e) = this
-                .do_send_application_rejected(&to_email, &applicant_name, &service_name, &reason, &lang)
+                .do_send_application_rejected(&to_email, &service_name, &reason, &lang)
                 .await
             {
                 tracing::warn!("Failed to send API key rejection email: {}", e);
@@ -1799,7 +1783,6 @@ impl EmailService {
     async fn do_send_application_rejected(
         &self,
         to_email: &str,
-        applicant_name: &str,
         service_name: &str,
         reason: &str,
         lang: &str,
@@ -1809,8 +1792,7 @@ impl EmailService {
 
         let html_body = ApiKeyRejectedTemplate {
             html_lang: html_lang_attr(lang),
-            greeting: api_key_approved_greeting(lang, applicant_name),
-            service_name,
+            intro: api_key_rejected_intro(lang, service_name),
             reason,
             settings_url: format!("{}/settings?tab=api-keys", self.frontend_url),
             frontend_url: &self.frontend_url,

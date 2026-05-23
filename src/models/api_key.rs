@@ -51,4 +51,6 @@ pub struct ApiKeyListItem {
     pub expires_at: Option<DateTime<Utc>>,
     #[schema(example = "2026-05-21T14:30:00Z")]
     pub created_at: DateTime<Utc>,
+    #[schema(example = "a1b2c3d4...")]
+    pub reveal_token: Option<String>,
 }
