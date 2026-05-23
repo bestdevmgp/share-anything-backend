@@ -1592,7 +1592,7 @@ pub async fn create_api_key(
 
     sqlx::query_as::<_, ApiKey>(
         r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
-                  last_used_at, last_platform, expires_at, revoked_at, created_at
+                  last_used_at, last_platform, expires_at, revoked_at, expiration_notified_at, created_at
            FROM api_keys WHERE id = ?"#,
     )
     .bind(id)
@@ -1606,7 +1606,7 @@ pub async fn find_api_key_by_hash(
 ) -> Result<Option<ApiKey>, sqlx::Error> {
     sqlx::query_as::<_, ApiKey>(
         r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
-                  last_used_at, last_platform, expires_at, revoked_at, created_at
+                  last_used_at, last_platform, expires_at, revoked_at, expiration_notified_at, created_at
            FROM api_keys WHERE key_hash = ?"#,
     )
     .bind(hash)
@@ -1620,7 +1620,7 @@ pub async fn find_api_keys_by_user(
 ) -> Result<Vec<ApiKey>, sqlx::Error> {
     sqlx::query_as::<_, ApiKey>(
         r#"SELECT id, user_id, application_id, key_hash, key_prefix, name,
-                  last_used_at, last_platform, expires_at, revoked_at, created_at
+                  last_used_at, last_platform, expires_at, revoked_at, expiration_notified_at, created_at
            FROM api_keys
            WHERE user_id = ? AND revoked_at IS NULL
            ORDER BY created_at DESC"#,
@@ -1628,6 +1628,72 @@ pub async fn find_api_keys_by_user(
     .bind(user_id)
     .fetch_all(pool)
     .await
+}
+
+pub async fn find_expiring_api_keys(
+    pool: &MySqlPool,
+) -> Result<Vec<(ApiKey, String, String, String, String)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT k.id AS k_id, k.user_id AS k_user_id, k.application_id AS k_application_id,
+               k.key_hash AS k_key_hash, k.key_prefix AS k_key_prefix, k.name AS k_name,
+               k.last_used_at AS k_last_used_at, k.last_platform AS k_last_platform,
+               k.expires_at AS k_expires_at, k.revoked_at AS k_revoked_at,
+               k.expiration_notified_at AS k_expiration_notified_at,
+               k.created_at AS k_created_at,
+               u.email, u.name AS u_name, COALESCE(u.notify_language, 'ko') AS notify_language,
+               app.service_name
+        FROM api_keys k
+        INNER JOIN users u ON u.id = k.user_id
+        INNER JOIN api_key_applications app ON app.id = k.application_id
+        WHERE k.revoked_at IS NULL
+          AND k.expires_at IS NOT NULL
+          AND k.expires_at > UTC_TIMESTAMP()
+          AND k.expires_at <= UTC_TIMESTAMP() + INTERVAL 3 DAY
+          AND k.expiration_notified_at IS NULL
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut result = Vec::with_capacity(rows.len());
+    for row in rows {
+        let key = ApiKey {
+            id: row.try_get("k_id")?,
+            user_id: row.try_get("k_user_id")?,
+            application_id: row.try_get("k_application_id")?,
+            key_hash: row.try_get("k_key_hash")?,
+            key_prefix: row.try_get("k_key_prefix")?,
+            name: row.try_get("k_name")?,
+            last_used_at: row.try_get("k_last_used_at")?,
+            last_platform: row.try_get("k_last_platform")?,
+            expires_at: row.try_get("k_expires_at")?,
+            revoked_at: row.try_get("k_revoked_at")?,
+            expiration_notified_at: row.try_get("k_expiration_notified_at")?,
+            created_at: row.try_get("k_created_at")?,
+        };
+        let email: String = row.try_get("email")?;
+        let user_name: String = row.try_get("u_name")?;
+        let notify_language: String = row.try_get("notify_language")?;
+        let service_name: String = row.try_get("service_name")?;
+        result.push((key, email, user_name, notify_language, service_name));
+    }
+    Ok(result)
+}
+
+pub async fn mark_api_key_notified(
+    pool: &MySqlPool,
+    api_key_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"UPDATE api_keys SET expiration_notified_at = UTC_TIMESTAMP() WHERE id = ?"#,
+    )
+    .bind(api_key_id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn revoke_api_key(

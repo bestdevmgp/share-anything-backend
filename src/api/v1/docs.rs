@@ -64,8 +64,8 @@ impl Modify for ApiKeySecurity {
     ),
     info(
         title = "ShareAnything Public API",
-        version = "1.0.0",
-        description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+        version = "1.1.0",
+        description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys). Use of this API is governed by the [OpenAPI Terms of Use](https://share.mingyu.dev/api-terms-of-use).",
         contact(name = "ShareAnything", email = "shareanything@mingyu.dev"),
         license(name = "Proprietary"),
     ),

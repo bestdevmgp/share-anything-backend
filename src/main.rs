@@ -38,13 +38,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     tracing::info!("Storage service initialized");
 
-    let cleanup_pool = db_pool.clone();
-    let cleanup_storage = storage.clone();
-    tokio::spawn(async move {
-        services::start_cleanup_task(cleanup_pool, cleanup_storage).await;
-    });
-    tracing::info!("Cleanup background task started");
-
     let discord = Arc::new(services::discord::DiscordNotifier::new(
         config.discord.webhook_url.clone(),
     ));
@@ -57,6 +50,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &config.server.frontend_url,
         &config.server.base_url,
     ));
+
+    let cleanup_pool = db_pool.clone();
+    let cleanup_storage = storage.clone();
+    let cleanup_email = Arc::clone(&email);
+    tokio::spawn(async move {
+        services::start_cleanup_task(cleanup_pool, cleanup_storage, cleanup_email).await;
+    });
+    tracing::info!("Cleanup background task started");
     if email.is_enabled() {
         tracing::info!("Email notifications enabled");
     }

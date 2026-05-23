@@ -17,6 +17,7 @@ pub struct ApiKey {
     pub last_platform: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
+    pub expiration_notified_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 

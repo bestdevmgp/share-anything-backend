@@ -165,6 +165,7 @@ impl Modify for SecurityAddon {
             // personal tokens
             CreatePersonalTokenRequest,
             CreatePersonalTokenResponse,
+            crate::models::ErrorResponse,
             crate::models::personal_token::PersonalTokenResponse,
             crate::models::personal_token::Scope,
             // email auth

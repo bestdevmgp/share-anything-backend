@@ -1388,6 +1388,202 @@ impl EmailService {
         Ok(())
     }
 
+    pub async fn send_api_key_expiration_warning(
+        &self,
+        to_email: &str,
+        user_name: &str,
+        service_name: &str,
+        key_prefix: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+        notify_language: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let from: Mailbox = format!("{} <{}>", self.from_name, self.from_email).parse()?;
+        let to: Mailbox = to_email.parse()?;
+
+        let subject = match notify_language {
+            "en" => "[ShareAnything] Your API Key is expiring soon",
+            "ja" => "[ShareAnything] API Keyがまもなく期限切れになります",
+            "zh-CN" => "[ShareAnything] 您的 API Key 即将过期",
+            "zh-TW" => "[ShareAnything] 您的 API Key 即將過期",
+            _ => "[ShareAnything] API Key가 곧 만료됩니다",
+        };
+
+        let now = chrono::Utc::now();
+        let duration = expires_at.signed_duration_since(now);
+        let days_remaining = duration.num_days().max(0);
+
+        // For KST (ko), display time in KST (UTC+9)
+        let display_expires = if notify_language == "ko" || notify_language == "ja" {
+            expires_at + chrono::Duration::hours(9)
+        } else {
+            expires_at
+        };
+        let date_str = format_date_localized(&display_expires, notify_language);
+        let time_str = display_expires.format("%H:%M").to_string();
+        let timezone_label = if notify_language == "ko" || notify_language == "ja" {
+            " (KST)"
+        } else {
+            " (UTC)"
+        };
+        let formatted_expires_at = format!("{} {}{}", date_str, time_str, timezone_label);
+
+        let html_body = self.build_api_key_expiration_html(
+            user_name,
+            service_name,
+            key_prefix,
+            &formatted_expires_at,
+            days_remaining,
+            notify_language,
+        );
+
+        let message = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(subject)
+            .header(ContentType::TEXT_HTML)
+            .body(html_body)?;
+
+        self.transport.as_ref().unwrap().send(message).await?;
+        Ok(())
+    }
+
+    fn build_api_key_expiration_html(
+        &self,
+        user_name: &str,
+        service_name: &str,
+        key_prefix: &str,
+        formatted_expires_at: &str,
+        days_remaining: i64,
+        lang: &str,
+    ) -> String {
+        let html_lang = html_lang_attr(lang);
+        let settings_url = format!("{}/settings?tab=api-keys", self.frontend_url);
+        let frontend_url = &self.frontend_url;
+
+        match lang {
+            "en" => format!(
+                r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key Expiring Soon</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">Hi, {user_name}.</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">The API Key used by <strong>{service_name}</strong> will expire in <strong>{days_remaining} day(s)</strong>.</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">Key details:<br>
+&nbsp;&nbsp;- Identifier: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
+&nbsp;&nbsp;- Expiry: <strong>{formatted_expires_at}</strong></p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">Once expired, API calls will no longer work. Please issue a new API Key to continue.</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">Settings → API Keys</a> — issue a new key here.</p>
+<p style="margin:0;font-size:14px;color:#374151;">Thank you,<br>The ShareAnything Team</p>
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
+</div></body></html>"#,
+                html_lang = html_lang,
+                user_name = user_name,
+                service_name = service_name,
+                days_remaining = days_remaining,
+                key_prefix = key_prefix,
+                formatted_expires_at = formatted_expires_at,
+                settings_url = settings_url,
+                frontend_url = frontend_url,
+            ),
+            "ja" => format!(
+                r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Keyの期限切れ通知</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">{user_name}様、こんにちは。</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;"><strong>{service_name}</strong> で使用中のAPI Keyが <strong>あと{days_remaining}日</strong> で期限切れになります。</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">キー情報：<br>
+&nbsp;&nbsp;- 識別子：<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
+&nbsp;&nbsp;- 期限：<strong>{formatted_expires_at}</strong></p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">期限切れになるとAPIコールが動作しなくなります。引き続きご利用の場合は、新しいAPI Keyを発行してください。</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">設定 → API Keys</a> から新しいキーを申請できます。</p>
+<p style="margin:0;font-size:14px;color:#374151;">よろしくお願いいたします。<br>ShareAnythingチーム</p>
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
+</div></body></html>"#,
+                html_lang = html_lang,
+                user_name = user_name,
+                service_name = service_name,
+                days_remaining = days_remaining,
+                key_prefix = key_prefix,
+                formatted_expires_at = formatted_expires_at,
+                settings_url = settings_url,
+                frontend_url = frontend_url,
+            ),
+            "zh-CN" => format!(
+                r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key 即将过期</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">您好，{user_name}。</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;"><strong>{service_name}</strong> 使用的 API Key 将在 <strong>{days_remaining} 天后</strong>过期。</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">密钥信息：<br>
+&nbsp;&nbsp;- 标识符：<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
+&nbsp;&nbsp;- 到期时间：<strong>{formatted_expires_at}</strong></p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">密钥过期后，API 调用将无法正常工作。如需继续使用，请申请新的 API Key。</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">设置 → API Keys</a> — 在此申请新密钥。</p>
+<p style="margin:0;font-size:14px;color:#374151;">感谢您，<br>ShareAnything 团队</p>
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
+</div></body></html>"#,
+                html_lang = html_lang,
+                user_name = user_name,
+                service_name = service_name,
+                days_remaining = days_remaining,
+                key_prefix = key_prefix,
+                formatted_expires_at = formatted_expires_at,
+                settings_url = settings_url,
+                frontend_url = frontend_url,
+            ),
+            "zh-TW" => format!(
+                r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key 即將過期</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">您好，{user_name}。</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;"><strong>{service_name}</strong> 使用的 API Key 將在 <strong>{days_remaining} 天後</strong>過期。</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">金鑰資訊：<br>
+&nbsp;&nbsp;- 識別碼：<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
+&nbsp;&nbsp;- 到期時間：<strong>{formatted_expires_at}</strong></p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">金鑰過期後，API 呼叫將無法正常運作。如需繼續使用，請申請新的 API Key。</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">設定 → API Keys</a> — 在此申請新金鑰。</p>
+<p style="margin:0;font-size:14px;color:#374151;">感謝您，<br>ShareAnything 團隊</p>
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
+</div></body></html>"#,
+                html_lang = html_lang,
+                user_name = user_name,
+                service_name = service_name,
+                days_remaining = days_remaining,
+                key_prefix = key_prefix,
+                formatted_expires_at = formatted_expires_at,
+                settings_url = settings_url,
+                frontend_url = frontend_url,
+            ),
+            // default: Korean
+            _ => format!(
+                r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key 만료 예정 안내</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">안녕하세요, {user_name}님.</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">'{service_name}' 서비스에서 사용 중인 API Key가 <strong>{days_remaining}일 후</strong>에 만료됩니다.</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">키 정보:<br>
+&nbsp;&nbsp;- 식별자: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
+&nbsp;&nbsp;- 만료 일시: <strong>{formatted_expires_at}</strong></p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">키가 만료되면 OpenAPI 호출이 더 이상 작동하지 않습니다. 계속 사용하시려면 새 API Key를 발급받아 주세요.</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">설정 → API Keys</a>에서 새 키를 신청할 수 있습니다.</p>
+<p style="margin:0;font-size:14px;color:#374151;">감사합니다.<br>ShareAnything 팀 드림.</p>
+<hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
+<p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
+</div></body></html>"#,
+                html_lang = html_lang,
+                user_name = user_name,
+                service_name = service_name,
+                days_remaining = days_remaining,
+                key_prefix = key_prefix,
+                formatted_expires_at = formatted_expires_at,
+                settings_url = settings_url,
+                frontend_url = frontend_url,
+            ),
+        }
+    }
+
     pub fn send_application_rejected(
         self: &Arc<Self>,
         to_email: &str,
