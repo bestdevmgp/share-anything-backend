@@ -165,23 +165,23 @@ fn get_api_key_approved_translations(lang: &str) -> &'static ApiKeyApprovedTrans
 fn api_key_approved_intro(lang: &str, name: &str, service_name: &str) -> String {
     match lang {
         "en" => format!(
-            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been approved.<br><br>Click the button below to view your API Key.",
+            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been approved.<br>Click the button below to view your API Key.",
             name, service_name
         ),
         "ja" => format!(
-            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が承認されました。<br><br>下のボタンから API Key をご確認ください。",
+            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が承認されました。<br>下のボタンから API Key をご確認ください。",
             name, service_name
         ),
         "zh-CN" => format!(
-            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请已通过。<br><br>请点击下方按钮查看您的 API Key。",
+            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请已通过。<br>请点击下方按钮查看您的 API Key。",
             name, service_name
         ),
         "zh-TW" => format!(
-            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請已核准。<br><br>請點選下方按鈕查看您的 API Key。",
+            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請已核准。<br>請點選下方按鈕查看您的 API Key。",
             name, service_name
         ),
         _ => format!(
-            "{}님, 신청하신 \"<strong>{}</strong>\"의 OpenAPI Key 발급 신청이 승인되었습니다.<br><br>아래 버튼을 눌러 API Key를 확인하세요.",
+            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 승인되었습니다.<br>아래 버튼을 눌러 API Key를 확인하세요.",
             name, service_name
         ),
     }
@@ -189,11 +189,11 @@ fn api_key_approved_intro(lang: &str, name: &str, service_name: &str) -> String 
 
 fn api_key_approved_subject(lang: &str, service_name: &str) -> String {
     match lang {
-        "en" => format!("[ShareAnything] \"{}\" API Key approved", service_name),
-        "ja" => format!("[ShareAnything] 「{}」の API Key 申請が承認されました", service_name),
-        "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请已批准", service_name),
-        "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請已核准", service_name),
-        _ => format!("[ShareAnything] \"{}\" API Key 신청이 승인되었습니다", service_name),
+        "en" => format!("[ShareAnything] API Key application for \"{}\" approved.", service_name),
+        "ja" => format!("[ShareAnything] 「{}」の API Key 申請が承認されました。", service_name),
+        "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请已批准。", service_name),
+        "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請已核准。", service_name),
+        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 승인되었습니다.", service_name),
     }
 }
 
@@ -247,23 +247,23 @@ fn get_api_key_rejected_translations(lang: &str) -> &'static ApiKeyRejectedTrans
 fn api_key_rejected_intro(lang: &str, name: &str, service_name: &str) -> String {
     match lang {
         "en" => format!(
-            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been rejected.<br><br>Please review the reason below, make adjustments, and submit a new application.",
+            "Hi {}, your OpenAPI Key application for <strong>\"{}\"</strong> has been rejected.<br>Please review the reason below, make adjustments, and submit a new application.",
             name, service_name
         ),
         "ja" => format!(
-            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が却下されました。<br><br>下記の理由をご確認のうえ、修正して再度お申し込みいただけます。",
+            "{}様、お申し込みいただいた「<strong>{}</strong>」の OpenAPI Key 発行申請が却下されました。<br>下記の理由をご確認のうえ、修正して再度お申し込みいただけます。",
             name, service_name
         ),
         "zh-CN" => format!(
-            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请未通过。<br><br>请参考下方原因修改后再次申请。",
+            "{},您申请的「<strong>{}</strong>」OpenAPI Key 发放申请未通过。<br>请参考下方原因修改后再次申请。",
             name, service_name
         ),
         "zh-TW" => format!(
-            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請未通過。<br><br>請參考下方原因修改後再次申請。",
+            "{},您申請的「<strong>{}</strong>」OpenAPI Key 發放申請未通過。<br>請參考下方原因修改後再次申請。",
             name, service_name
         ),
         _ => format!(
-            "{}님, 신청하신 \"<strong>{}</strong>\"의 OpenAPI Key 발급 신청이 반려되었습니다.<br><br>아래 반려 사유를 참고하여 수정 후 재신청할 수 있습니다.",
+            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 반려되었습니다.<br>아래 반려 사유를 참고하여 수정 후 재신청할 수 있습니다.",
             name, service_name
         ),
     }
@@ -271,11 +271,11 @@ fn api_key_rejected_intro(lang: &str, name: &str, service_name: &str) -> String 
 
 fn api_key_rejected_subject(lang: &str, service_name: &str) -> String {
     match lang {
-        "en" => format!("[ShareAnything] \"{}\" API Key application rejected", service_name),
-        "ja" => format!("[ShareAnything] 「{}」の API Key 申請が却下されました", service_name),
-        "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请未通过", service_name),
-        "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請未通過", service_name),
-        _ => format!("[ShareAnything] \"{}\" API Key 신청이 반려되었습니다", service_name),
+        "en" => format!("[ShareAnything] API Key application for \"{}\" rejected.", service_name),
+        "ja" => format!("[ShareAnything] 「{}」の API Key 申請が却下されました。", service_name),
+        "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请未通过。", service_name),
+        "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請未通過。", service_name),
+        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 반려되었습니다.", service_name),
     }
 }
 
