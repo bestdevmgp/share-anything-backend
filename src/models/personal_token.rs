@@ -57,7 +57,7 @@ pub struct PersonalToken {
 pub struct PersonalTokenResponse {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
-    #[schema(example = "sk_a1b2c")]
+    #[schema(example = "sat_a1b2c")]
     pub token_prefix: String,
     #[schema(example = "My Token")]
     pub name: String,

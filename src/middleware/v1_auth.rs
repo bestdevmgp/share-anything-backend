@@ -27,9 +27,9 @@ pub async fn v1_auth(
             .to_str()
             .map_err(|_| unauthorized("Invalid auth header"))?;
 
-        if !token.starts_with("sk_") {
+        if !token.starts_with("sak_") {
             return Err(unauthorized(
-                "Invalid token format. Only API keys (sk_ prefix) are accepted on this endpoint.",
+                "Invalid token format. Only API keys (sak_ prefix) are accepted on this endpoint.",
             ));
         }
 

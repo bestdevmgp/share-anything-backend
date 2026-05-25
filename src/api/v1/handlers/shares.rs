@@ -41,7 +41,7 @@ use crate::utils::PrettyJson;
     responses(
         (status = 200, description = "Share metadata and file list", body = CliFileListResponse),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
@@ -117,7 +117,7 @@ pub struct DownloadQuery {
                                       `Content-Disposition` carries the suggested filename. \
                                       For multi-file whole-share downloads the content type is `application/zip`."),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,

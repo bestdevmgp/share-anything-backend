@@ -27,7 +27,7 @@ fn generate_personal_token() -> String {
         .chars()
         .collect();
     let random_part: String = (0..40).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
-    format!("sa_{}", random_part)
+    format!("sat_{}", random_part)
 }
 
 /// Create a new personal access token for the authenticated user.

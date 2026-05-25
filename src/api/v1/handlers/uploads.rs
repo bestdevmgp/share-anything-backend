@@ -76,7 +76,7 @@ impl From<CliUploadResponse> for V1UploadResponse {
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
@@ -155,7 +155,7 @@ pub async fn post_upload(
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
@@ -225,7 +225,7 @@ pub async fn post_multipart_init(
                            response to pass to the `/complete` endpoint.",
             body = CliPresignPartsResponse),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
@@ -302,7 +302,7 @@ pub async fn post_multipart_parts(
                            Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
-            description = "API key is missing, malformed (must start with `sk_`), revoked, or expired. \
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,

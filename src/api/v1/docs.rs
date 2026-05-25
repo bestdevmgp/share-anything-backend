@@ -11,7 +11,7 @@ impl Modify for ApiKeySecurity {
                 "api_key",
                 SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::with_description(
                     "X-API-Key",
-                    "API keys start with sk_ followed by 40 alphanumeric characters.",
+                    "API keys start with sak_ followed by 40 alphanumeric characters.",
                 ))),
             );
         }

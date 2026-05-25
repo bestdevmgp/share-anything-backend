@@ -108,7 +108,7 @@ pub struct RejectRequest {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApiKeyResponse {
-    #[schema(example = "sk_a1b2c3")]
+    #[schema(example = "sak_a1b2c3")]
     pub key_prefix: String,
     #[schema(example = "API Key for MyDrive Cloud Backup")]
     pub name: String,

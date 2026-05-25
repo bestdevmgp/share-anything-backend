@@ -29,7 +29,7 @@ fn generate_personal_token() -> String {
         .chars()
         .collect();
     let random_part: String = (0..40).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
-    format!("sa_{}", random_part)
+    format!("sat_{}", random_part)
 }
 
 /// Create a CLI device-pairing session and return a browser login URL.

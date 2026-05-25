@@ -221,7 +221,7 @@ pub async fn cli_upload(
         uploaded_files.push(file_share.file_name);
     }
 
-    let download_url = format!("{}/v1/shares/{}/download", state.config.server.base_url, share_code);
+    let download_url = format!("{}/cli/shares/{}/download", state.config.server.base_url, share_code);
     let curl_command = format!("curl -OJ -H \"X-Personal-Token: $TOKEN\" {}", download_url);
 
     Ok(PrettyJson(CliUploadResponse {
@@ -540,7 +540,7 @@ pub async fn cli_complete_multipart(
         .map_err(|_| internal_error("Failed to complete upload session"))?;
 
     let download_url = format!(
-        "{}/v1/shares/{}/download",
+        "{}/cli/shares/{}/download",
         state.config.server.base_url, session.share_code
     );
     let curl_command = format!("curl -OJ -H \"X-Personal-Token: $TOKEN\" {}", download_url);

@@ -64,7 +64,7 @@ fn generate_api_key() -> String {
         .chars()
         .collect();
     let random_part: String = (0..40).map(|_| chars[rng.gen_range(0..chars.len())]).collect();
-    format!("sk_{}", random_part)
+    format!("sak_{}", random_part)
 }
 
 fn generate_reveal_token() -> String {
@@ -106,7 +106,7 @@ pub async fn admin_list_applications(
 
 /// Approve an API key application
 ///
-/// Issues a new API key (prefix `sk_`) tied to the application, sets the application status to `approved`,
+/// Issues a new API key (prefix `sak_`) tied to the application, sets the application status to `approved`,
 /// and emails the applicant.
 /// Requires the `X-Admin-Password` header set to the value of the `ADMIN_PASSWORD` environment variable.
 #[utoipa::path(

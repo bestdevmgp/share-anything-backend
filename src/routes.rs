@@ -338,6 +338,16 @@ pub fn create_router(
         .route("/cli/p2p/create", post(handlers::cli::cli_p2p_create))
         .route("/cli/download/:code/info", get(handlers::cli::cli_download_info))
         .route("/cli/me", get(handlers::cli::cli_me))
+        .route("/cli/uploads", post(handlers::cli::cli_upload))
+        .route("/cli/uploads/multipart", post(handlers::cli::cli_multipart_init))
+        .route("/cli/uploads/multipart/:id/parts", post(handlers::cli::cli_presign_parts))
+        .route("/cli/uploads/multipart/:id/complete", post(handlers::cli::cli_complete_multipart))
+        .route("/cli/me/uploads", get(handlers::cli::cli_upload_history))
+        .route("/cli/me/uploads/:code", delete(handlers::cli::cli_delete_upload))
+        .route("/cli/me/uploads/:code/downloads", get(handlers::cli::cli_share_logs))
+        .route("/cli/me/downloads", get(handlers::cli::cli_download_history))
+        .route("/cli/shares/:code/download", get(handlers::cli::cli_download))
+        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             cli_rate_limiter.clone(),
             crate::middleware::rate_limiter::cli_rate_limit_middleware,

@@ -23,9 +23,9 @@ pub struct ApiKey {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApiKeyRevealResponse {
-    #[schema(example = "sk_5UqEU7qHLkMi6aLAAmcrpNo4wS7p8pi3SYnv3dQa")]
+    #[schema(example = "sak_5UqEU7qHLkMi6aLAAmcrpNo4wS7p8pi3SYnv3dQa")]
     pub api_key: String,
-    #[schema(example = "sk_a1b2c")]
+    #[schema(example = "sak_a1b2c")]
     pub key_prefix: String,
     #[schema(example = "API Key for MyDrive Cloud Backup")]
     pub name: String,
@@ -40,7 +40,7 @@ pub struct ApiKeyRevealResponse {
 pub struct ApiKeyListItem {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
-    #[schema(example = "sk_a1b2c")]
+    #[schema(example = "sak_a1b2c")]
     pub key_prefix: String,
     #[schema(example = "My API Key")]
     pub name: String,
