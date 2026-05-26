@@ -152,8 +152,8 @@ impl Bucket {
     fn limit(&self) -> u32 {
         match self {
             Bucket::Read => 500,
-            Bucket::Upload => 80,
-            Bucket::Download => 150,
+            Bucket::Upload => 100,
+            Bucket::Download => 300,
         }
     }
 }

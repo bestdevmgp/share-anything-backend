@@ -28,7 +28,7 @@ use crate::models::signaling::SignalingMessage;
 use crate::models::{
     CliP2PCreateRequest, CliP2PCreateResponse, P2pStatusResponse, TurnCredentialsResponse,
 };
-use crate::services::signaling::SignalingState;
+use crate::services::signaling::{ActiveSlot, SignalingState, SlotRefusal};
 use crate::utils::PrettyJson;
 
 const WS_SUBPROTOCOL: &str = "share-anything.v1";
@@ -399,15 +399,35 @@ pub async fn signaling_ws(
     headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    match authenticate_ws(&headers, &state.db).await {
-        Ok(_user) => {
-            let signaling = state.signaling.clone();
-            let db = state.db.clone();
-            ws.protocols([WS_SUBPROTOCOL])
-                .on_upgrade(move |socket| handle_socket(socket, signaling, db))
+    let user = match authenticate_ws(&headers, &state.db).await {
+        Ok(u) => u,
+        Err(err) => return err.into_response(),
+    };
+
+    let slot = match state.signaling.acquire_slot(&user.personal_token_id) {
+        Ok(s) => s,
+        Err(SlotRefusal::TooManyAttempts) => {
+            return PublicApiError::TooManyRequests.into_response();
         }
-        Err(err) => err.into_response(),
-    }
+        Err(SlotRefusal::TooManyActive) => {
+            return PublicApiError::TooManyRequests.into_response();
+        }
+    };
+
+    let signaling = state.signaling.clone();
+    let db = state.db.clone();
+    ws.protocols([WS_SUBPROTOCOL])
+        .on_upgrade(move |socket| handle_socket_with_slot(socket, signaling, db, slot))
+}
+
+async fn handle_socket_with_slot(
+    socket: WebSocket,
+    state: SignalingState,
+    db: DbPool,
+    slot: ActiveSlot,
+) {
+    handle_socket(socket, state, db).await;
+    drop(slot);
 }
 
 async fn authenticate_ws(
