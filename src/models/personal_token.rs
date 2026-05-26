@@ -4,12 +4,13 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 #[schema(example = "read")]
 pub enum Scope {
     Read,
     Upload,
     Delete,
+    P2pTransfer,
 }
 
 impl Scope {
@@ -18,6 +19,7 @@ impl Scope {
             Scope::Read => "read",
             Scope::Upload => "upload",
             Scope::Delete => "delete",
+            Scope::P2pTransfer => "p2p_transfer",
         }
     }
 
@@ -26,6 +28,7 @@ impl Scope {
             "read" => Some(Scope::Read),
             "upload" => Some(Scope::Upload),
             "delete" => Some(Scope::Delete),
+            "p2p_transfer" => Some(Scope::P2pTransfer),
             _ => None,
         }
     }

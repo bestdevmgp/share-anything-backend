@@ -235,7 +235,7 @@ pub fn create_router(
 
     let p2p_routes = Router::new()
         .route("/p2p/status", get(handlers::p2p::check_uploader_status))
-        .with_state(signaling_state);
+        .with_state(signaling_state.clone());
 
     let turn_state = handlers::turn::TurnState {
         config: config.clone(),
@@ -362,6 +362,7 @@ pub fn create_router(
         config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
+        signaling: signaling_state.clone(),
     };
     let v1_auth_state = V1AuthState {
         db: db.clone(),

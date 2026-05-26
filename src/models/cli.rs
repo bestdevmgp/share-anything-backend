@@ -44,6 +44,10 @@ pub struct CliFileListResponse {
     pub is_one_time: bool,
     #[schema(example = "2026-05-21 14:30")]
     pub expires_at: String,
+    /// Either `server` (download via `GET /v1/shares/{code}/download`) or
+    /// `p2p` (use the WebRTC signaling flow at `GET /v1/ws/signaling`).
+    #[schema(example = "server")]
+    pub transfer_type: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

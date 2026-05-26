@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SignalingMessage {
     UploaderReady {
@@ -16,6 +17,12 @@ pub enum SignalingMessage {
         file_name: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         device_info: Option<String>,
+        /// Required when the share is password-protected. The server verifies
+        /// this against the stored bcrypt hash before relaying any signaling
+        /// messages — a wrong password causes the join to fail with an
+        /// `error` message and the downloader is not matched to the uploader.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
     },
     UploaderInfo {
         share_code: String,
@@ -72,7 +79,7 @@ pub enum SignalingMessage {
     Pong {},
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum PeerRole {
     Uploader,

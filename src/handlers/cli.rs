@@ -736,6 +736,7 @@ pub async fn cli_file_list(
         has_password: first.password_hash.is_some(),
         is_one_time: first.is_one_time,
         expires_at: format_expires_at(first.expires_at),
+        transfer_type: first.transfer_type.clone(),
     }))
 }
 

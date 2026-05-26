@@ -66,6 +66,19 @@ async fn handle_socket(socket: WebSocket, state: SignalingState, db: DbPool) {
     cleanup_peer(&peer_id, &state, &db).await;
 }
 
+pub async fn dispatch_message(
+    text: &str,
+    peer_id: &str,
+    state: &SignalingState,
+    db: &DbPool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    handle_message(text, peer_id, state, db).await
+}
+
+pub async fn cleanup_peer_public(peer_id: &str, state: &SignalingState, db: &DbPool) {
+    cleanup_peer(peer_id, state, db).await
+}
+
 async fn handle_message(
     text: &str,
     peer_id: &str,
@@ -87,8 +100,9 @@ async fn handle_message(
             peer_id: _,
             file_name,
             device_info,
+            password,
         } => {
-            handle_downloader_join(share_code, peer_id, file_name, device_info, state, db).await?;
+            handle_downloader_join(share_code, peer_id, file_name, device_info, password, state, db).await?;
         }
         SignalingMessage::Offer {
             share_code,
@@ -195,9 +209,22 @@ async fn handle_downloader_join(
     peer_id: &str,
     file_name: Option<String>,
     device_info: Option<String>,
+    password: Option<String>,
     state: &SignalingState,
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let file_share = repository::find_file_share_by_code(db, &share_code)
+        .await?
+        .ok_or("Share code not found")?;
+
+    if let Some(stored_hash) = &file_share.password_hash {
+        let supplied = password.unwrap_or_default();
+        let matches = bcrypt::verify(&supplied, stored_hash).unwrap_or(false);
+        if !matches {
+            return Err("Incorrect password for this share".into());
+        }
+    }
+
     let (uploader_peer_id, uploader_device_info) = state
         .find_uploader_with_device(&share_code)
         .ok_or("Uploader is not online")?;

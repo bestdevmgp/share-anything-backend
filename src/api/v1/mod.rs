@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod code_samples;
 pub mod docs;
 pub mod error;
 pub mod handlers;
@@ -10,7 +11,7 @@ use crate::{
     db::DbPool,
     middleware::v1_auth::V1AuthState,
     middleware::rate_limiter::CliRateLimiter,
-    services::StorageService,
+    services::{signaling::SignalingState, StorageService},
 };
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ pub struct V1State {
     pub config: Arc<crate::config::Config>,
     pub db: DbPool,
     pub storage: StorageService,
+    pub signaling: SignalingState,
 }
 
 pub fn router(
@@ -48,7 +50,7 @@ pub fn router(
             HeaderName::from_static("content-disposition"),
         ]);
 
-    Router::new()
+    let auth_protected = Router::new()
         .route("/v1/me", get(handlers::me::get_me))
         .route("/v1/uploads", post(handlers::uploads::post_upload))
         .route("/v1/uploads/multipart", post(handlers::uploads::post_multipart_init))
@@ -60,11 +62,34 @@ pub fn router(
         .route("/v1/me/uploads/:code", delete(handlers::history::delete_my_upload))
         .route("/v1/me/uploads/:code/downloads", get(handlers::history::list_share_downloads))
         .route("/v1/me/downloads", get(handlers::history::list_my_downloads))
-        .route("/v1/openapi.json", get(docs::openapi_json))
-        .route("/reference", get(docs::scalar_html))
+        .route("/v1/p2p/sessions", post(handlers::p2p::post_p2p_session))
+        .route(
+            "/v1/p2p/sessions/:code/status",
+            get(handlers::p2p::get_p2p_status),
+        )
+        .route(
+            "/v1/turn/credentials",
+            get(handlers::p2p::get_v1_turn_credentials),
+        )
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(cli_rate_limiter, cli_rate_limit_middleware))
         .layer(middleware::from_fn_with_state(v1_auth_state, v1_auth))
+        .with_state(state.clone());
+
+    // WebSocket signaling authenticates itself via the Sec-WebSocket-Protocol
+    // handshake header (browsers cannot send custom headers on WebSocket
+    // connections). It must bypass the v1_auth middleware which expects an
+    // `X-API-Key` HTTP header.
+    let ws_router = Router::new()
+        .route("/v1/ws/signaling", get(handlers::p2p::signaling_ws))
+        .with_state(state);
+
+    let docs_router = Router::new()
+        .route("/v1/openapi.json", get(docs::openapi_json))
+        .route("/reference", get(docs::scalar_html));
+
+    auth_protected
+        .merge(ws_router)
+        .merge(docs_router)
         .layer(v1_cors)
-        .with_state(state)
 }

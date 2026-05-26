@@ -2,6 +2,8 @@ use axum::{response::Html, Json};
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::{Modify, OpenApi};
 
+use crate::api::v1::code_samples::CodeSamples;
+
 struct ApiKeySecurity;
 
 impl Modify for ApiKeySecurity {
@@ -32,6 +34,10 @@ impl Modify for ApiKeySecurity {
         crate::api::v1::handlers::history::delete_my_upload,
         crate::api::v1::handlers::history::list_share_downloads,
         crate::api::v1::handlers::history::list_my_downloads,
+        crate::api::v1::handlers::p2p::post_p2p_session,
+        crate::api::v1::handlers::p2p::get_p2p_status,
+        crate::api::v1::handlers::p2p::get_v1_turn_credentials,
+        crate::api::v1::handlers::p2p::signaling_ws,
     ),
     components(
         schemas(
@@ -53,12 +59,21 @@ impl Modify for ApiKeySecurity {
             crate::models::CliFileListResponse,
             crate::models::CliFileDetail,
             crate::api::v1::handlers::shares::DownloadQuery,
+            crate::models::CliP2PCreateRequest,
+            crate::models::CliP2PCreateResponse,
+            crate::models::CliP2PFileInfo,
+            crate::models::P2pStatusResponse,
+            crate::models::IceServer,
+            crate::models::TurnCredentialsResponse,
+            crate::models::signaling::SignalingMessage,
+            crate::models::signaling::PeerRole,
         )
     ),
-    modifiers(&ApiKeySecurity),
+    modifiers(&ApiKeySecurity, &CodeSamples),
     tags(
         (name = "me", description = "Authenticated principal"),
         (name = "uploads", description = "Create and manage uploads"),
+        (name = "p2p", description = "Peer-to-peer transfers — create a P2P session, check uploader liveness, fetch TURN/STUN credentials, and connect to the signaling WebSocket. Use these when you want WebRTC end-to-end transfers without operating your own TURN infrastructure."),
         (name = "shares", description = "Inspect and download shares"),
         (name = "history", description = "Owner-side history"),
     ),
