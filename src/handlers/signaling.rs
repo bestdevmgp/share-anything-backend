@@ -162,7 +162,7 @@ async fn handle_message(
             handle_downloader_arrived(share_code, peer_id, device_info, state).await?;
         }
         SignalingMessage::TransferComplete { share_code } => {
-            handle_transfer_complete(share_code, db).await?;
+            handle_transfer_complete(share_code, state, db).await?;
         }
         SignalingMessage::UploaderCancelled { share_code } => {
             if let Some(downloader_peer_id) = state.find_downloader(&share_code) {
@@ -344,8 +344,17 @@ async fn relay_ice_candidate(
 
 async fn handle_transfer_complete(
     share_code: String,
+    state: &SignalingState,
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Forward TransferComplete to the uploader before cleaning up, so the uploader
+    // knows the receiver explicitly ended the session.
+    if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
+        let _ = state.send_to_peer(
+            &uploader_peer_id,
+            SignalingMessage::TransferComplete { share_code: share_code.clone() },
+        );
+    }
     repository::complete_p2p_transfer(db, &share_code).await?;
     Ok(())
 }
