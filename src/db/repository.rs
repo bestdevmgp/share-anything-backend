@@ -198,6 +198,7 @@ pub async fn create_file_share(
     expires_at: chrono::DateTime<Utc>,
     image_width: Option<i32>,
     image_height: Option<i32>,
+    display_order: i32,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
@@ -207,8 +208,8 @@ pub async fn create_file_share(
         INSERT INTO file_shares
         (id, share_group_id, user_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
-         image_width, image_height)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         image_width, image_height, display_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -229,6 +230,7 @@ pub async fn create_file_share(
     .bind(now)
     .bind(image_width)
     .bind(image_height)
+    .bind(display_order)
     .execute(pool)
     .await?;
 
@@ -271,7 +273,7 @@ pub async fn find_file_shares_by_code(
         UNION ALL
         (SELECT fs.* FROM file_shares fs
          WHERE fs.share_code = ? AND fs.expires_at > UTC_TIMESTAMP())
-        ORDER BY created_at ASC
+        ORDER BY display_order ASC, created_at ASC
         "#,
     )
     .bind(share_code)
@@ -296,7 +298,7 @@ pub async fn find_file_shares_by_code_with_uploader(
         (SELECT fs.*, u.name AS uploader_name FROM file_shares fs
          LEFT JOIN users u ON u.id = fs.user_id
          WHERE fs.share_code = ? AND fs.expires_at > UTC_TIMESTAMP())
-        ORDER BY created_at ASC
+        ORDER BY display_order ASC, created_at ASC
         "#,
     )
     .bind(share_code)

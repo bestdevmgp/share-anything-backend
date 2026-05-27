@@ -210,7 +210,7 @@ pub async fn upload_file(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    for file_data in files {
+    for (idx, file_data) in files.into_iter().enumerate() {
         let file_size = file_data.data.len() as i64;
 
         let storage_key = if matches!(transfer_type, TransferType::P2p) {
@@ -253,6 +253,7 @@ pub async fn upload_file(
             expires_at,
             None,
             None,
+            idx as i32,
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;
@@ -357,7 +358,7 @@ pub async fn create_p2p_session(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    for file_info in request.files {
+    for (idx, file_info) in request.files.into_iter().enumerate() {
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
@@ -375,6 +376,7 @@ pub async fn create_p2p_session(
             expires_at,
             None,
             None,
+            idx as i32,
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;

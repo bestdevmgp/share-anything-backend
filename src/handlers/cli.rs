@@ -183,7 +183,7 @@ pub async fn cli_upload(
     let user_id = token_user.as_ref().map(|u| u.user_id.clone());
     let mut uploaded_files: Vec<String> = Vec::new();
 
-    for file_data in files {
+    for (idx, file_data) in files.into_iter().enumerate() {
         let file_size = file_data.data.len() as i64;
         let storage_key = generate_storage_key(
             &state.config.s3.prefix,
@@ -214,6 +214,7 @@ pub async fn cli_upload(
             expires_at,
             None,
             None,
+            idx as i32,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -270,7 +271,7 @@ pub async fn cli_p2p_create(
     let user_id = token_user.as_ref().map(|u| u.user_id.clone());
     let mut file_names: Vec<String> = Vec::new();
 
-    for file_info in &request.files {
+    for (idx, file_info) in request.files.iter().enumerate() {
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
@@ -288,6 +289,7 @@ pub async fn cli_p2p_create(
             expires_at,
             None,
             None,
+            idx as i32,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -496,7 +498,7 @@ pub async fn cli_complete_multipart(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<String> = Vec::new();
 
-    for file_info in &request.files {
+    for (idx, file_info) in request.files.iter().enumerate() {
         if file_info.upload_id != "direct" && !file_info.parts.is_empty() {
             let parts: Vec<(i32, String)> = file_info
                 .parts
@@ -528,6 +530,7 @@ pub async fn cli_complete_multipart(
             expires_at,
             None,
             None,
+            idx as i32,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;

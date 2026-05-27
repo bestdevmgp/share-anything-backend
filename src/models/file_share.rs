@@ -25,6 +25,7 @@ pub struct FileShare {
     pub updated_at: DateTime<Utc>,
     pub image_width: Option<i32>,
     pub image_height: Option<i32>,
+    pub display_order: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

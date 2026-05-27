@@ -207,7 +207,7 @@ pub async fn complete_presigned_upload(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    for file_info in &request.files {
+    for (idx, file_info) in request.files.iter().enumerate() {
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
@@ -225,6 +225,7 @@ pub async fn complete_presigned_upload(
             expires_at,
             file_info.image_width,
             file_info.image_height,
+            idx as i32,
         )
         .await
         .map_err(|e| {
@@ -530,7 +531,7 @@ pub async fn complete_multipart_upload(
     let share_group_id = Uuid::new_v4().to_string();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
-    for file_info in &request.files {
+    for (idx, file_info) in request.files.iter().enumerate() {
         if file_info.upload_id != "direct" && !file_info.parts.is_empty() {
             let parts: Vec<(i32, String)> = file_info.parts
                 .iter()
@@ -563,6 +564,7 @@ pub async fn complete_multipart_upload(
             expires_at,
             file_info.image_width,
             file_info.image_height,
+            idx as i32,
         )
         .await
         .map_err(|e| {
