@@ -45,10 +45,24 @@ impl RateLimiter {
         rate_limiter
     }
 
+    /// Returns Err with a localized message when this IP is currently in the
+    /// brute-force blocklist. Does NOT touch the per-minute request counter.
+    /// Used by routes that have their own rate budget (CLI / v1 token buckets)
+    /// but still want the shared IP-block protection.
+    pub fn check_blocked(&self, ip: &str) -> Result<(), String> {
+        if let Some(blocked_until) = self.blocked_ips.get(ip) {
+            if blocked_until.value().elapsed() < Duration::from_secs(600) {
+                return Err("Your IP has been temporarily blocked due to suspicious activity. Please try again later.".to_string());
+            }
+        }
+        self.blocked_ips.remove(ip);
+        Ok(())
+    }
+
     pub fn check_rate_limit(&self, ip: &str) -> Result<(), String> {
         if let Some(blocked_until) = self.blocked_ips.get(ip) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
-                return Err("비정상적인 활동으로 인해 사용자의 IP가 일시적으로 차단되었습니다. 나중에 다시 시도해 주세요".to_string());
+                return Err("Your IP has been temporarily blocked due to suspicious activity. Please try again later.".to_string());
             } else {
                 self.blocked_ips.remove(ip);
             }
@@ -297,11 +311,22 @@ impl CliRateLimiter {
 }
 
 pub async fn cli_rate_limit_middleware(
-    State(cli_rate_limiter): State<CliRateLimiter>,
+    State((cli_rate_limiter, rate_limiter)): State<(CliRateLimiter, RateLimiter)>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
+    let ip = extract_ip(&headers);
+    if rate_limiter.check_blocked(&ip).is_err() {
+        let body = json!({
+            "error": {
+                "code": "ip_blocked",
+                "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",
+                "request_id": null
+            }
+        });
+        return (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+    }
     let path = request.uri().path().to_string();
     let method = request.method().clone();
 
@@ -322,7 +347,7 @@ pub async fn cli_rate_limit_middleware(
 
     let key = match token_user {
         Some(u) => u.user_id.clone(),
-        None => extract_ip(&headers),
+        None => ip.clone(),
     };
 
     match cli_rate_limiter.check(&key, bucket) {
@@ -354,7 +379,11 @@ pub async fn cli_rate_limit_middleware(
             response
         }
         Ok(status) => {
-            let mut response = next.run(request).await;
+            let response = next.run(request).await;
+            if response.status() == StatusCode::NOT_FOUND {
+                rate_limiter.record_failed_request(&ip);
+            }
+            let mut response = response;
             let h = response.headers_mut();
             h.insert(
                 HeaderName::from_static("x-ratelimit-limit"),
@@ -393,10 +422,12 @@ pub async fn rate_limit_middleware(
     let ip = extract_ip(&headers);
 
     if let Err(error_message) = rate_limiter.check_rate_limit(&ip) {
+        let code = if error_message.contains("blocked") { "ip_blocked" } else { "RATE_LIMIT_EXCEEDED" };
         return (
             StatusCode::TOO_MANY_REQUESTS,
             Json(json!({
-                "error": error_message
+                "error": code,
+                "message": error_message
             })),
         )
             .into_response();

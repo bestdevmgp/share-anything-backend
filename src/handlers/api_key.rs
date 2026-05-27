@@ -65,18 +65,18 @@ pub async fn apply(
     Json(req): Json<CreateApplicationRequest>,
 ) -> Result<Json<ApplicationResponse>, AppError> {
     if req.service_name.is_empty() || req.service_name.len() > 255 {
-        return Err(bad_request("서비스 이름은 1~255자 이내여야 합니다"));
+        return Err(bad_request("Service name must be between 1 and 255 characters"));
     }
 
     if !req.service_url.starts_with("http://") && !req.service_url.starts_with("https://") {
-        return Err(bad_request("서비스 URL은 http:// 또는 https://로 시작해야 합니다"));
+        return Err(bad_request("Service URL must start with http:// or https://"));
     }
     if req.service_url.len() > 512 {
-        return Err(bad_request("서비스 URL은 512자 이내여야 합니다"));
+        return Err(bad_request("Service URL must be 512 characters or fewer"));
     }
 
     if req.purpose.len() < 30 {
-        return Err(bad_request("사용 목적은 30자 이상 입력해야 합니다"));
+        return Err(bad_request("Purpose must be at least 30 characters"));
     }
 
     let scopes = req
@@ -90,7 +90,7 @@ pub async fn apply(
 
     if has_pending {
         return Err(AppError::Conflict(
-            "이미 검토 중인 신청이 있습니다".to_string(),
+            "You already have an application under review".to_string(),
         ));
     }
 
@@ -104,7 +104,7 @@ pub async fn apply(
 
     if today_count > 0 {
         return Err(AppError::TooManyRequests(
-            "하루에 한 번만 신청할 수 있습니다".to_string(),
+            "You can only submit one application per day".to_string(),
         ));
     }
 
@@ -198,10 +198,10 @@ pub async fn get_my_application(
     let app = repository::find_application_by_id(&state.db, id)
         .await
         .map_err(|e| internal_error(format!("Failed to find application: {}", e)))?
-        .ok_or_else(|| not_found("신청을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("Request not found"))?;
 
     if app.user_id != claims.sub {
-        return Err(not_found("신청을 찾을 수 없습니다"));
+        return Err(not_found("Request not found"));
     }
 
     let mut item: ApplicationResponse = app.into();
@@ -287,7 +287,7 @@ pub async fn revoke_api_key(
         .map_err(|e| internal_error(format!("API Key revocation failed: {}", e)))?;
 
     if rows == 0 {
-        return Err(not_found("API Key를 찾을 수 없습니다"));
+        return Err(not_found("API key not found"));
     }
 
     Ok(StatusCode::NO_CONTENT)

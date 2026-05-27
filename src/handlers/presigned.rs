@@ -61,10 +61,10 @@ pub async fn request_presigned_upload(
 
     verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
         .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     if request.files.is_empty() {
-        return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
+        return Err(bad_request("At least one file is required"));
     }
 
     let max_total_size: i64 = if user_claims.is_some() {
@@ -79,14 +79,14 @@ pub async fn request_presigned_upload(
         let limit_mb = max_total_size / 1024 / 1024;
         let current_mb = total_size / 1024 / 1024;
         return Err(bad_request(format!(
-            "파일 크기 제한을 초과하였습니다. (업로드: {}MB, 제한: {}MB)",
+            "File size limit exceeded. (uploaded: {}MB, limit: {}MB)",
             current_mb, limit_mb
         )));
     }
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다"));
+            return Err(unauthorized("Guest users can only use the 5-minute expiration"));
         }
         exp
     } else {
@@ -96,11 +96,11 @@ pub async fn request_presigned_upload(
     let is_one_time = request.is_one_time.unwrap_or(false);
 
     if is_one_time && user_claims.is_none() {
-        return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
+        return Err(unauthorized("Sign in required for one-time download"));
     }
 
     if request.password.is_some() && user_claims.is_none() {
-        return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
+        return Err(unauthorized("Sign in required for password protection"));
     }
 
     let share_code = repository::reserve_share_code(&state.db).await?;
@@ -121,7 +121,7 @@ pub async fn request_presigned_upload(
             .await
             .map_err(|e| {
                 error!(error = %e, "Failed to generate presigned URL");
-                internal_error("Presigned URL 생성 실패")
+                internal_error("Failed to create presigned URL")
             })?;
 
         urls.push(PresignedUploadUrl {
@@ -134,7 +134,7 @@ pub async fn request_presigned_upload(
     let password_hash = if let Some(password) = &request.password {
         Some(
             bcrypt::hash(password, bcrypt::DEFAULT_COST)
-                .map_err(|_| internal_error("비밀번호 해싱 실패"))?,
+                .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {
         None
@@ -158,7 +158,7 @@ pub async fn request_presigned_upload(
     .await
     .map_err(|e| {
         error!(error = %e, "Failed to create upload session");
-        internal_error("업로드 세션 생성 실패")
+        internal_error("Failed to create upload session")
     })?;
 
     Ok(Json(PresignedUploadResponse {
@@ -188,16 +188,16 @@ pub async fn complete_presigned_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to get upload session");
-            internal_error("업로드 세션 조회 실패")
+            internal_error("Failed to fetch upload session")
         })?
-        .ok_or_else(|| bad_request("유효하지 않은 업로드 세션입니다"))?;
+        .ok_or_else(|| bad_request("Invalid upload session"))?;
 
     if session.share_code != request.share_code {
-        return Err(bad_request("공유 코드가 일치하지 않습니다"));
+        return Err(bad_request("Share code does not match"));
     }
 
     if session.completed {
-        return Err(bad_request("이미 완료된 업로드 세션입니다"));
+        return Err(bad_request("Upload session already completed"));
     }
 
     let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
@@ -229,7 +229,7 @@ pub async fn complete_presigned_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to create file share record");
-            internal_error(format!("데이터베이스 저장 실패: {}", e))
+            internal_error(format!("Failed to save to database: {}", e))
         })?;
 
         uploaded_files.push(FileShareResponse {
@@ -254,7 +254,7 @@ pub async fn complete_presigned_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to complete upload session");
-            internal_error("업로드 세션 완료 처리 실패")
+            internal_error("Failed to complete upload session")
         })?;
 
     let download_url = format!(
@@ -319,10 +319,10 @@ pub async fn init_multipart_upload(
 
     verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
         .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     if request.files.is_empty() {
-        return Err(bad_request("최소 1개 이상의 파일 정보가 필요합니다"));
+        return Err(bad_request("At least one file is required"));
     }
 
     let max_total_size: i64 = if user_claims.is_some() {
@@ -337,14 +337,14 @@ pub async fn init_multipart_upload(
         let limit_mb = max_total_size / 1024 / 1024;
         let current_mb = total_size / 1024 / 1024;
         return Err(bad_request(format!(
-            "파일 크기 제한을 초과하였습니다. (업로드: {}MB, 제한: {}MB)",
+            "File size limit exceeded. (uploaded: {}MB, limit: {}MB)",
             current_mb, limit_mb
         )));
     }
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("로그인하지 않은 사용자는 5분 유효기간만 사용할 수 있습니다"));
+            return Err(unauthorized("Guest users can only use the 5-minute expiration"));
         }
         exp
     } else {
@@ -354,11 +354,11 @@ pub async fn init_multipart_upload(
     let is_one_time = request.is_one_time.unwrap_or(false);
 
     if is_one_time && user_claims.is_none() {
-        return Err(unauthorized("일회용 다운로드 설정은 로그인이 필요합니다"));
+        return Err(unauthorized("Sign in required for one-time download"));
     }
 
     if request.password.is_some() && user_claims.is_none() {
-        return Err(unauthorized("비밀번호 설정은 로그인이 필요합니다"));
+        return Err(unauthorized("Sign in required for password protection"));
     }
 
     let share_code = repository::reserve_share_code(&state.db).await?;
@@ -383,7 +383,7 @@ pub async fn init_multipart_upload(
                 .await
                 .map_err(|e| {
                     error!(error = %e, "Failed to create multipart upload on R2");
-                    internal_error("R2 멀티파트 업로드 생성 실패")
+                    internal_error("Failed to create R2 multipart upload")
                 })?
         } else {
             String::new()
@@ -400,7 +400,7 @@ pub async fn init_multipart_upload(
     let password_hash = if let Some(password) = &request.password {
         Some(
             bcrypt::hash(password, bcrypt::DEFAULT_COST)
-                .map_err(|_| internal_error("비밀번호 해싱 실패"))?,
+                .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {
         None
@@ -424,7 +424,7 @@ pub async fn init_multipart_upload(
     .await
     .map_err(|e| {
         error!(error = %e, "Failed to create upload session");
-        internal_error("업로드 세션 생성 실패")
+        internal_error("Failed to create upload session")
     })?;
 
     Ok(Json(InitMultipartUploadResponse {
@@ -454,12 +454,12 @@ pub async fn get_part_presigned_urls(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to get upload session");
-            internal_error("업로드 세션 조회 실패")
+            internal_error("Failed to fetch upload session")
         })?
-        .ok_or_else(|| bad_request("유효하지 않은 업로드 세션입니다"))?;
+        .ok_or_else(|| bad_request("Invalid upload session"))?;
 
     if session.completed {
-        return Err(bad_request("이미 완료된 업로드 세션입니다"));
+        return Err(bad_request("Upload session already completed"));
     }
 
     let mut urls: Vec<PartPresignedUrl> = Vec::new();
@@ -476,7 +476,7 @@ pub async fn get_part_presigned_urls(
             .await
             .map_err(|e| {
                 error!(error = %e, part_number = part_number, "Failed to generate presigned URL for part");
-                internal_error("파트 Presigned URL 생성 실패")
+                internal_error("Failed to create part presigned URL")
             })?;
 
         urls.push(PartPresignedUrl {
@@ -511,16 +511,16 @@ pub async fn complete_multipart_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to get upload session");
-            internal_error("업로드 세션 조회 실패")
+            internal_error("Failed to fetch upload session")
         })?
-        .ok_or_else(|| bad_request("유효하지 않은 업로드 세션입니다"))?;
+        .ok_or_else(|| bad_request("Invalid upload session"))?;
 
     if session.share_code != request.share_code {
-        return Err(bad_request("공유 코드가 일치하지 않습니다"));
+        return Err(bad_request("Share code does not match"));
     }
 
     if session.completed {
-        return Err(bad_request("이미 완료된 업로드 세션입니다"));
+        return Err(bad_request("Upload session already completed"));
     }
 
     let expiration_period = ExpirationPeriod::from_str(&session.expiration_period)
@@ -542,7 +542,7 @@ pub async fn complete_multipart_upload(
                 .await
                 .map_err(|e| {
                     error!(error = %e, "Failed to complete multipart upload on R2");
-                    internal_error("R2 멀티파트 업로드 완료 실패")
+                    internal_error("Failed to complete R2 multipart upload")
                 })?;
         }
 
@@ -567,7 +567,7 @@ pub async fn complete_multipart_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to create file share record");
-            internal_error(format!("데이터베이스 저장 실패: {}", e))
+            internal_error(format!("Failed to save to database: {}", e))
         })?;
 
         uploaded_files.push(FileShareResponse {
@@ -592,7 +592,7 @@ pub async fn complete_multipart_upload(
         .await
         .map_err(|e| {
             error!(error = %e, "Failed to complete upload session");
-            internal_error("업로드 세션 완료 처리 실패")
+            internal_error("Failed to complete upload session")
         })?;
 
     let download_url = format!(

@@ -585,7 +585,7 @@ pub async fn reserve_share_code(pool: &MySqlPool) -> Result<String, sqlx::Error>
     }
 
     Err(sqlx::Error::Protocol(
-        "공유 코드 예약을 반복 시도했지만 실패했습니다 (코드 풀이 거의 가득 찼을 수 있음)"
+        "Failed to reserve share code after repeated attempts (code pool may be nearly full)"
             .into(),
     ))
 }
@@ -1536,7 +1536,7 @@ pub async fn cancel_application_by_user(
     .map_err(|e| crate::models::internal_error(format!("Cancel application failed: {}", e)))?;
 
     if result.rows_affected() == 0 {
-        return Err(crate::models::not_found("신청을 찾을 수 없습니다"));
+        return Err(crate::models::not_found("Request not found"));
     }
     Ok(())
 }

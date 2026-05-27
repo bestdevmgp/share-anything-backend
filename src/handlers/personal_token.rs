@@ -52,7 +52,7 @@ pub async fn create_personal_token(
     let name = request.name.unwrap_or_else(|| "API Token".to_string());
 
     if name.len() > 255 {
-        return Err(bad_request("토큰 이름은 255자 이하여야 합니다"));
+        return Err(bad_request("Token name must be 255 characters or fewer"));
     }
 
     let raw_token = generate_personal_token();
@@ -78,7 +78,7 @@ pub async fn create_personal_token(
         expires_at,
     )
     .await
-    .map_err(|e| internal_error(format!("Personal Token 생성 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to create personal token: {}", e)))?;
 
     Ok(Json(CreatePersonalTokenResponse {
         id: personal_token.id,
@@ -107,7 +107,7 @@ pub async fn list_personal_tokens(
 ) -> Result<Json<Vec<PersonalTokenResponse>>, AppError> {
     let tokens = repository::find_personal_tokens_by_user(&state.db, &claims.sub)
         .await
-        .map_err(|e| internal_error(format!("Personal Token 목록 조회 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to list personal tokens: {}", e)))?;
 
     let response: Vec<PersonalTokenResponse> = tokens
         .into_iter()
@@ -146,10 +146,10 @@ pub async fn delete_personal_token(
 ) -> Result<StatusCode, AppError> {
     let rows = repository::revoke_personal_token(&state.db, &token_id, &claims.sub)
         .await
-        .map_err(|e| internal_error(format!("Personal Token 폐기 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to revoke personal token: {}", e)))?;
 
     if rows == 0 {
-        return Err(not_found("Personal Token을 찾을 수 없습니다"));
+        return Err(not_found("Personal token not found"));
     }
 
     Ok(StatusCode::NO_CONTENT)

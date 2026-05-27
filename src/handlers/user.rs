@@ -49,7 +49,7 @@ pub async fn get_upload_history(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let rows = repository::find_file_shares_with_download_count_by_user(
         &state.db,
@@ -125,15 +125,15 @@ pub async fn get_download_logs(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?
+        .ok_or_else(|| not_found("File not found"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
-        return Err(forbidden("다른 사용자의 파일에 접근할 수 없습니다"));
+        return Err(forbidden("Access to another user's file is forbidden"));
     }
 
     let rows = repository::find_download_logs_with_downloader_name_by_file_share(
@@ -181,15 +181,15 @@ pub async fn delete_file_share(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let file_share = repository::find_file_share_by_id(&state.db, &file_id)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("파일을 찾을 수 없습니다"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?
+        .ok_or_else(|| not_found("File not found"))?;
 
     if file_share.user_id.as_ref() != Some(&user_claims.sub) {
-        return Err(forbidden("파일 접근 권한이 없습니다"));
+        return Err(forbidden("Access to another user's file is forbidden"));
     }
 
     if !file_share.storage_key.is_empty() {
@@ -197,12 +197,12 @@ pub async fn delete_file_share(
             .storage
             .delete_file(&file_share.storage_key)
             .await
-            .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Failed to delete file from storage: {}", e)))?;
     }
 
     repository::delete_file_share(&state.db, &file_id)
         .await
-        .map_err(|e| internal_error(format!("데이터베이스에서 파일 삭제 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to delete file record: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -226,18 +226,18 @@ pub async fn delete_all_file_shares(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let storage_keys = repository::delete_all_user_file_shares(&state.db, &user_claims.sub)
         .await
-        .map_err(|e| internal_error(format!("전체 파일 삭제 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to delete all files: {}", e)))?;
 
     if !storage_keys.is_empty() {
         state
             .storage
             .delete_files(storage_keys)
             .await
-            .map_err(|e| internal_error(format!("스토리지에서 파일 삭제 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Failed to delete file from storage: {}", e)))?;
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -263,24 +263,24 @@ pub async fn update_name(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
+        .ok_or_else(|| unauthorized("Authentication required"))?
         .clone();
 
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
-        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다"))?;
+        .map_err(|_| internal_error("Cannot read request body"))?;
 
     let req: UpdateNameRequest = serde_json::from_slice(&body_bytes)
-        .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
+        .map_err(|_| internal_error("Invalid request format"))?;
 
     let name = req.name.trim().to_string();
     if name.is_empty() || name.len() > 50 {
-        return Err(bad_request("이름은 1~50자 이내로 입력해주세요"));
+        return Err(bad_request("Name must be between 1 and 50 characters"));
     }
 
     repository::update_user_name(&state.db, &user_claims.sub, &name)
         .await
-        .map_err(|e| internal_error(format!("이름 변경 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to update name: {}", e)))?;
 
     Ok(Json(UpdateNameResponse { name }))
 }
@@ -303,15 +303,15 @@ pub async fn delete_account(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     repository::revoke_all_personal_tokens(&state.db, &user_claims.sub)
         .await
-        .map_err(|e| internal_error(format!("토큰 폐기 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to revoke tokens: {}", e)))?;
 
     repository::soft_delete_user(&state.db, &user_claims.sub)
         .await
-        .map_err(|e| internal_error(format!("계정 삭제 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to delete account: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -334,12 +334,12 @@ pub async fn get_notification_settings(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let (notify_upload, notify_download, notify_download_alert, notify_security, notify_language) =
         repository::get_user_notification_settings(&state.db, &user_claims.sub)
             .await
-            .map_err(|e| internal_error(format!("알림 설정 조회 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Failed to fetch notification settings: {}", e)))?;
 
     Ok(Json(NotificationSettingsResponse {
         notify_upload,
@@ -369,15 +369,15 @@ pub async fn update_notification_settings(
     let user_claims = request
         .extensions()
         .get::<Claims>()
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?
+        .ok_or_else(|| unauthorized("Authentication required"))?
         .clone();
 
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
-        .map_err(|_| internal_error("요청 본문을 읽을 수 없습니다"))?;
+        .map_err(|_| internal_error("Cannot read request body"))?;
 
     let req: UpdateNotificationSettingsRequest = serde_json::from_slice(&body_bytes)
-        .map_err(|_| internal_error("잘못된 요청 형식입니다"))?;
+        .map_err(|_| internal_error("Invalid request format"))?;
 
     repository::update_user_notification_settings(
         &state.db,
@@ -389,7 +389,7 @@ pub async fn update_notification_settings(
         &req.notify_language,
     )
     .await
-    .map_err(|e| internal_error(format!("알림 설정 업데이트 실패: {}", e)))?;
+    .map_err(|e| internal_error(format!("Failed to update notification settings: {}", e)))?;
 
     Ok(Json(NotificationSettingsResponse {
         notify_upload: req.notify_upload,

@@ -349,7 +349,7 @@ pub fn create_router(
         .route("/cli/shares/:code/download", get(handlers::cli::cli_download))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
-            cli_rate_limiter.clone(),
+            (cli_rate_limiter.clone(), rate_limiter.clone()),
             crate::middleware::rate_limiter::cli_rate_limit_middleware,
         ))
         .layer(middleware::from_fn_with_state(
@@ -372,6 +372,7 @@ pub fn create_router(
         v1_state,
         v1_auth_state,
         cli_rate_limiter,
+        rate_limiter.clone(),
     );
 
     let install_route = Router::new()

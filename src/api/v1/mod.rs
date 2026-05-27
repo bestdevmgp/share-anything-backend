@@ -27,6 +27,7 @@ pub fn router(
     state: V1State,
     v1_auth_state: V1AuthState,
     cli_rate_limiter: CliRateLimiter,
+    rate_limiter: crate::middleware::rate_limiter::RateLimiter,
 ) -> Router {
     use axum::routing::{delete, get, post};
     use axum::middleware;
@@ -72,7 +73,10 @@ pub fn router(
             get(handlers::p2p::get_v1_turn_credentials),
         )
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
-        .layer(middleware::from_fn_with_state(cli_rate_limiter, cli_rate_limit_middleware))
+        .layer(middleware::from_fn_with_state(
+            (cli_rate_limiter, rate_limiter),
+            cli_rate_limit_middleware,
+        ))
         .layer(middleware::from_fn_with_state(v1_auth_state, v1_auth))
         .with_state(state.clone());
 

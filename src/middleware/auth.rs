@@ -60,21 +60,21 @@ pub async fn require_auth(
     let auth_header = request
         .headers()
         .get(header::AUTHORIZATION)
-        .ok_or_else(|| unauthorized("인증이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Authentication required"))?;
 
     let auth_str = auth_header
         .to_str()
-        .map_err(|_| unauthorized("잘못된 인증 헤더입니다"))?;
+        .map_err(|_| unauthorized("Invalid authentication header"))?;
 
     let token = auth_str
         .strip_prefix("Bearer ")
-        .ok_or_else(|| unauthorized("Bearer 토큰이 필요합니다"))?;
+        .ok_or_else(|| unauthorized("Bearer token required"))?;
 
     let claims = verify_jwt(token, &state.config.jwt.secret)
-        .map_err(|_| unauthorized("유효하지 않은 인증 토큰입니다"))?;
+        .map_err(|_| unauthorized("Invalid authentication token"))?;
 
     if !session_active(&state.db, &claims.jti).await {
-        return Err(unauthorized("세션이 종료되었습니다. 다시 로그인해 주세요"));
+        return Err(unauthorized("Session expired. Please sign in again."));
     }
 
     spawn_touch_session(&state.db, &claims.jti);

@@ -88,7 +88,7 @@ impl AuthService {
                         }
                     }
                 } else if existing.status != UserStatus::Active {
-                    return Err(forbidden("이 계정은 비활성화 상태입니다"));
+                    return Err(forbidden("This account is inactive"));
                 } else {
                     existing
                 }
@@ -138,7 +138,7 @@ impl AuthService {
                         }
                     }
                 } else if existing.status != UserStatus::Active {
-                    return Err(forbidden("이 계정은 비활성화 상태입니다"));
+                    return Err(forbidden("This account is inactive"));
                 } else {
                     if existing.oauth_provider != OAuthProvider::Email {
                         existing_provider = Some(existing.oauth_provider.to_string());
@@ -261,7 +261,7 @@ impl AuthService {
         )
         .map_err(|e| {
             tracing::error!(error = ?e, "JWT creation failed");
-            internal_error("JWT 발급 실패")
+            internal_error("Failed to issue JWT")
         })
     }
 

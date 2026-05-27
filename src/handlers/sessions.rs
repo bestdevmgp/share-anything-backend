@@ -97,7 +97,7 @@ pub async fn terminate_session(
     Path(jti): Path<String>,
 ) -> Result<StatusCode, AppError> {
     if jti == claims.jti {
-        return Err(bad_request("현재 사용 중인 세션은 종료할 수 없습니다"));
+        return Err(bad_request("Cannot terminate the active session"));
     }
     let rows = repository::delete_session(&state.db, &claims.sub, &jti).await?;
     if rows > 0 {
@@ -105,7 +105,7 @@ pub async fn terminate_session(
     }
     let cli_rows = repository::revoke_personal_token(&state.db, &jti, &claims.sub).await?;
     if cli_rows == 0 {
-        return Err(not_found("세션을 찾을 수 없습니다"));
+        return Err(not_found("Session not found"));
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -183,7 +183,7 @@ pub async fn delete_trusted_device(
 ) -> Result<StatusCode, AppError> {
     let rows = repository::delete_trusted_device(&state.db, &claims.sub, &id).await?;
     if rows == 0 {
-        return Err(not_found("신뢰 기기를 찾을 수 없습니다"));
+        return Err(not_found("Trusted device not found"));
     }
     Ok(StatusCode::NO_CONTENT)
 }

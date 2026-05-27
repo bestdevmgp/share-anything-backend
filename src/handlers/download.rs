@@ -51,18 +51,18 @@ pub async fn get_file_list(
     let turnstile_token = headers
         .get("X-Turnstile-Token")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+        .ok_or_else(|| bad_request("Security verification required"))?;
 
     let client_ip = extract_client_ip(&headers);
 
     verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
         .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     let rows = repository::find_file_shares_by_code_with_uploader(&state.db, &query.code).await?;
 
     if rows.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let uploader_name = rows[0].1.clone();
@@ -126,18 +126,18 @@ pub async fn get_file_info(
     let turnstile_token = headers
         .get("X-Turnstile-Token")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("보안 확인이 필요합니다"))?;
+        .ok_or_else(|| bad_request("Security verification required"))?;
 
     let client_ip = extract_client_ip(&headers);
 
     verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
         .await
-        .map_err(|_| forbidden("보안 확인에 실패했습니다. 다시 시도해주세요"))?;
+        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     let (file_share, uploader_name) =
         repository::find_file_share_by_code_with_uploader(&state.db, &query.code)
             .await?
-            .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
+            .ok_or_else(|| not_found("File not found or expired"))?;
 
     let uploader_online = if file_share.transfer_type == "p2p" {
         Some(state.signaling.find_uploader(&query.code).is_some())
@@ -194,20 +194,20 @@ pub async fn download_single_file(
 
     let file_shares = repository::find_file_shares_by_code(&state.db, code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let file_share = file_shares
         .iter()
         .find(|f| f.id == file_id)
-        .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("File not found"))?;
 
     if file_share.transfer_type == "p2p" {
         return Err(forbidden(
-            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
+            "This file is configured for P2P transfer. Use WebRTC connection.",
         ));
     }
 
@@ -215,13 +215,13 @@ pub async fn download_single_file(
         let password = headers
             .get("X-File-Password")
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+            .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
         let is_valid = bcrypt::verify(password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
-            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+            return Err(unauthorized("Incorrect password"));
         }
     }
 
@@ -280,7 +280,7 @@ pub async fn download_single_file(
         .storage
         .download_file(&file_share.storage_key)
         .await
-        .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
@@ -342,28 +342,28 @@ pub async fn preview_file(
 
     let file_shares = repository::find_file_shares_by_code(&state.db, code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let file_share = file_shares
         .iter()
         .find(|f| f.id == file_id)
-        .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("File not found"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+            .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
         let is_valid = bcrypt::verify(password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
-            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+            return Err(unauthorized("Incorrect password"));
         }
     }
 
@@ -371,7 +371,7 @@ pub async fn preview_file(
         .storage
         .download_file(&file_share.storage_key)
         .await
-        .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
 
     let mut response = Response::new(Body::from(file_data));
 
@@ -417,20 +417,20 @@ pub async fn download_file(
 ) -> Result<Response, AppError> {
     let file_share = repository::find_file_share_by_code(&state.db, &query.code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?
+        .ok_or_else(|| not_found("File not found or expired"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let password = headers
             .get("X-File-Password")
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+            .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
         let is_valid = bcrypt::verify(password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
-            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+            return Err(unauthorized("Incorrect password"));
         }
     }
 
@@ -489,7 +489,7 @@ pub async fn download_file(
         .storage
         .download_file(&file_share.storage_key)
         .await
-        .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
@@ -540,21 +540,21 @@ pub async fn download_multiple_files(
 
     let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
-        .map_err(|_| bad_request("요청 본문을 읽을 수 없습니다"))?;
+        .map_err(|_| bad_request("Cannot read request body"))?;
 
     let req: DownloadFilesRequest = serde_json::from_slice(&body_bytes)
-        .map_err(|_| bad_request("잘못된 요청 형식입니다"))?;
+        .map_err(|_| bad_request("Invalid request format"))?;
 
     if req.file_ids.is_empty() {
-        return Err(bad_request("최소 1개 이상의 파일 ID가 필요합니다"));
+        return Err(bad_request("At least one file ID is required"));
     }
 
     let all_files = repository::find_file_shares_by_code(&state.db, &req.code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?;
 
     if all_files.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let files_to_download: Vec<_> = all_files
@@ -563,19 +563,19 @@ pub async fn download_multiple_files(
         .collect();
 
     if files_to_download.is_empty() {
-        return Err(not_found("요청한 파일을 찾을 수 없습니다"));
+        return Err(not_found("Requested files not found"));
     }
 
     if let Some(password_hash) = &files_to_download[0].password_hash {
         if let Some(password) = &req.password {
             let is_valid = bcrypt::verify(password, password_hash)
-                .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+                .map_err(|_| internal_error("Password verification failed"))?;
 
             if !is_valid {
-                return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+                return Err(unauthorized("Incorrect password"));
             }
         } else {
-            return Err(unauthorized("비밀번호가 필요합니다"));
+            return Err(unauthorized("Password required"));
         }
     }
 
@@ -612,13 +612,13 @@ pub async fn download_multiple_files(
             .storage
             .download_file(&file_share.storage_key)
             .await
-            .map_err(|e| internal_error(format!("스토리지에서 파일 다운로드 실패: {}", e)))?;
+            .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
 
         zip.start_file(&file_share.file_name, options)
-            .map_err(|_| internal_error("ZIP 파일 생성 실패"))?;
+            .map_err(|_| internal_error("Failed to create ZIP file"))?;
 
         zip.write_all(&file_data)
-            .map_err(|_| internal_error("ZIP 파일 쓰기 실패"))?;
+            .map_err(|_| internal_error("Failed to write ZIP file"))?;
 
         log_dtos.push(CreateDownloadLogDto {
             file_share_id: file_share.id.clone(),
@@ -640,7 +640,7 @@ pub async fn download_multiple_files(
 
     let buffer = zip
         .finish()
-        .map_err(|_| internal_error("ZIP 파일 완성 실패"))?;
+        .map_err(|_| internal_error("Failed to finalize ZIP file"))?;
 
     let zip_data = buffer.into_inner();
 
@@ -705,17 +705,17 @@ pub async fn verify_password(
 ) -> Result<StatusCode, AppError> {
     let file_share = repository::find_file_share_by_code(&state.db, &req.code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?
-        .ok_or_else(|| not_found("찾을 수 없거나 만료된 파일입니다"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?
+        .ok_or_else(|| not_found("File not found or expired"))?;
 
     if let Some(password_hash) = &file_share.password_hash {
         let is_valid = bcrypt::verify(&req.password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Password verification failed"))?;
 
         if is_valid {
             Ok(StatusCode::OK)
         } else {
-            Err(unauthorized("비밀번호가 일치하지 않습니다"))
+            Err(unauthorized("Incorrect password"))
         }
     } else {
         Ok(StatusCode::OK)
@@ -756,20 +756,20 @@ pub async fn get_download_url(
 
     let file_shares = repository::find_file_shares_by_code(&state.db, code)
         .await
-        .map_err(|_| internal_error("파일 조회 실패"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?;
 
     if file_shares.is_empty() {
-        return Err(not_found("찾을 수 없거나 만료된 파일입니다"));
+        return Err(not_found("File not found or expired"));
     }
 
     let file_share = file_shares
         .iter()
         .find(|f| f.id == file_id)
-        .ok_or_else(|| not_found("해당 파일을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("File not found"))?;
 
     if file_share.transfer_type == "p2p" {
         return Err(forbidden(
-            "이 파일은 P2P 전송으로 설정되어 있습니다. WebRTC 연결을 사용하세요",
+            "This file is configured for P2P transfer. Use WebRTC connection.",
         ));
     }
 
@@ -777,13 +777,13 @@ pub async fn get_download_url(
         let password = headers
             .get("X-File-Password")
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| unauthorized("비밀번호가 필요합니다. X-File-Password 헤더를 설정하세요"))?;
+            .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
         let is_valid = bcrypt::verify(password, password_hash)
-            .map_err(|_| internal_error("비밀번호 검증 실패"))?;
+            .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
-            return Err(unauthorized("비밀번호가 일치하지 않습니다"));
+            return Err(unauthorized("Incorrect password"));
         }
     }
 
@@ -862,7 +862,7 @@ pub async fn get_download_url(
             file_name_param,
         )
         .await
-        .map_err(|e| internal_error(format!("다운로드 URL 생성 실패: {}", e)))?;
+        .map_err(|e| internal_error(format!("Failed to create download URL: {}", e)))?;
 
     if file_share.is_one_time {
         let storage_key = file_share.storage_key.clone();

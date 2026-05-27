@@ -132,10 +132,10 @@ pub async fn admin_approve(
     let app = repository::find_application_by_id(&state.db, id)
         .await
         .map_err(|e| internal_error(format!("DB error: {}", e)))?
-        .ok_or_else(|| not_found("신청을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("Request not found"))?;
 
     if app.status != "pending" {
-        return Err(AppError::Conflict("이미 처리된 신청입니다".to_string()));
+        return Err(AppError::Conflict("Application already processed".to_string()));
     }
 
     let raw_key = generate_api_key();
@@ -236,10 +236,10 @@ pub async fn admin_reject(
     let app = repository::find_application_by_id(&state.db, id)
         .await
         .map_err(|e| internal_error(format!("DB error: {}", e)))?
-        .ok_or_else(|| not_found("신청을 찾을 수 없습니다"))?;
+        .ok_or_else(|| not_found("Request not found"))?;
 
     if app.status != "pending" {
-        return Err(AppError::Conflict("이미 처리된 신청입니다".to_string()));
+        return Err(AppError::Conflict("Application already processed".to_string()));
     }
 
     repository::reject_application(&state.db, id, &body.reject_reason)
