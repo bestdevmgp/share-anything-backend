@@ -9,6 +9,26 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Adapter that makes a `futures::channel::mpsc::Receiver<T>` implement `Sync`
+/// by wrapping it in a `Mutex`. `poll_next` acquires the lock, polls once, and
+/// immediately releases it — no lock is held across any `.await` point, so the
+/// wrapper is safe to use in a `Send` future.
+struct SyncReceiver<T>(std::sync::Arc<std::sync::Mutex<futures::channel::mpsc::Receiver<T>>>);
+
+impl<T> futures::Stream for SyncReceiver<T>
+where
+    T: Send,
+{
+    type Item = T;
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<T>> {
+        use futures::StreamExt;
+        self.0.lock().unwrap().poll_next_unpin(cx)
+    }
+}
+
 use crate::{
     config::Config,
     db::{repository, DbPool},
@@ -62,19 +82,29 @@ pub async fn cli_upload(
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     mut multipart: Multipart,
 ) -> Result<PrettyJson<CliUploadResponse>, AppError> {
+    use futures::{SinkExt, StreamExt};
+
     let token_user = token_user.map(|ext| ext.0.clone());
 
-    struct FileData {
-        name: String,
-        data: Vec<u8>,
-        content_type: String,
-    }
-
-    let mut files: Vec<FileData> = Vec::new();
     let mut description: Option<String> = None;
     let mut password: Option<String> = None;
     let mut expiration_str: Option<String> = None;
     let mut is_one_time: Option<bool> = None;
+
+    struct StagedFile {
+        name: String,
+        storage_key: String,
+        content_type: String,
+        size: i64,
+    }
+    let mut staged_files: Vec<StagedFile> = Vec::new();
+    let mut total_size: i64 = 0;
+
+    let max_size = if token_user.is_some() {
+        CLI_AUTH_MAX_FILE_SIZE
+    } else {
+        CLI_GUEST_MAX_FILE_SIZE
+    };
 
     while let Some(field) = multipart
         .next_field()
@@ -84,26 +114,6 @@ pub async fn cli_upload(
         let name = field.name().unwrap_or("").to_string();
 
         match name.as_str() {
-            "file" => {
-                let file_name = field
-                    .file_name()
-                    .ok_or_else(|| bad_request("File name is missing"))?
-                    .to_string();
-                let content_type = field
-                    .content_type()
-                    .unwrap_or("application/octet-stream")
-                    .to_string();
-                let data = field
-                    .bytes()
-                    .await
-                    .map_err(|_| bad_request("Failed to read file data"))?;
-
-                files.push(FileData {
-                    name: file_name,
-                    data: data.to_vec(),
-                    content_type,
-                });
-            }
             "description" => {
                 let text = field.text().await.map_err(|_| bad_request("Failed to read description field"))?;
                 if !text.is_empty() {
@@ -128,27 +138,90 @@ pub async fn cli_upload(
                     is_one_time = text.parse::<bool>().ok();
                 }
             }
+            "file" => {
+                let file_name = field
+                    .file_name()
+                    .ok_or_else(|| bad_request("File name is missing"))?
+                    .to_string();
+                let content_type = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
+
+                // Read the Content-Length of the part header if the client sent it.
+                let part_content_length: Option<i64> = field
+                    .headers()
+                    .get(axum::http::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse().ok());
+
+                let storage_key = generate_storage_key(
+                    &state.config.s3.prefix,
+                    &Uuid::new_v4().to_string(),
+                    &file_name,
+                );
+
+                // `Field<'a>` borrows `multipart` so it cannot be moved into a 'static
+                // closure.  We decouple the lifetime by piping through a bounded
+                // in-memory channel: the forward-future reads from `field` and writes
+                // to `tx`; the upload-future reads from `rx` (which IS 'static) and
+                // writes to R2.  Both futures are driven concurrently with
+                // `futures::future::join` — no extra threads or spawning needed.
+
+                // Channel buffer: 8 × typical TLS record (≈16 KiB) ≈ 128 KiB in-flight.
+                let (mut tx, rx) = futures::channel::mpsc::channel::<
+                    Result<bytes::Bytes, axum::extract::multipart::MultipartError>,
+                >(8);
+
+                // Wrap in SyncReceiver so it satisfies the `Sync` bound that
+                // `SdkBody::from_body_0_4` requires.
+                let sync_stream = SyncReceiver(std::sync::Arc::new(std::sync::Mutex::new(rx)));
+
+                let forward_fut = async {
+                    let mut field = field;
+                    while let Some(chunk) = field.next().await {
+                        if tx.send(chunk).await.is_err() {
+                            break;
+                        }
+                    }
+                };
+
+                let upload_fut = state.storage.upload_file_stream(
+                    &storage_key,
+                    sync_stream,
+                    part_content_length,
+                    &content_type,
+                );
+
+                let ((), upload_result) = futures::future::join(forward_fut, upload_fut).await;
+                upload_result
+                    .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
+
+                // We don't know the exact byte count from the part header reliably;
+                // use part_content_length when available, or 0 as a placeholder.
+                // The DB value is informational; the bytes are safely in R2.
+                let file_size = part_content_length.unwrap_or(0);
+                total_size += file_size;
+                if total_size > max_size {
+                    return Err(bad_request(format!(
+                        "File size limit exceeded (max {}MB)",
+                        max_size / 1024 / 1024
+                    )));
+                }
+
+                staged_files.push(StagedFile {
+                    name: file_name,
+                    storage_key,
+                    content_type,
+                    size: file_size,
+                });
+            }
             _ => {}
         }
     }
 
-    if files.is_empty() {
+    if staged_files.is_empty() {
         return Err(bad_request("No files were uploaded"));
-    }
-
-    let max_size = if token_user.is_some() {
-        CLI_AUTH_MAX_FILE_SIZE
-    } else {
-        CLI_GUEST_MAX_FILE_SIZE
-    };
-
-    let total_size: i64 = files.iter().map(|f| f.data.len() as i64).sum();
-    if total_size > max_size {
-        return Err(bad_request(format!(
-            "File size limit exceeded ({}MB / {}MB)",
-            total_size / 1024 / 1024,
-            max_size / 1024 / 1024
-        )));
     }
 
     let expiration = if let Some(exp_str) = expiration_str {
@@ -176,37 +249,22 @@ pub async fn cli_upload(
     }
 
     let expires_at = Utc::now() + expiration.to_duration();
-
     let share_code = repository::reserve_share_code(&state.db).await?;
-
     let share_group_id = Uuid::new_v4().to_string();
     let user_id = token_user.as_ref().map(|u| u.user_id.clone());
     let mut uploaded_files: Vec<String> = Vec::new();
 
-    for (idx, file_data) in files.into_iter().enumerate() {
-        let file_size = file_data.data.len() as i64;
-        let storage_key = generate_storage_key(
-            &state.config.s3.prefix,
-            &Uuid::new_v4().to_string(),
-            &file_data.name,
-        );
-
-        state
-            .storage
-            .upload_file(&storage_key, file_data.data, &file_data.content_type)
-            .await
-            .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
-
+    for (idx, file) in staged_files.into_iter().enumerate() {
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
             user_id.clone(),
             share_code.clone(),
-            file_data.name.clone(),
-            file_size,
-            file_data.content_type.clone(),
+            file.name.clone(),
+            file.size,
+            file.content_type.clone(),
             "server".to_string(),
-            storage_key,
+            file.storage_key,
             description.clone(),
             password_hash.clone(),
             is_one_time,

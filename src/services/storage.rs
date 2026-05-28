@@ -1,12 +1,59 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::{
     config::{Credentials, Region},
+    operation::get_object::GetObjectOutput,
     presigning::PresigningConfig,
     primitives::ByteStream,
     Client as S3Client,
 };
+use bytes::Bytes;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
+
+/// Newtype wrapper that adapts a `futures::Stream<Item = Result<Bytes, E>>`
+/// into an `http_body::Body`, allowing it to be passed to `SdkBody::from_body_0_4`.
+struct StreamBody<S> {
+    stream: S,
+    size_hint: Option<u64>,
+}
+
+impl<S, E> http_body::Body for StreamBody<S>
+where
+    S: futures::Stream<Item = Result<Bytes, E>> + Send + Sync + Unpin + 'static,
+    E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
+{
+    type Data = Bytes;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn poll_data(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        use futures::StreamExt;
+        match self.stream.poll_next_unpin(cx) {
+            Poll::Ready(Some(Ok(b))) => Poll::Ready(Some(Ok(b))),
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e.into()))),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn poll_trailers(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+        Poll::Ready(Ok(None))
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        match self.size_hint {
+            Some(n) => http_body::SizeHint::with_exact(n),
+            None => http_body::SizeHint::default(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct StorageService {
@@ -82,6 +129,19 @@ impl StorageService {
 
         let data = response.body.collect().await?;
         Ok(data.into_bytes().to_vec())
+    }
+
+    pub async fn download_file_stream(
+        &self,
+        key: &str,
+    ) -> Result<GetObjectOutput, crate::models::error::AppError> {
+        self.client
+            .get_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| crate::models::error::internal_error(format!("Failed to fetch from R2: {}", e)))
     }
 
     pub async fn delete_file(&self, key: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -204,6 +264,43 @@ impl StorageService {
             .await?;
 
         Ok(presigned_request.uri().to_string())
+    }
+
+    /// Upload a streaming body directly to R2 without buffering the entire payload in RAM.
+    ///
+    /// `content_length` — pass the exact byte count when known; pass `None` to let R2 use
+    /// chunked transfer encoding (R2 accepts unsigned chunked PUTs).
+    pub async fn upload_file_stream<S, E>(
+        &self,
+        key: &str,
+        stream: S,
+        content_length: Option<i64>,
+        content_type: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        S: futures::Stream<Item = Result<Bytes, E>> + Send + Sync + Unpin + 'static,
+        E: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
+    {
+        let stream_body = StreamBody {
+            stream,
+            size_hint: content_length.map(|n| n as u64),
+        };
+        let sdk_body = aws_sdk_s3::primitives::SdkBody::from_body_0_4(stream_body);
+        let byte_stream = ByteStream::new(sdk_body);
+
+        let mut req = self.client
+            .put_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .body(byte_stream)
+            .content_type(content_type);
+
+        if let Some(len) = content_length {
+            req = req.content_length(len);
+        }
+
+        req.send().await?;
+        Ok(())
     }
 
     pub async fn complete_multipart_upload(

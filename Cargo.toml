@@ -11,6 +11,8 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 futures = "0.3"
 http-body-util = "0.1"
+http-body = "0.4"
+bytes = "1"
 
 # API Documentation
 utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
@@ -59,6 +61,8 @@ woothee = "0.13"
 # File compression
 zip = "0.6"
 http = "0.2.12"
+
+tokio-util = { version = "0.7", features = ["io"] }
 
 # URL encoding
 percent-encoding = "2.3"

@@ -5,6 +5,8 @@ use axum::{
     response::Response,
     Json,
 };
+use futures::StreamExt as _;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
@@ -276,11 +278,12 @@ pub async fn download_single_file(
         )
         .await;
 
-    let file_data = state
+    let s3_resp = state
         .storage
-        .download_file(&file_share.storage_key)
-        .await
-        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+
+    let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
@@ -288,24 +291,28 @@ pub async fn download_single_file(
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
-    let mut response = Response::new(Body::from(file_data));
+    let async_read = s3_resp.body.into_async_read();
+    let body = Body::from_stream(tokio_util::io::ReaderStream::with_capacity(async_read, 256 * 1024));
 
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        file_share
-            .file_type
-            .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
+    let content_type: HeaderValue = file_share
+        .file_type
+        .parse()
+        .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
 
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
+    let content_disposition: HeaderValue =
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment"));
 
-    Ok(response)
+    let mut builder = Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_DISPOSITION, content_disposition);
+
+    if let Some(len) = content_length {
+        builder = builder.header(header::CONTENT_LENGTH, len.to_string());
+    }
+
+    builder.body(body).map_err(|e| internal_error(format!("Failed to build response: {}", e)))
 }
 
 #[utoipa::path(
@@ -367,30 +374,35 @@ pub async fn preview_file(
         }
     }
 
-    let file_data = state
+    let s3_resp = state
         .storage
-        .download_file(&file_share.storage_key)
-        .await
-        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
+        .download_file_stream(&file_share.storage_key)
+        .await?;
 
-    let mut response = Response::new(Body::from(file_data));
+    let content_length = s3_resp.content_length();
 
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        file_share
-            .file_type
-            .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
+    let async_read = s3_resp.body.into_async_read();
+    let body = Body::from_stream(tokio_util::io::ReaderStream::with_capacity(async_read, 256 * 1024));
 
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
+    let content_type: HeaderValue = file_share
+        .file_type
+        .parse()
+        .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
+
+    let content_disposition: HeaderValue =
         encode_content_disposition("inline", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("inline")),
-    );
+            .unwrap_or_else(|_| HeaderValue::from_static("inline"));
 
-    Ok(response)
+    let mut builder = Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_DISPOSITION, content_disposition);
+
+    if let Some(len) = content_length {
+        builder = builder.header(header::CONTENT_LENGTH, len.to_string());
+    }
+
+    builder.body(body).map_err(|e| internal_error(format!("Failed to build response: {}", e)))
 }
 
 #[utoipa::path(
@@ -485,11 +497,12 @@ pub async fn download_file(
         )
         .await;
 
-    let file_data = state
+    let s3_resp = state
         .storage
-        .download_file(&file_share.storage_key)
-        .await
-        .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+
+    let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
@@ -497,24 +510,28 @@ pub async fn download_file(
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
-    let mut response = Response::new(Body::from(file_data));
+    let async_read = s3_resp.body.into_async_read();
+    let body = Body::from_stream(tokio_util::io::ReaderStream::with_capacity(async_read, 256 * 1024));
 
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        file_share
-            .file_type
-            .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
+    let content_type: HeaderValue = file_share
+        .file_type
+        .parse()
+        .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
 
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
+    let content_disposition: HeaderValue =
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment"));
 
-    Ok(response)
+    let mut builder = Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_DISPOSITION, content_disposition);
+
+    if let Some(len) = content_length {
+        builder = builder.header(header::CONTENT_LENGTH, len.to_string());
+    }
+
+    builder.body(body).map_err(|e| internal_error(format!("Failed to build response: {}", e)))
 }
 
 #[utoipa::path(
@@ -599,6 +616,31 @@ pub async fn download_multiple_files(
 
     let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
 
+    // Pre-collect keys so closures don't capture a double-reference across a lifetime boundary.
+    let file_meta: Vec<(usize, String, String)> = files_to_download
+        .iter()
+        .enumerate()
+        .map(|(idx, f)| (idx, f.storage_key.clone(), f.file_name.clone()))
+        .collect();
+
+    let fetches = file_meta.into_iter().map(|(idx, key, name)| {
+        let storage = state.storage.clone();
+        async move {
+            let bytes = storage
+                .download_file(&key)
+                .await
+                .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
+            Ok::<_, AppError>((idx, name, bytes))
+        }
+    });
+
+    let mut fetch_stream = futures::stream::iter(fetches).buffer_unordered(4);
+    let mut fetched: HashMap<usize, (String, Vec<u8>)> = HashMap::new();
+    while let Some(result) = fetch_stream.next().await {
+        let (idx, name, bytes) = result?;
+        fetched.insert(idx, (name, bytes));
+    }
+
     let buffer = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(buffer);
     let options = FileOptions::default()
@@ -607,14 +649,10 @@ pub async fn download_multiple_files(
 
     let mut log_dtos: Vec<CreateDownloadLogDto> = Vec::with_capacity(files_to_download.len());
 
-    for file_share in files_to_download.iter() {
-        let file_data = state
-            .storage
-            .download_file(&file_share.storage_key)
-            .await
-            .map_err(|e| internal_error(format!("Failed to download file from storage: {}", e)))?;
+    for (idx, file_share) in files_to_download.iter().enumerate() {
+        let (name, file_data) = fetched.remove(&idx).expect("all files fetched");
 
-        zip.start_file(&file_share.file_name, options)
+        zip.start_file(&name, options)
             .map_err(|_| internal_error("Failed to create ZIP file"))?;
 
         zip.write_all(&file_data)

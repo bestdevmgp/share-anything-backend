@@ -172,8 +172,6 @@ impl Bucket {
     }
 }
 
-/// Rate-limit state returned in both allowed and denied cases, used to populate
-/// the X-RateLimit-* response headers.
 #[derive(Debug, Clone, Copy)]
 pub struct RateLimitStatus {
     pub limit: u32,
@@ -206,11 +204,6 @@ impl CliRateLimiter {
         limiter
     }
 
-    /// Check the rate limit for the given key and bucket.
-    ///
-    /// Returns `Ok(status)` when the request is allowed, `Err(status)` when denied.
-    /// The `RateLimitStatus` contains the information needed for X-RateLimit-* headers
-    /// in both cases.
     pub fn check(&self, key: &str, bucket: Bucket) -> Result<RateLimitStatus, RateLimitStatus> {
         if let Some(blocked_until) = self.blocked_ips.get(key) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
