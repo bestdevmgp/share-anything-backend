@@ -400,9 +400,6 @@ pub async fn cli_p2p_create(
 ///
 /// Returns a `storage_key`, `upload_id`, and `total_parts` per file. The CLI then calls
 /// `/cli/uploads/multipart/{id}/parts` for presigned URLs and PUTs bytes directly to R2.
-///
-/// `upload_id` is an empty string when the file fits in a single part and no real S3 multipart
-/// upload was created — pass the sentinel `"direct"` back to the complete endpoint for these.
 #[utoipa::path(
     post,
     path = "/cli/uploads/multipart",
@@ -475,15 +472,11 @@ pub async fn cli_multipart_init(
 
         let total_parts = ((file_info.file_size as f64) / (chunk_size as f64)).ceil() as i32;
 
-        let upload_id = if total_parts > 1 {
-            state
-                .storage
-                .create_multipart_upload(&storage_key, &file_info.content_type)
-                .await
-                .map_err(|e| internal_error(format!("Failed to create multipart upload: {}", e)))?
-        } else {
-            String::new()
-        };
+        let upload_id = state
+            .storage
+            .create_multipart_upload(&storage_key, &file_info.content_type)
+            .await
+            .map_err(|e| internal_error(format!("Failed to create multipart upload: {}", e)))?;
 
         files.push(CliMultipartFileInit {
             file_name: file_info.file_name.clone(),
