@@ -180,9 +180,12 @@ pub struct CliCompletedPart {
     pub etag: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct CliDownloadQuery {
+    /// Password for password-protected shares.
     pub password: Option<String>,
+    /// When the share has multiple files, the specific file id to download.
     pub file_id: Option<String>,
 }
 
@@ -193,4 +196,83 @@ pub struct CliUploadHistoryQuery {
     pub limit: Option<i64>,
     #[param(example = 0)]
     pub offset: Option<i64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliMeResponse {
+    #[schema(example = "Mingyu Park")]
+    pub name: String,
+    #[schema(example = "user@example.com")]
+    pub email: String,
+    /// ISO-like timestamp ("YYYY-MM-DD HH:MM UTC") of the last time the personal token was used.
+    /// `null` if the token has never been used.
+    #[schema(example = "2026-05-21 14:30 UTC")]
+    pub last_used_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliUploadHistoryItem {
+    #[schema(example = "482917")]
+    pub share_code: String,
+    #[schema(example = "report.pdf")]
+    pub file_name: String,
+    #[schema(example = 5242880)]
+    pub file_size: i64,
+    #[schema(example = "2026-05-21 14:30")]
+    pub expires_at: String,
+    #[schema(example = "2026-05-21 13:00")]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliUploadHistoryResponse {
+    pub uploads: Vec<CliUploadHistoryItem>,
+    #[schema(example = 7)]
+    pub count: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliDownloadHistoryItem {
+    #[schema(example = "482917")]
+    pub share_code: String,
+    #[schema(example = "report.pdf")]
+    pub file_name: String,
+    #[schema(example = 5242880)]
+    pub file_size: i64,
+    #[schema(example = "203.0.113.4")]
+    pub ip_address: String,
+    #[schema(example = "2026-05-21 14:32")]
+    pub downloaded_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliDownloadHistoryResponse {
+    pub downloads: Vec<CliDownloadHistoryItem>,
+    #[schema(example = 3)]
+    pub count: usize,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliShareDownloadLog {
+    #[schema(example = "report.pdf")]
+    pub file_name: String,
+    /// Display name of the downloader. `null` for anonymous downloads.
+    #[schema(example = "Mingyu Park")]
+    pub downloader_name: Option<String>,
+    #[schema(example = "203.0.113.4")]
+    pub ip_address: String,
+    /// Best-effort device/platform string parsed from the User-Agent header.
+    #[schema(example = "macOS")]
+    pub device_platform: String,
+    #[schema(example = "2026-05-21 14:32")]
+    pub downloaded_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliShareLogsResponse {
+    #[schema(example = "482917")]
+    pub share_code: String,
+    pub downloads: Vec<CliShareDownloadLog>,
+    #[schema(example = 4)]
+    pub count: usize,
 }

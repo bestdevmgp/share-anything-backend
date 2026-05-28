@@ -44,6 +44,17 @@ use crate::{
         CliDownloadQuery, CliUploadHistoryQuery,
     },
     services::StorageService,
+};
+
+#[allow(unused_imports)]
+use crate::models::{
+    CliMeResponse,
+    CliUploadHistoryItem, CliUploadHistoryResponse,
+    CliDownloadHistoryItem, CliDownloadHistoryResponse,
+    CliShareDownloadLog, CliShareLogsResponse,
+};
+
+use crate::{
     utils::{
         encode_content_disposition, generate_storage_key, parse_device_platform, PrettyJson,
     },
@@ -77,6 +88,29 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
     }
 }
 
+/// Upload one or more files via a multipart form.
+///
+/// Prefer the presigned flow (`POST /cli/uploads/multipart`) for large files — this endpoint
+/// relays bytes through the server and can fail when the multipart part lacks a reliable
+/// Content-Length.
+///
+/// Multipart fields:
+/// - `file` (one or more) — the file content. Repeat for multiple files.
+/// - `description` (optional, text)
+/// - `password` (optional, text; requires `X-Personal-Token`)
+/// - `expiration` (optional, text: 5m, 30m, 1h, 3h, 6h, 12h, 24h; requires token)
+/// - `is_one_time` (optional, text: "true"/"false"; requires token)
+#[utoipa::path(
+    post,
+    path = "/cli/uploads",
+    tag = "cli",
+    responses(
+        (status = 200, description = "Files uploaded", body = CliUploadResponse),
+        (status = 400, description = "Invalid request or file size exceeded"),
+        (status = 401, description = "Personal token required for password / expiration / one-time"),
+        (status = 500, description = "Storage upload failed")
+    )
+)]
 pub async fn cli_upload(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
@@ -362,6 +396,25 @@ pub async fn cli_p2p_create(
     }))
 }
 
+/// Initialize a multipart upload session.
+///
+/// Returns a `storage_key`, `upload_id`, and `total_parts` per file. The CLI then calls
+/// `/cli/uploads/multipart/{id}/parts` for presigned URLs and PUTs bytes directly to R2.
+///
+/// `upload_id` is an empty string when the file fits in a single part and no real S3 multipart
+/// upload was created — pass the sentinel `"direct"` back to the complete endpoint for these.
+#[utoipa::path(
+    post,
+    path = "/cli/uploads/multipart",
+    tag = "cli",
+    request_body = CliMultipartInitRequest,
+    responses(
+        (status = 200, description = "Upload session created", body = CliMultipartInitResponse),
+        (status = 400, description = "Invalid request or file size exceeded"),
+        (status = 401, description = "Personal token required for password / expiration / one-time"),
+        (status = 500, description = "Failed to create multipart upload on storage")
+    )
+)]
 pub async fn cli_multipart_init(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
@@ -472,6 +525,25 @@ pub async fn cli_multipart_init(
     }))
 }
 
+/// Issue presigned PUT URLs for the requested part numbers of a multipart upload.
+///
+/// The CLI uses these URLs to PUT bytes directly to R2 without relaying through the backend.
+#[utoipa::path(
+    post,
+    path = "/cli/uploads/multipart/{id}/parts",
+    tag = "cli",
+    params(
+        ("id" = String, Path, description = "Upload session id returned by /cli/uploads/multipart")
+    ),
+    request_body = CliPresignPartsRequest,
+    responses(
+        (status = 200, description = "Presigned URLs issued", body = CliPresignPartsResponse),
+        (status = 400, description = "Upload session already completed"),
+        (status = 403, description = "Upload session belongs to another user"),
+        (status = 404, description = "Upload session not found"),
+        (status = 500, description = "Failed to generate presigned URL")
+    )
+)]
 pub async fn cli_presign_parts(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
@@ -522,6 +594,26 @@ pub async fn cli_presign_parts(
     }))
 }
 
+/// Finalize a multipart upload session.
+///
+/// Send each file's part ETags (or `upload_id = "direct"` for single-part files). The server
+/// calls S3 CompleteMultipartUpload where needed and creates the `file_share` rows.
+#[utoipa::path(
+    post,
+    path = "/cli/uploads/multipart/{id}/complete",
+    tag = "cli",
+    params(
+        ("id" = String, Path, description = "Upload session id returned by /cli/uploads/multipart")
+    ),
+    request_body = CliCompleteMultipartRequest,
+    responses(
+        (status = 200, description = "Upload finalized", body = CliUploadResponse),
+        (status = 400, description = "Share code mismatch or session already completed"),
+        (status = 403, description = "Upload session belongs to another user"),
+        (status = 404, description = "Upload session not found"),
+        (status = 500, description = "Failed to complete multipart upload on storage")
+    )
+)]
 pub async fn cli_complete_multipart(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
@@ -614,6 +706,25 @@ pub async fn cli_complete_multipart(
     }))
 }
 
+/// Download a shared file via the CLI tool.
+///
+/// Returns the raw file bytes with a `Content-Disposition` header carrying the original
+/// filename. P2P shares are not downloadable through this endpoint — use the WebRTC flow.
+#[utoipa::path(
+    get,
+    path = "/cli/shares/{code}/download",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code"),
+        CliDownloadQuery,
+    ),
+    responses(
+        (status = 200, description = "File stream", content_type = "application/octet-stream"),
+        (status = 400, description = "P2P share cannot be downloaded via this endpoint"),
+        (status = 401, description = "Password required or incorrect"),
+        (status = 404, description = "Share not found or expired")
+    )
+)]
 pub async fn cli_download(
     State(state): State<CliState>,
     Path(code): Path<String>,
@@ -801,6 +912,17 @@ pub async fn cli_file_list(
     }))
 }
 
+/// List the authenticated user's recent uploads.
+#[utoipa::path(
+    get,
+    path = "/cli/me/uploads",
+    tag = "cli",
+    params(CliUploadHistoryQuery),
+    responses(
+        (status = 200, description = "Upload history", body = CliUploadHistoryResponse),
+        (status = 401, description = "Missing or invalid personal token")
+    )
+)]
 pub async fn cli_upload_history(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
@@ -832,6 +954,21 @@ pub async fn cli_upload_history(
     })))
 }
 
+/// List download logs for one of the authenticated user's shares.
+#[utoipa::path(
+    get,
+    path = "/cli/me/uploads/{code}/downloads",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code owned by the authenticated user")
+    ),
+    responses(
+        (status = 200, description = "Per-share download logs", body = CliShareLogsResponse),
+        (status = 401, description = "Missing or invalid personal token"),
+        (status = 403, description = "Share belongs to another user"),
+        (status = 404, description = "Share not found")
+    )
+)]
 pub async fn cli_share_logs(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
@@ -881,6 +1018,22 @@ pub async fn cli_share_logs(
     })))
 }
 
+/// Delete one of the authenticated user's shares (and its file in storage).
+#[utoipa::path(
+    delete,
+    path = "/cli/me/uploads/{code}",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code owned by the authenticated user")
+    ),
+    responses(
+        (status = 204, description = "Share deleted"),
+        (status = 401, description = "Missing or invalid personal token"),
+        (status = 403, description = "Share belongs to another user"),
+        (status = 404, description = "Share not found"),
+        (status = 500, description = "Failed to delete from storage or database")
+    )
+)]
 pub async fn cli_delete_upload(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
@@ -916,6 +1069,17 @@ pub async fn cli_delete_upload(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// List the authenticated user's recent downloads.
+#[utoipa::path(
+    get,
+    path = "/cli/me/downloads",
+    tag = "cli",
+    params(CliUploadHistoryQuery),
+    responses(
+        (status = 200, description = "Download history", body = CliDownloadHistoryResponse),
+        (status = 401, description = "Missing or invalid personal token")
+    )
+)]
 pub async fn cli_download_history(
     State(state): State<CliState>,
     token_user: axum::extract::Extension<PersonalTokenUser>,
@@ -955,7 +1119,7 @@ pub async fn cli_download_history(
     path = "/cli/me",
     tag = "cli",
     responses(
-        (status = 200, description = "User profile returned"),
+        (status = 200, description = "User profile returned", body = CliMeResponse),
         (status = 401, description = "Unauthorized — missing or invalid personal token"),
         (status = 404, description = "User not found")
     )
