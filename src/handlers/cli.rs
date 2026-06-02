@@ -182,7 +182,6 @@ pub async fn cli_upload(
                     .unwrap_or("application/octet-stream")
                     .to_string();
 
-                // Read the Content-Length of the part header if the client sent it.
                 let part_content_length: Option<i64> = field
                     .headers()
                     .get(axum::http::header::CONTENT_LENGTH)

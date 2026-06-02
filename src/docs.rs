@@ -55,7 +55,6 @@ impl Modify for SecurityAddon {
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        // auth — OAuth
         crate::handlers::auth::google_login,
         crate::handlers::auth::google_callback,
         crate::handlers::auth::google_callback_handler,
@@ -68,23 +67,18 @@ impl Modify for SecurityAddon {
         crate::handlers::auth::apple_login,
         crate::handlers::auth::apple_callback,
         crate::handlers::auth::apple_callback_handler,
-        // auth — device revoke
         crate::handlers::device_confirm::revoke_device,
-        // email-auth
         crate::handlers::auth::email_send,
         crate::handlers::auth::email_verify,
         crate::handlers::auth::email_verify_code,
         crate::handlers::auth::email_status,
-        // upload
         crate::handlers::upload::upload_file,
         crate::handlers::upload::create_p2p_session,
-        // presigned
         crate::handlers::presigned::request_presigned_upload,
         crate::handlers::presigned::complete_presigned_upload,
         crate::handlers::presigned::init_multipart_upload,
         crate::handlers::presigned::get_part_presigned_urls,
         crate::handlers::presigned::complete_multipart_upload,
-        // download
         crate::handlers::download::get_file_list,
         crate::handlers::download::download_file,
         crate::handlers::download::download_single_file,
@@ -93,7 +87,6 @@ impl Modify for SecurityAddon {
         crate::handlers::download::get_file_info,
         crate::handlers::download::verify_password,
         crate::handlers::download::get_download_url,
-        // user
         crate::handlers::user::get_upload_history,
         crate::handlers::user::get_download_logs,
         crate::handlers::user::delete_file_share,
@@ -102,28 +95,22 @@ impl Modify for SecurityAddon {
         crate::handlers::user::get_notification_settings,
         crate::handlers::user::update_notification_settings,
         crate::handlers::user::update_name,
-        // sessions & trusted devices
         crate::handlers::sessions::list_sessions,
         crate::handlers::sessions::terminate_session,
         crate::handlers::sessions::terminate_other_sessions,
         crate::handlers::sessions::list_trusted_devices,
         crate::handlers::sessions::delete_trusted_device,
-        // personal tokens
         crate::handlers::personal_token::create_personal_token,
         crate::handlers::personal_token::list_personal_tokens,
         crate::handlers::personal_token::delete_personal_token,
-        // quick access
         crate::handlers::quick_access::init_quick_access_upload,
         crate::handlers::quick_access::list_quick_access_files,
         crate::handlers::quick_access::delete_quick_access_file,
         crate::handlers::quick_access::preview_quick_access_file,
         crate::handlers::quick_access::share_quick_access_file,
         crate::handlers::quick_access::download_quick_access_file,
-        // p2p
         crate::handlers::p2p::check_uploader_status,
-        // turn
         crate::handlers::turn::get_turn_credentials,
-        // api-keys (user-facing)
         crate::handlers::api_key::apply,
         crate::handlers::api_key::list_my_applications,
         crate::handlers::api_key::get_my_application,
@@ -131,11 +118,9 @@ impl Modify for SecurityAddon {
         crate::handlers::api_key::list_my_api_keys,
         crate::handlers::api_key::revoke_api_key,
         crate::handlers::api_key::reveal_api_key,
-        // admin
         crate::handlers::admin::admin_list_applications,
         crate::handlers::admin::admin_approve,
         crate::handlers::admin::admin_reject,
-        // cli tool routes
         crate::handlers::cli::cli_me,
         crate::handlers::cli::cli_download_info,
         crate::handlers::cli::cli_p2p_create,
@@ -148,14 +133,12 @@ impl Modify for SecurityAddon {
         crate::handlers::cli::cli_share_logs,
         crate::handlers::cli::cli_delete_upload,
         crate::handlers::cli::cli_download_history,
-        // cli device pairing
         crate::handlers::cli_auth::create_session,
         crate::handlers::cli_auth::check_status,
         crate::handlers::cli_auth::complete_session,
     ),
     components(
         schemas(
-            // core
             User,
             OAuthProvider,
             FileShare,
@@ -173,21 +156,17 @@ impl Modify for SecurityAddon {
             FileInfoResponse,
             VerifyPasswordRequest,
             UploadHistoryResponse,
-            // user settings
             NotificationSettingsResponse,
             UpdateNotificationSettingsRequest,
             UpdateNameRequest,
             UpdateNameResponse,
-            // sessions
             SessionResponse,
             TrustedDeviceResponse,
-            // personal tokens
             CreatePersonalTokenRequest,
             CreatePersonalTokenResponse,
             crate::models::ErrorResponse,
             crate::models::personal_token::PersonalTokenResponse,
             crate::models::personal_token::Scope,
-            // email auth
             EmailSendRequest,
             EmailSendResponse,
             EmailVerifyRequest,
@@ -197,10 +176,8 @@ impl Modify for SecurityAddon {
             EmailStatusResponse,
             EmailAuthData,
             EmailAuthUser,
-            // cli auth
             CliAuthSessionResponse,
             CliAuthStatusResponse,
-            // cli tool
             CliFileInfoResponse,
             CliP2PFileInfo,
             CliP2PCreateRequest,
@@ -225,7 +202,6 @@ impl Modify for SecurityAddon {
             CliDownloadHistoryResponse,
             CliShareDownloadLog,
             CliShareLogsResponse,
-            // presigned upload
             PresignedUploadRequest,
             PresignedUploadFileInfo,
             PresignedUploadUrl,
@@ -242,17 +218,13 @@ impl Modify for SecurityAddon {
             CompletedPart,
             CompleteMultipartUploadRequest,
             CompleteMultipartFileInfo,
-            // quick access
             QuickAccessUploadRequest,
             QuickAccessFileResponse,
             QuickAccessListResponse,
-            // p2p
             P2pStatusQuery,
             P2pStatusResponse,
-            // turn
             IceServer,
             TurnCredentialsResponse,
-            // api-keys
             crate::models::api_key_application::ApplicationStatus,
             crate::models::api_key_application::ApiKeyApplication,
             crate::models::api_key_application::CreateApplicationRequest,
