@@ -33,6 +33,94 @@ pub struct DownloadState {
     pub notifications: Arc<NotificationService>,
 }
 
+/// Reduce an uploader-supplied file name to a safe ZIP entry: basename only, no
+/// `.` / `..` / empty, and de-duplicated within one archive so a collision doesn't
+/// silently overwrite an earlier entry on extract. The `fallback_id` is the
+/// file_share row id, used when the name collapses to nothing after stripping.
+fn sanitize_zip_entry_name(
+    raw: &str,
+    fallback_id: &str,
+    used: &mut std::collections::HashSet<String>,
+) -> String {
+    let basename = raw.rsplit(['/', '\\']).next().unwrap_or("").trim();
+    let base = if matches!(basename, "" | "." | "..") {
+        format!("file_{}", fallback_id)
+    } else {
+        basename.to_string()
+    };
+    if used.insert(base.clone()) {
+        return base;
+    }
+    let (stem, ext) = match base.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{}", e)),
+        _ => (base.clone(), String::new()),
+    };
+    for n in 1..=9999 {
+        let candidate = format!("{} ({}){}", stem, n, ext);
+        if used.insert(candidate.clone()) {
+            return candidate;
+        }
+    }
+    let last_resort = format!("{}_{}", base, fallback_id);
+    used.insert(last_resort.clone());
+    last_resort
+}
+
+#[cfg(test)]
+mod zip_entry_tests {
+    use super::sanitize_zip_entry_name;
+    use std::collections::HashSet;
+
+    #[test]
+    fn strips_directory_traversal() {
+        let mut used = HashSet::new();
+        assert_eq!(
+            sanitize_zip_entry_name("../../etc/passwd", "abc", &mut used),
+            "passwd"
+        );
+    }
+
+    #[test]
+    fn strips_absolute_unix_path() {
+        let mut used = HashSet::new();
+        assert_eq!(
+            sanitize_zip_entry_name("/etc/shadow", "abc", &mut used),
+            "shadow"
+        );
+    }
+
+    #[test]
+    fn strips_windows_drive_path() {
+        let mut used = HashSet::new();
+        assert_eq!(
+            sanitize_zip_entry_name(r"C:\Windows\notepad.exe", "abc", &mut used),
+            "notepad.exe"
+        );
+    }
+
+    #[test]
+    fn fallback_for_dot_names() {
+        let mut used = HashSet::new();
+        assert_eq!(sanitize_zip_entry_name("..", "abc", &mut used), "file_abc");
+        assert_eq!(sanitize_zip_entry_name(".", "def", &mut used), "file_def");
+        assert_eq!(sanitize_zip_entry_name("", "ghi", &mut used), "file_ghi");
+    }
+
+    #[test]
+    fn dedupes_collisions() {
+        let mut used = HashSet::new();
+        assert_eq!(sanitize_zip_entry_name("photo.png", "a", &mut used), "photo.png");
+        assert_eq!(sanitize_zip_entry_name("photo.png", "b", &mut used), "photo (1).png");
+        assert_eq!(sanitize_zip_entry_name("photo.png", "c", &mut used), "photo (2).png");
+    }
+
+    #[test]
+    fn keeps_unicode_basename() {
+        let mut used = HashSet::new();
+        assert_eq!(sanitize_zip_entry_name("안녕.txt", "abc", &mut used), "안녕.txt");
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/files/list",
@@ -648,11 +736,19 @@ pub async fn download_multiple_files(
         .unix_permissions(0o755);
 
     let mut log_dtos: Vec<CreateDownloadLogDto> = Vec::with_capacity(files_to_download.len());
+    // ZIP entry names are extractor-trusted paths — many tools (macOS Archive Utility,
+    // `unzip`, language stdlibs) write them verbatim into the user's filesystem. The
+    // uploader controls `file_name`, so an attacker (or even an honest mistake) could
+    // embed `..` / absolute / Windows-drive paths and escape the chosen extract
+    // directory (CWE-22 / "Zip Slip"). Strip every entry to its basename and reject
+    // path-only names so the archive is safe to expand anywhere.
+    let mut used_names: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (idx, file_share) in files_to_download.iter().enumerate() {
         let (name, file_data) = fetched.remove(&idx).expect("all files fetched");
 
-        zip.start_file(&name, options)
+        let safe_name = sanitize_zip_entry_name(&name, &file_share.id, &mut used_names);
+        zip.start_file(&safe_name, options)
             .map_err(|_| internal_error("Failed to create ZIP file"))?;
 
         zip.write_all(&file_data)
