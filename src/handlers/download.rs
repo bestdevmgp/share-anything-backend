@@ -814,7 +814,7 @@ pub async fn download_multiple_files(
 
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"files_{}.zip\"", req.code)
+        format!("attachment; filename=\"share-{}.zip\"", req.code)
             .parse()
             .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
