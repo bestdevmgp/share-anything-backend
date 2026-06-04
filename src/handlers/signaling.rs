@@ -381,6 +381,14 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         .collect();
 
     for share_code in downloader_share_codes {
+        // Conditional remove: a fresh WebSocket for the next file may already have
+        // re-registered itself under the same `share_code` while this cleanup task
+        // was being scheduled. We must only act if we are still the registered
+        // downloader — otherwise we'd evict the new receiver and stall the next
+        // ICE negotiation. See `SignalingState::remove_downloader_if_matches`.
+        if !state.remove_downloader_if_matches(&share_code, peer_id) {
+            continue;
+        }
         if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
             let _ = state.send_to_peer(
                 &uploader_peer_id,
@@ -389,7 +397,6 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
                 },
             );
         }
-        state.remove_downloader(&share_code);
         let _ = repository::update_p2p_status(db, &share_code, "waiting", None).await;
     }
 

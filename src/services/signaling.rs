@@ -139,6 +139,20 @@ impl SignalingState {
         self.downloaders.remove(share_code);
     }
 
+    /// Conditional remove used by cleanup paths: only evict the downloader for
+    /// `share_code` if it is still pointing at `peer_id`. Critical for multi-file
+    /// transfers — receivers reconnect with a fresh WebSocket per file, and the
+    /// previous WS's cleanup task can race with the next WS's registration. A blind
+    /// `remove(share_code)` would wipe out the freshly-registered downloader and
+    /// leave subsequent signaling relays (Offer / ICE) with no target.
+    ///
+    /// Returns `true` when the entry was actually removed.
+    pub fn remove_downloader_if_matches(&self, share_code: &str, peer_id: &str) -> bool {
+        self.downloaders
+            .remove_if(share_code, |_, current| current == peer_id)
+            .is_some()
+    }
+
     pub fn register_connection(&self, peer_id: String, sender: mpsc::UnboundedSender<Message>) {
         self.connections.insert(peer_id, sender);
     }
