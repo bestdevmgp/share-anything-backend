@@ -71,7 +71,7 @@ pub async fn get_file_list(
     let first_file = &rows[0].0;
     let total_count = rows.len();
     let description = first_file.description.clone();
-    let has_password = first_file.password_hash.is_some();
+    let has_password = rows.iter().any(|(f, _)| f.password_hash.is_some());
     let is_one_time = first_file.is_one_time;
     let transfer_type = first_file.transfer_type.clone();
     let expires_at = first_file.expires_at;
@@ -741,22 +741,29 @@ pub async fn verify_password(
     State(state): State<DownloadState>,
     Json(req): Json<VerifyPasswordRequest>,
 ) -> Result<StatusCode, AppError> {
-    let file_share = repository::find_file_share_by_code(&state.db, &req.code)
+    let file_shares = repository::find_file_shares_by_code(&state.db, &req.code)
         .await
-        .map_err(|_| internal_error("Failed to fetch file"))?
-        .ok_or_else(|| not_found("File not found or expired"))?;
+        .map_err(|_| internal_error("Failed to fetch file"))?;
 
-    if let Some(password_hash) = &file_share.password_hash {
-        let is_valid = bcrypt::verify(&req.password, password_hash)
-            .map_err(|_| internal_error("Password verification failed"))?;
+    if file_shares.is_empty() {
+        return Err(not_found("File not found or expired"));
+    }
 
-        if is_valid {
-            Ok(StatusCode::OK)
-        } else {
-            Err(unauthorized("Incorrect password"))
-        }
-    } else {
+    let password_hash = file_shares
+        .iter()
+        .find_map(|f| f.password_hash.as_deref());
+
+    let Some(hash) = password_hash else {
+        return Ok(StatusCode::OK);
+    };
+
+    let is_valid = bcrypt::verify(&req.password, hash)
+        .map_err(|_| internal_error("Password verification failed"))?;
+
+    if is_valid {
         Ok(StatusCode::OK)
+    } else {
+        Err(unauthorized("Incorrect password"))
     }
 }
 
