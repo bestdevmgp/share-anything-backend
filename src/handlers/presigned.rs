@@ -45,7 +45,8 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
         (status = 200, description = "Presigned URLs generated", body = PresignedUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 403, description = "Turnstile verification failed")
+        (status = 403, description = "Turnstile verification failed"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
@@ -73,15 +74,13 @@ pub async fn request_presigned_upload(
         500 * 1024 * 1024
     };
 
+    if request.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
+    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
     if total_size > max_total_size {
-        let limit_mb = max_total_size / 1024 / 1024;
-        let current_mb = total_size / 1024 / 1024;
-        return Err(bad_request(format!(
-            "File size limit exceeded. (uploaded: {}MB, limit: {}MB)",
-            current_mb, limit_mb
-        )));
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
     }
 
     let expiration = if let Some(exp) = request.expiration {
@@ -212,6 +211,7 @@ pub async fn complete_presigned_upload(
             &state.db,
             Some(share_group_id.clone()),
             session.user_id.clone(),
+            None,
             session.share_code.clone(),
             file_info.file_name.clone(),
             file_info.file_size,
@@ -304,7 +304,8 @@ pub async fn complete_presigned_upload(
         (status = 200, description = "Multipart upload initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 403, description = "Turnstile verification failed")
+        (status = 403, description = "Turnstile verification failed"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
@@ -332,15 +333,13 @@ pub async fn init_multipart_upload(
         500 * 1024 * 1024
     };
 
+    if request.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
+    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
     if total_size > max_total_size {
-        let limit_mb = max_total_size / 1024 / 1024;
-        let current_mb = total_size / 1024 / 1024;
-        return Err(bad_request(format!(
-            "File size limit exceeded. (uploaded: {}MB, limit: {}MB)",
-            current_mb, limit_mb
-        )));
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
     }
 
     let expiration = if let Some(exp) = request.expiration {
@@ -551,6 +550,7 @@ pub async fn complete_multipart_upload(
             &state.db,
             Some(share_group_id.clone()),
             session.user_id.clone(),
+            None,
             session.share_code.clone(),
             file_info.file_name.clone(),
             file_info.file_size,

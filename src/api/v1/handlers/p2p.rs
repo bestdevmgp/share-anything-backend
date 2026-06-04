@@ -507,10 +507,12 @@ async fn authenticate_ws(
         }
     });
 
+    let api_key_id = api_key_row.id.clone();
     Ok(PersonalTokenUser {
         user_id: api_key_row.user_id,
         personal_token_id: api_key_row.id,
         scopes,
+        api_key_id: Some(api_key_id),
     })
 }
 

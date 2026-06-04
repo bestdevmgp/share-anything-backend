@@ -37,7 +37,8 @@ pub struct QuickAccessState {
     responses(
         (status = 200, description = "Upload session initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized")
+        (status = 401, description = "Unauthorized"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
@@ -63,10 +64,13 @@ pub async fn init_quick_access_upload(
     }
 
     let max_total_size: i64 = 3 * 1024 * 1024 * 1024;
+    if req.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
+    }
     let total_size: i64 = req.files.iter().map(|f| f.file_size).sum();
 
     if total_size > max_total_size {
-        return Err(bad_request("File size limit exceeded"));
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
     }
 
     let share_code = repository::reserve_share_code(&state.db).await?;

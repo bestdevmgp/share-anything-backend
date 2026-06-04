@@ -37,6 +37,10 @@ pub enum AppError {
     #[error("{0}")]
     Gone(String),
     #[error("{0}")]
+    PayloadTooLarge(String),
+    #[error("{0}")]
+    StorageQuotaExceeded(String),
+    #[error("{0}")]
     TooManyRequests(String),
     #[error("{0}")]
     Internal(String),
@@ -55,6 +59,8 @@ impl AppError {
             Self::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             Self::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
             Self::Gone(_) => (StatusCode::GONE, "GONE"),
+            Self::PayloadTooLarge(_) => (StatusCode::PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE"),
+            Self::StorageQuotaExceeded(_) => (StatusCode::TOO_MANY_REQUESTS, "STORAGE_QUOTA_EXCEEDED"),
             Self::TooManyRequests(_) => (StatusCode::TOO_MANY_REQUESTS, "RATE_LIMIT_EXCEEDED"),
             Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR"),
             Self::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR"),
@@ -70,6 +76,8 @@ impl AppError {
             | Self::NotFound(m)
             | Self::Conflict(m)
             | Self::Gone(m)
+            | Self::PayloadTooLarge(m)
+            | Self::StorageQuotaExceeded(m)
             | Self::TooManyRequests(m)
             | Self::Internal(m) => m.clone(),
             Self::Database(_) => "An internal database error occurred.".to_string(),
@@ -109,6 +117,14 @@ pub fn not_found(message: impl Into<String>) -> AppError {
 
 pub fn internal_error(message: impl Into<String>) -> AppError {
     AppError::Internal(message.into())
+}
+
+pub fn payload_too_large(message: impl Into<String>) -> AppError {
+    AppError::PayloadTooLarge(message.into())
+}
+
+pub fn storage_quota_exceeded(message: impl Into<String>) -> AppError {
+    AppError::StorageQuotaExceeded(message.into())
 }
 
 impl From<StatusCode> for AppError {

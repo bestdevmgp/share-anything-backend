@@ -70,6 +70,10 @@ pub struct CliState {
 const CLI_GUEST_MAX_FILE_SIZE: i64 = 100 * 1024 * 1024;
 const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024;
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
+pub const STANDARD_PER_FILE_LIMIT: i64 = 3 * 1024 * 1024 * 1024;
+pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 8 * 1024 * 1024 * 1024;
+pub const FILE_TOO_LARGE_MESSAGE: &str = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.";
+pub const STORAGE_QUOTA_MESSAGE: &str = "Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.";
 
 fn format_expires_at(dt: DateTime<Utc>) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
@@ -106,8 +110,10 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
     tag = "cli",
     responses(
         (status = 200, description = "Files uploaded", body = CliUploadResponse),
-        (status = 400, description = "Invalid request or file size exceeded"),
+        (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 429, description = "Storage quota for this API key exceeded. Only returned when the request is authenticated by an API key (sak_). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Storage upload failed")
     )
 )]
@@ -139,6 +145,17 @@ pub async fn cli_upload(
     } else {
         CLI_GUEST_MAX_FILE_SIZE
     };
+
+    let api_key_id_for_quota = token_user.as_ref().and_then(|u| u.api_key_id.clone());
+    let mut existing_active_storage: i64 = 0;
+    if let Some(ref kid) = api_key_id_for_quota {
+        existing_active_storage = repository::sum_active_storage_for_api_key(&state.db, kid)
+            .await
+            .map_err(|_| internal_error("Failed to compute API key storage usage"))?;
+        if existing_active_storage >= API_KEY_ACTIVE_STORAGE_LIMIT {
+            return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
+        }
+    }
 
     while let Some(field) = multipart
         .next_field()
@@ -234,12 +251,17 @@ pub async fn cli_upload(
                 // use part_content_length when available, or 0 as a placeholder.
                 // The DB value is informational; the bytes are safely in R2.
                 let file_size = part_content_length.unwrap_or(0);
+                if file_size > STANDARD_PER_FILE_LIMIT {
+                    return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
+                }
                 total_size += file_size;
                 if total_size > max_size {
-                    return Err(bad_request(format!(
-                        "File size limit exceeded (max {}MB)",
-                        max_size / 1024 / 1024
-                    )));
+                    return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
+                }
+                if api_key_id_for_quota.is_some()
+                    && existing_active_storage + total_size > API_KEY_ACTIVE_STORAGE_LIMIT
+                {
+                    return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
                 }
 
                 staged_files.push(StagedFile {
@@ -285,6 +307,7 @@ pub async fn cli_upload(
     let share_code = repository::reserve_share_code(&state.db).await?;
     let share_group_id = Uuid::new_v4().to_string();
     let user_id = token_user.as_ref().map(|u| u.user_id.clone());
+    let api_key_id = token_user.as_ref().and_then(|u| u.api_key_id.clone());
     let mut uploaded_files: Vec<String> = Vec::new();
 
     for (idx, file) in staged_files.into_iter().enumerate() {
@@ -292,6 +315,7 @@ pub async fn cli_upload(
             &state.db,
             Some(share_group_id.clone()),
             user_id.clone(),
+            api_key_id.clone(),
             share_code.clone(),
             file.name.clone(),
             file.size,
@@ -367,6 +391,7 @@ pub async fn cli_p2p_create(
             &state.db,
             Some(share_group_id.clone()),
             user_id.clone(),
+            None,
             share_code.clone(),
             file_info.name.clone(),
             file_info.size,
@@ -406,8 +431,10 @@ pub async fn cli_p2p_create(
     request_body = CliMultipartInitRequest,
     responses(
         (status = 200, description = "Upload session created", body = CliMultipartInitResponse),
-        (status = 400, description = "Invalid request or file size exceeded"),
+        (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 429, description = "Storage quota for this API key exceeded. Only returned when the request is authenticated by an API key (sak_). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Failed to create multipart upload on storage")
     )
 )]
@@ -428,13 +455,21 @@ pub async fn cli_multipart_init(
         CLI_GUEST_MAX_FILE_SIZE
     };
 
+    if request.files.iter().any(|f| f.file_size > STANDARD_PER_FILE_LIMIT) {
+        return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
+    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
     if total_size > max_size {
-        return Err(bad_request(format!(
-            "File size limit exceeded ({}MB / {}MB)",
-            total_size / 1024 / 1024,
-            max_size / 1024 / 1024
-        )));
+        return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
+    }
+
+    if let Some(ref kid) = token_user.as_ref().and_then(|u| u.api_key_id.clone()) {
+        let existing = repository::sum_active_storage_for_api_key(&state.db, kid)
+            .await
+            .map_err(|_| internal_error("Failed to compute API key storage usage"))?;
+        if existing + total_size > API_KEY_ACTIVE_STORAGE_LIMIT {
+            return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
+        }
     }
 
     let expiration = if let Some(exp_str) = &request.expiration {
@@ -638,6 +673,7 @@ pub async fn cli_complete_multipart(
     let expires_at = Utc::now() + expiration_period.to_duration();
 
     let share_group_id = Uuid::new_v4().to_string();
+    let api_key_id = token_user.as_ref().and_then(|u| u.api_key_id.clone());
     let mut uploaded_files: Vec<String> = Vec::new();
 
     for (idx, file_info) in request.files.iter().enumerate() {
@@ -659,6 +695,7 @@ pub async fn cli_complete_multipart(
             &state.db,
             Some(share_group_id.clone()),
             session.user_id.clone(),
+            api_key_id.clone(),
             session.share_code.clone(),
             file_info.file_name.clone(),
             file_info.file_size,
@@ -854,6 +891,7 @@ pub async fn cli_download_info(
     let files: Vec<CliFileDetail> = file_shares
         .iter()
         .map(|f| CliFileDetail {
+            id: f.id.clone(),
             file_name: f.file_name.clone(),
             file_size: f.file_size,
         })
@@ -886,6 +924,7 @@ pub async fn cli_file_list(
     let files: Vec<CliFileDetail> = file_shares
         .iter()
         .map(|f| CliFileDetail {
+            id: f.id.clone(),
             file_name: f.file_name.clone(),
             file_size: f.file_size,
         })

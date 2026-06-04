@@ -32,6 +32,7 @@ pub struct PersonalTokenUser {
     pub user_id: String,
     pub personal_token_id: String,
     pub scopes: Vec<Scope>,
+    pub api_key_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -80,6 +81,7 @@ pub async fn cli_auth(
             user_id: token_record.user_id,
             personal_token_id: token_id.clone(),
             scopes: vec![],
+            api_key_id: None,
         });
 
         tokio::spawn(async move {

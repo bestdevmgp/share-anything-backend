@@ -12,7 +12,8 @@ use crate::models::AppError;
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PublicErrorBody {
     /// Machine-readable error code. Stable values: `bad_request`, `unauthorized`, `forbidden`,
-    /// `insufficient_scope`, `not_found`, `conflict`, `gone`, `too_many_requests`, `internal_error`.
+    /// `insufficient_scope`, `not_found`, `conflict`, `gone`, `file_too_large`,
+    /// `storage_quota_exceeded`, `too_many_requests`, `internal_error`.
     #[schema(example = "insufficient_scope")]
     pub code: &'static str,
     /// Human-readable description of what went wrong and how to fix it.
@@ -42,6 +43,10 @@ pub enum PublicApiError {
     Conflict(String),
     #[error("gone: {0}")]
     Gone(String),
+    #[error("file too large")]
+    FileTooLarge,
+    #[error("storage quota exceeded")]
+    StorageQuotaExceeded,
     #[error("rate limited")]
     TooManyRequests,
     #[error("insufficient scope: requires '{0}'")]
@@ -59,6 +64,8 @@ impl PublicApiError {
             Self::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             Self::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             Self::Gone(_) => (StatusCode::GONE, "gone"),
+            Self::FileTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "file_too_large"),
+            Self::StorageQuotaExceeded => (StatusCode::TOO_MANY_REQUESTS, "storage_quota_exceeded"),
             Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             Self::InsufficientScope(_) => (StatusCode::FORBIDDEN, "insufficient_scope"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
@@ -73,6 +80,8 @@ impl PublicApiError {
             | Self::NotFound(m)
             | Self::Conflict(m)
             | Self::Gone(m) => m.clone(),
+            Self::FileTooLarge => "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.".to_string(),
+            Self::StorageQuotaExceeded => "Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.".to_string(),
             Self::TooManyRequests => "Rate limit exceeded.".to_string(),
             Self::InsufficientScope(s) => {
                 format!("This endpoint requires the '{}' scope.", s)
@@ -105,6 +114,8 @@ impl From<AppError> for PublicApiError {
             AppError::NotFound(_) => PublicApiError::NotFound("Resource not found".into()),
             AppError::Conflict(_) => PublicApiError::Conflict("Conflict".into()),
             AppError::Gone(_) => PublicApiError::Gone("Resource is no longer available".into()),
+            AppError::PayloadTooLarge(_) => PublicApiError::FileTooLarge,
+            AppError::StorageQuotaExceeded(_) => PublicApiError::StorageQuotaExceeded,
             AppError::TooManyRequests(_) => PublicApiError::TooManyRequests,
             AppError::Internal(_) | AppError::Database(_) | AppError::Http(_) => {
                 tracing::error!(error = ?e, "v1 internal error");

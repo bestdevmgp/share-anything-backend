@@ -60,6 +60,7 @@ pub async fn v1_auth(
             user_id: api_key.user_id,
             personal_token_id: key_id.clone(),
             scopes,
+            api_key_id: Some(key_id.clone()),
         });
 
         tokio::spawn(async move {

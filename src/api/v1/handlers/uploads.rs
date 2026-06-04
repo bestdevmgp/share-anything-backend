@@ -62,6 +62,10 @@ impl From<CliUploadResponse> for V1UploadResponse {
 /// - The share code in the response is the canonical identifier used in all subsequent calls.
 /// - Uploading zero bytes files is rejected with `400`.
 ///
+/// **Limits:** Single file size and per-API-key active storage limits apply. Exact values are
+/// published at <https://share.mingyu.dev/api-terms-of-use>. Exceeding them returns `413` or
+/// `429` respectively — error messages do not include the numeric limits.
+///
 /// **Required scope:** `upload`
 #[utoipa::path(
     post,
@@ -70,10 +74,9 @@ impl From<CliUploadResponse> for V1UploadResponse {
     responses(
         (status = 200, description = "Upload accepted and share created. The `share_code` is immediately live.", body = V1UploadResponse),
         (status = 400,
-            description = "The multipart body is malformed, no `file` part was included, an unknown \
+            description = "The multipart body is malformed, no `file` part was included, or an unknown \
                            `expiration` value was sent (must be one of `5m`, `30m`, `1h`, `3h`, `6h`, \
-                           `12h`, `24h`), or an individual file exceeds the per-file size limit. \
-                           Inspect `error.message` for the specific reason.",
+                           `12h`, `24h`). Inspect `error.message` for the specific reason.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
@@ -83,9 +86,17 @@ impl From<CliUploadResponse> for V1UploadResponse {
             description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
                            Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 413,
+            description = "A single file exceeds the per-file size limit. \
+                           `error.code` = `file_too_large`; \
+                           `error.message` = `Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+            body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
-            description = "Upload quota exceeded. Inspect the `Retry-After` header for the number of \
-                           seconds until the quota window resets.",
+            description = "Per-API-key active storage quota exceeded — uploading this file would push \
+                           the sum of file sizes of your unexpired shares over the limit. Delete some \
+                           of your existing shares or wait for them to expire to reclaim quota. \
+                           `error.code` = `storage_quota_exceeded`; \
+                           `error.message` = `Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -137,6 +148,10 @@ pub async fn post_upload(
 /// - The share is **not publicly accessible** until `complete` is called successfully.
 /// - An abandoned session (never completed) is cleaned up by a background job after 24 hours.
 ///
+/// **Limits:** Single file size and per-API-key active storage limits apply. Exact values are
+/// published at <https://share.mingyu.dev/api-terms-of-use>. Exceeding them returns `413` or
+/// `429` respectively — error messages do not include the numeric limits.
+///
 /// **Required scope:** `upload`
 #[utoipa::path(
     post,
@@ -162,9 +177,17 @@ pub async fn post_upload(
             description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
                            Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 413,
+            description = "A single file in the manifest exceeds the per-file size limit. \
+                           `error.code` = `file_too_large`; \
+                           `error.message` = `Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+            body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
-            description = "Upload quota exceeded. Inspect the `Retry-After` header for the number of \
-                           seconds until the quota window resets.",
+            description = "Per-API-key active storage quota exceeded — initialising this session would \
+                           push the sum of file sizes of your unexpired shares over the limit. Delete \
+                           some of your existing shares or wait for them to expire to reclaim quota. \
+                           `error.code` = `storage_quota_exceeded`; \
+                           `error.message` = `Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))

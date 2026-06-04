@@ -76,7 +76,6 @@ impl SignalingState {
         let now = Instant::now();
         let window = Duration::from_secs(60);
 
-        // Fixed-window connect-attempt rate limiter.
         let attempts_exceeded = {
             let mut entry = self.attempts_per_key.entry(key.to_string()).or_insert_with(|| AttemptRecord {
                 window_start: now,
@@ -95,7 +94,6 @@ impl SignalingState {
             return Err(SlotRefusal::TooManyAttempts);
         }
 
-        // Per-key concurrent active connection cap.
         let counter = self
             .active_per_key
             .entry(key.to_string())

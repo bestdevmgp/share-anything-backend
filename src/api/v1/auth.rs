@@ -29,6 +29,7 @@ mod tests {
             user_id: "u1".into(),
             personal_token_id: "t1".into(),
             scopes,
+            api_key_id: Some("t1".into()),
         }
     }
 

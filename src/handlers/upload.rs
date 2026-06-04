@@ -35,7 +35,8 @@ pub struct UploadState {
     responses(
         (status = 200, description = "Files uploaded successfully", body = MultipleFileUploadResponse),
         (status = 400, description = "Bad request - missing or invalid file"),
-        (status = 401, description = "Unauthorized - custom expiration/password requires authentication")
+        (status = 401, description = "Unauthorized - custom expiration/password requires authentication"),
+        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(
         ("bearer_auth" = [])
@@ -143,21 +144,13 @@ pub async fn upload_file(
         500 * 1024 * 1024
     };
 
+    if files.iter().any(|f| (f.data.len() as i64) > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
+    }
     let total_size: i64 = files.iter().map(|f| f.data.len() as i64).sum();
 
     if total_size > max_total_size {
-        let limit_mb = max_total_size / 1024 / 1024;
-        let current_mb = total_size / 1024 / 1024;
-        return Err(bad_request(format!(
-            "File size limit exceeded. (uploaded: {}MB, limit: {}MB){}",
-            current_mb,
-            limit_mb,
-            if user_claims.is_none() {
-                " Sign in to upload larger files."
-            } else {
-                ""
-            }
-        )));
+        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
     }
 
     let metadata = UploadMetadata {
@@ -240,6 +233,7 @@ pub async fn upload_file(
             &state.db,
             Some(share_group_id.clone()),
             user_claims.as_ref().map(|c| c.sub.clone()),
+            None,
             share_code.clone(),
             file_data.name.clone(),
             file_size,
@@ -363,6 +357,7 @@ pub async fn create_p2p_session(
             &state.db,
             Some(share_group_id.clone()),
             user_claims.as_ref().map(|c| c.sub.clone()),
+            None,
             share_code.clone(),
             file_info.name.clone(),
             file_info.size,

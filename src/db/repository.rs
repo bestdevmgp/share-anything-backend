@@ -185,6 +185,7 @@ pub async fn create_file_share(
     pool: &MySqlPool,
     share_group_id: Option<String>,
     user_id: Option<String>,
+    created_via_api_key_id: Option<String>,
     share_code: String,
     file_name: String,
     file_size: i64,
@@ -206,15 +207,16 @@ pub async fn create_file_share(
     sqlx::query(
         r#"
         INSERT INTO file_shares
-        (id, share_group_id, user_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
+        (id, share_group_id, user_id, created_via_api_key_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
          image_width, image_height, display_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
     .bind(&share_group_id)
     .bind(&user_id)
+    .bind(&created_via_api_key_id)
     .bind(&share_code)
     .bind(&file_name)
     .bind(file_size)
@@ -235,6 +237,24 @@ pub async fn create_file_share(
     .await?;
 
     find_file_share_by_id(pool, &id).await?.ok_or(sqlx::Error::RowNotFound)
+}
+
+pub async fn sum_active_storage_for_api_key(
+    pool: &MySqlPool,
+    api_key_id: &str,
+) -> Result<i64, sqlx::Error> {
+    let row: (Option<i64>,) = sqlx::query_as(
+        r#"
+        SELECT COALESCE(SUM(file_size), 0)
+        FROM file_shares
+        WHERE created_via_api_key_id = ?
+          AND expires_at > UTC_TIMESTAMP()
+        "#,
+    )
+    .bind(api_key_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0.unwrap_or(0))
 }
 
 pub async fn find_file_share_by_code(
