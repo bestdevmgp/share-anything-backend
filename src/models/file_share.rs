@@ -8,6 +8,7 @@ pub struct FileShare {
     pub id: String,
     pub share_group_id: Option<String>,
     pub user_id: Option<String>,
+    pub created_via_api_key_id: Option<String>,
     pub share_code: String,
     pub file_name: String,
     pub file_size: i64,
