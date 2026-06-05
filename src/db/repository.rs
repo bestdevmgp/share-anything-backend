@@ -243,9 +243,12 @@ pub async fn sum_active_storage_for_api_key(
     pool: &MySqlPool,
     api_key_id: &str,
 ) -> Result<i64, sqlx::Error> {
+    // CAST AS SIGNED — MySQL's SUM over BIGINT returns DECIMAL by default,
+    // which SQLx can't decode into i64 directly. Casting to SIGNED (i64) lets
+    // the query_as tuple decoder use the cheap integer path.
     let row: (Option<i64>,) = sqlx::query_as(
         r#"
-        SELECT COALESCE(SUM(file_size), 0)
+        SELECT COALESCE(CAST(SUM(file_size) AS SIGNED), 0)
         FROM file_shares
         WHERE created_via_api_key_id = ?
           AND expires_at > UTC_TIMESTAMP()

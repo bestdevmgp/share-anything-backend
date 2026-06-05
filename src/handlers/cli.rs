@@ -72,8 +72,8 @@ const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024;
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
 pub const STANDARD_PER_FILE_LIMIT: i64 = 3 * 1024 * 1024 * 1024;
 pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 8 * 1024 * 1024 * 1024;
-pub const FILE_TOO_LARGE_MESSAGE: &str = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.";
-pub const STORAGE_QUOTA_MESSAGE: &str = "Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.";
+pub const FILE_TOO_LARGE_MESSAGE: &str = "Per-file size limit exceeded.";
+pub const STORAGE_QUOTA_MESSAGE: &str = "API key storage quota exceeded.";
 
 fn format_expires_at(dt: DateTime<Utc>) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
@@ -112,8 +112,8 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
         (status = 200, description = "Files uploaded", body = CliUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
-        (status = 429, description = "Storage quota for this API key exceeded. Only returned when the request is authenticated by an API key (sak_). See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Storage upload failed")
     )
 )]
@@ -436,8 +436,8 @@ pub async fn cli_p2p_create(
         (status = 200, description = "Upload session created", body = CliMultipartInitResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
-        (status = 429, description = "Storage quota for this API key exceeded. Only returned when the request is authenticated by an API key (sak_). See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Failed to create multipart upload on storage")
     )
 )]
