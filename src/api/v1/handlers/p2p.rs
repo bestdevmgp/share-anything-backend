@@ -278,6 +278,11 @@ pub async fn get_v1_turn_credentials(
 ///
 /// ## Session flow
 ///
+/// One `RTCPeerConnection` + `RTCDataChannel` is established at the start of
+/// the session and **reused for every file in the share**. The downloader
+/// requests subsequent files with `file_request` on the same WebSocket — no
+/// new ICE handshake per file (which would cost 5–15s on a TURN relay).
+///
 /// ```mermaid
 /// sequenceDiagram
 ///   participant U as Uploader
@@ -288,27 +293,35 @@ pub async fn get_v1_turn_credentials(
 ///   U->>S: uploader_ready { share_code }
 ///   D->>S: downloader_join { share_code, file_name, password? }
 ///   Note over S: server verifies password against bcrypt hash<br/>(only if share has_password = true)
-///   S->>U: peer_matched { role: downloader, peer_id }
+///   S->>U: peer_matched { role: downloader, peer_id, file_name }
 ///   S->>D: peer_matched { role: uploader, peer_id }
 ///   U->>S: offer { sdp }
 ///   S->>D: offer { sdp }
 ///   D->>S: answer { sdp }
 ///   S->>U: answer { sdp }
-///   U->>S: ice_candidate { candidate }
-///   S->>D: ice_candidate { candidate }
-///   D->>S: ice_candidate { candidate }
-///   S->>U: ice_candidate { candidate }
-///   Note over U,D: WebRTC DataChannel established — file bytes flow peer-to-peer
-///   U->>S: transfer_complete { share_code }
+///   U-->>S: ice_candidate { candidate } (trickled both ways)
+///   Note over U,D: WebRTC DataChannel open — file #1 streams peer-to-peer:<br/>file_metadata → binary chunks → "__EOF__"
+///   Note over U,D: (subsequent files reuse the same PC+DC)
+///   D->>S: file_request { share_code, file_name }
+///   S->>U: file_request { share_code, file_name }
+///   Note over U,D: file #2 streams over the SAME DataChannel:<br/>file_metadata → binary chunks → "__EOF__"
+///   Note over U,D: (repeat per file…)
+///   D->>S: transfer_complete { share_code }
+///   S->>U: transfer_complete { share_code }
 ///   Note over S: server deletes the share record (one-time consumed)
 /// ```
 ///
 /// Notes on the flow:
-/// - **Uploader (not downloader) sends `transfer_complete`**, after the last
-///   file's `__EOF__` text on the DataChannel. The server uses this to mark
-///   the share consumed and free the share_code.
-/// - ICE candidates are trickled in both directions until each side has a
-///   complete view. The server simply mirrors them between the two peers.
+/// - **First file** is requested implicitly by the `file_name` on
+///   `downloader_join`. **Subsequent files** are requested with
+///   `file_request` on the WebSocket — the server relays it to the uploader,
+///   which then streams that file on the **existing DataChannel**.
+/// - **`transfer_complete` is sent by the downloader** after every file has
+///   been received. The server relays it to the uploader (which exits its
+///   send loop) and deletes the share record.
+/// - ICE candidates are trickled in both directions during the initial
+///   handshake until each side has a complete view. The server mirrors them
+///   between the two peers.
 /// - `peer_matched` is also emitted to a re-joining downloader if the
 ///   uploader is still online and the share has not yet been consumed.
 ///
@@ -344,18 +357,26 @@ pub async fn get_v1_turn_credentials(
 ///    of the current file. Receivers should commit the accumulated buffer
 ///    on this frame and reset for the next file.
 ///
-/// **Multi-file shares** repeat steps 1–3 once per file, in the order the
-/// files were declared in the `POST /v1/p2p/sessions` request.
+/// **Multi-file shares** repeat steps 1–3 once per file on the **same**
+/// DataChannel — the downloader triggers each subsequent file by sending
+/// `{"type":"file_request","share_code":"...","file_name":"..."}` on the
+/// WebSocket (not the DataChannel), then waits for the uploader to start
+/// streaming `file_metadata` for that file on the existing DataChannel.
+/// File order is up to the downloader; pick from the `files` list returned
+/// by `GET /v1/shares/{code}` (or by the original `POST /v1/p2p/sessions`).
 ///
 /// **Recommended chunk size:** **64 KiB** (65 536 bytes) per binary frame.
 /// Larger frames risk hitting SCTP message-size limits in some WebRTC
 /// implementations.
 ///
 /// **Back-pressure:** before sending each chunk, check
-/// `dataChannel.bufferedAmount` and wait if it exceeds **1 MiB**
-/// (1 048 576 bytes). This prevents memory blow-up on slow peers. Resume
-/// when it drops back below the threshold (or use `bufferedAmountLowThreshold`
-/// + the `bufferedamountlow` event).
+/// `dataChannel.bufferedAmount` and pause sending once it exceeds **4 MiB**
+/// (4 194 304 bytes). Resume when it drops back below **1 MiB** (1 048 576
+/// bytes) — use `bufferedAmountLowThreshold` + the `bufferedamountlow`
+/// event for an efficient event-driven loop. The 4 MiB high-water mark is
+/// sized for typical TURN-relayed BDP (≈200ms RTT × ~20 MB/s) so SCTP can
+/// keep the send window full without piling unbounded memory on direct
+/// (low-RTT) paths.
 ///
 /// **Cancellation:** if the uploader aborts mid-transfer it should send
 /// `{"type":"uploader_cancelled","share_code":"..."}` on the **WebSocket**
@@ -391,6 +412,11 @@ pub async fn get_v1_turn_credentials(
         (status = 101, description = "WebSocket upgrade succeeded. The connection is now bidirectional and carries `SignalingMessage` JSON frames."),
         (status = 401, description = "Missing or invalid `api-key.*` subprotocol on the upgrade request."),
         (status = 403, description = "API key does not have the `p2p_transfer` scope."),
+        (status = 429,
+            description = "Either `p2p_connection_limit` — too many concurrent P2P WebSocket connections for this API key, or \
+                           `p2p_attempt_limit` — too many upgrade attempts within the last minute. \
+                           Numeric limits at <https://share.mingyu.dev/api-terms-of-use>.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
 )]
@@ -407,10 +433,10 @@ pub async fn signaling_ws(
     let slot = match state.signaling.acquire_slot(&user.personal_token_id) {
         Ok(s) => s,
         Err(SlotRefusal::TooManyAttempts) => {
-            return PublicApiError::TooManyRequests.into_response();
+            return PublicApiError::P2PAttemptLimit.into_response();
         }
         Err(SlotRefusal::TooManyActive) => {
-            return PublicApiError::TooManyRequests.into_response();
+            return PublicApiError::P2PConnectionLimit.into_response();
         }
     };
 

@@ -13,7 +13,8 @@ use crate::models::AppError;
 pub struct PublicErrorBody {
     /// Machine-readable error code. Stable values: `bad_request`, `unauthorized`, `forbidden`,
     /// `insufficient_scope`, `not_found`, `conflict`, `gone`, `file_too_large`,
-    /// `storage_quota_exceeded`, `too_many_requests`, `internal_error`.
+    /// `storage_quota_exceeded`, `p2p_connection_limit`, `p2p_attempt_limit`,
+    /// `too_many_requests`, `internal_error`.
     #[schema(example = "insufficient_scope")]
     pub code: &'static str,
     /// Human-readable description of what went wrong and how to fix it.
@@ -47,6 +48,10 @@ pub enum PublicApiError {
     FileTooLarge,
     #[error("storage quota exceeded")]
     StorageQuotaExceeded,
+    #[error("too many concurrent p2p connections")]
+    P2PConnectionLimit,
+    #[error("too many p2p connection attempts")]
+    P2PAttemptLimit,
     #[error("rate limited")]
     TooManyRequests,
     #[error("insufficient scope: requires '{0}'")]
@@ -66,6 +71,8 @@ impl PublicApiError {
             Self::Gone(_) => (StatusCode::GONE, "gone"),
             Self::FileTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "file_too_large"),
             Self::StorageQuotaExceeded => (StatusCode::TOO_MANY_REQUESTS, "storage_quota_exceeded"),
+            Self::P2PConnectionLimit => (StatusCode::TOO_MANY_REQUESTS, "p2p_connection_limit"),
+            Self::P2PAttemptLimit => (StatusCode::TOO_MANY_REQUESTS, "p2p_attempt_limit"),
             Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             Self::InsufficientScope(_) => (StatusCode::FORBIDDEN, "insufficient_scope"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
@@ -80,8 +87,10 @@ impl PublicApiError {
             | Self::NotFound(m)
             | Self::Conflict(m)
             | Self::Gone(m) => m.clone(),
-            Self::FileTooLarge => "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.".to_string(),
-            Self::StorageQuotaExceeded => "Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.".to_string(),
+            Self::FileTooLarge => "Per-file size limit exceeded.".to_string(),
+            Self::StorageQuotaExceeded => "API key storage quota exceeded.".to_string(),
+            Self::P2PConnectionLimit => "Too many concurrent P2P connections.".to_string(),
+            Self::P2PAttemptLimit => "Too many P2P connection attempts.".to_string(),
             Self::TooManyRequests => "Rate limit exceeded.".to_string(),
             Self::InsufficientScope(s) => {
                 format!("This endpoint requires the '{}' scope.", s)
