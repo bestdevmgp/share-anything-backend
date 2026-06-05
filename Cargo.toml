@@ -7,7 +7,6 @@ edition = "2021"
 # Web framework
 axum = { version = "0.7", features = ["multipart", "macros", "ws"] }
 tokio = { version = "1", features = ["full"] }
-tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 futures = "0.3"
 http-body-util = "0.1"
@@ -46,7 +45,6 @@ base64 = "0.21"
 
 # Configuration
 dotenvy = "0.15"
-config = "0.13"
 
 # Logging
 tracing = "0.1"

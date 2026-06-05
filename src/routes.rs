@@ -272,8 +272,6 @@ pub fn create_router(
     let api_key_state = handlers::api_key::ApiKeyState {
         db: db.clone(),
         discord: discord.clone(),
-        email: email.clone(),
-        frontend_url: config.server.frontend_url.clone(),
     };
 
     let api_key_routes = Router::new()
@@ -291,7 +289,6 @@ pub fn create_router(
     let admin_state = handlers::admin::AdminState {
         db: db.clone(),
         email: email.clone(),
-        discord: discord.clone(),
     };
 
     let admin_routes = Router::new()

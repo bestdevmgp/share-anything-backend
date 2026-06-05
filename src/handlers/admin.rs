@@ -17,15 +17,13 @@ use crate::{
         internal_error, not_found, unauthorized, AppError,
         personal_token::Scope,
     },
-    services::{discord::DiscordNotifier, email::EmailService},
+    services::email::EmailService,
 };
 
 #[derive(Clone)]
 pub struct AdminState {
     pub db: DbPool,
     pub email: Arc<EmailService>,
-    #[allow(dead_code)]
-    pub discord: Arc<DiscordNotifier>,
 }
 
 #[derive(Debug, serde::Deserialize)]

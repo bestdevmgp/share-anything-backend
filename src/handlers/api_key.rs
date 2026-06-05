@@ -16,17 +16,13 @@ use crate::{
         bad_request, internal_error, not_found, AppError,
         personal_token::Scope,
     },
-    services::{discord::DiscordNotifier, email::EmailService},
+    services::discord::DiscordNotifier,
 };
 
 #[derive(Clone)]
 pub struct ApiKeyState {
     pub db: DbPool,
     pub discord: Arc<DiscordNotifier>,
-    #[allow(dead_code)]
-    pub email: Arc<EmailService>,
-    #[allow(dead_code)]
-    pub frontend_url: String,
 }
 
 fn extract_ip(headers: &HeaderMap) -> Option<String> {

@@ -896,10 +896,6 @@ $connector("wss://share-api.mingyu.dev/v1/ws/signaling", [], $headers)
 $loop->run();
 "#;
 
-// =============================================================================
-// UPLOADER samples
-// =============================================================================
-
 const JS_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Browser JavaScript
 // Creates a P2P share and streams one or more File/Blob objects to the
 // downloader over a WebRTC DataChannel.
