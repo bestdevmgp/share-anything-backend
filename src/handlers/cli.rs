@@ -835,35 +835,42 @@ pub async fn cli_download(
     )
     .await;
 
-    let file_data = state
+    let s3_resp = state
         .storage
-        .download_file(&file_share.storage_key)
-        .await
-        .map_err(|e| internal_error(format!("File download failed: {}", e)))?;
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+    let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
-    let mut response = Response::new(Body::from(file_data));
+    let async_read = s3_resp.body.into_async_read();
+    let body = Body::from_stream(tokio_util::io::ReaderStream::with_capacity(
+        async_read,
+        256 * 1024,
+    ));
 
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        file_share
-            .file_type
-            .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
-
-    response.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
+    let content_type: HeaderValue = file_share
+        .file_type
+        .parse()
+        .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream"));
+    let content_disposition: HeaderValue =
         encode_content_disposition("attachment", &file_share.file_name)
             .parse()
-            .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
-    );
+            .unwrap_or_else(|_| HeaderValue::from_static("attachment"));
 
-    Ok(response)
+    let mut builder = Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_DISPOSITION, content_disposition);
+    if let Some(len) = content_length {
+        builder = builder.header(header::CONTENT_LENGTH, len.to_string());
+    }
+
+    builder
+        .body(body)
+        .map_err(|e| internal_error(format!("Failed to build response: {}", e)))
 }
 
 /// Get file metadata for a share code (used by the CLI before downloading).

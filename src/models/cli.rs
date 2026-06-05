@@ -25,9 +25,6 @@ pub struct CliFileInfoResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CliFileDetail {
-    /// ULID of this file row. Required to disambiguate files within a multi-file share
-    /// when calling `GET /v1/shares/{code}/download?file_id=…` or
-    /// `POST /download/bulk` with a subset of files.
     #[schema(example = "01HQX3K2N0X8B7H6JZJ5JZ9YK9")]
     pub id: String,
     #[schema(example = "report.pdf")]
