@@ -961,8 +961,6 @@ pub async fn cli_download_url(
         .await
         .map_err(|e| internal_error(format!("Failed to create download URL: {}", e)))?;
 
-    // One-time: delete the share row now so future URL requests 404; defer R2 cleanup until
-    // after the presigned URL has expired so an in-flight download can still finish.
     if file_share.is_one_time {
         let _ = repository::delete_file_share(&state.db, &file_share.id).await;
 
