@@ -36,7 +36,7 @@ pub struct UploadState {
         (status = 200, description = "Files uploaded successfully", body = MultipleFileUploadResponse),
         (status = 400, description = "Bad request - missing or invalid file"),
         (status = 401, description = "Unauthorized - custom expiration/password requires authentication"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(
         ("bearer_auth" = [])

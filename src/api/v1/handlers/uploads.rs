@@ -89,14 +89,16 @@ impl From<CliUploadResponse> for V1UploadResponse {
         (status = 413,
             description = "A single file exceeds the per-file size limit. \
                            `error.code` = `file_too_large`; \
-                           `error.message` = `Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+                           `error.message` = `Per-file size limit exceeded.` \
+                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Per-API-key active storage quota exceeded — uploading this file would push \
                            the sum of file sizes of your unexpired shares over the limit. Delete some \
                            of your existing shares or wait for them to expire to reclaim quota. \
                            `error.code` = `storage_quota_exceeded`; \
-                           `error.message` = `Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+                           `error.message` = `API key storage quota exceeded.` \
+                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -180,14 +182,16 @@ pub async fn post_upload(
         (status = 413,
             description = "A single file in the manifest exceeds the per-file size limit. \
                            `error.code` = `file_too_large`; \
-                           `error.message` = `Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+                           `error.message` = `Per-file size limit exceeded.` \
+                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Per-API-key active storage quota exceeded — initialising this session would \
                            push the sum of file sizes of your unexpired shares over the limit. Delete \
                            some of your existing shares or wait for them to expire to reclaim quota. \
                            `error.code` = `storage_quota_exceeded`; \
-                           `error.message` = `Storage quota for this API key exceeded. Delete or wait for existing shares to expire to reclaim quota. See https://share.mingyu.dev/api-terms-of-use for current limits.`",
+                           `error.message` = `API key storage quota exceeded.` \
+                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))

@@ -46,7 +46,7 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
         (status = 403, description = "Turnstile verification failed"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
@@ -305,7 +305,7 @@ pub async fn complete_presigned_upload(
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
         (status = 403, description = "Turnstile verification failed"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]

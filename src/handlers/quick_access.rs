@@ -38,7 +38,7 @@ pub struct QuickAccessState {
         (status = 200, description = "Upload session initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
-        (status = 413, description = "Per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
