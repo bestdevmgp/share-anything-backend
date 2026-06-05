@@ -174,6 +174,22 @@ async fn handle_message(
                 );
             }
         }
+        SignalingMessage::FileRequest { share_code, file_name } => {
+            // Relay the receiver's "send me this next file on the open DC"
+            // request to the matched uploader. No state change here — the
+            // existing PC+DC remain registered as they were, so the uploader
+            // can keep streaming on the same channel instead of running a
+            // fresh ICE handshake per file (≈5–15s saved per file on TURN).
+            relay_to_uploader(
+                &share_code,
+                SignalingMessage::FileRequest {
+                    share_code: share_code.clone(),
+                    file_name,
+                },
+                state,
+            )
+            .await?;
+        }
         SignalingMessage::Ping {} => {
             state.send_to_peer(peer_id, SignalingMessage::Pong {})?;
         }

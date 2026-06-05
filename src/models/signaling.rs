@@ -75,6 +75,17 @@ pub enum SignalingMessage {
     UploaderCancelled {
         share_code: String,
     },
+    /// Receiver-to-uploader request to start sending the next file over the
+    /// **already-established** PeerConnection. The traditional multi-file flow
+    /// tears down the WS+PC+DC after each file and re-runs the full ICE
+    /// handshake for the next one — on a TURN relay that's a 5–15 second gap
+    /// between every file. `FileRequest` keeps the existing PC+DC alive so the
+    /// uploader can stream the next file's metadata+bytes+EOF immediately on
+    /// the same channel.
+    FileRequest {
+        share_code: String,
+        file_name: String,
+    },
     Ping {},
     Pong {},
 }
