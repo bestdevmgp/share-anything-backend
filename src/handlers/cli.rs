@@ -140,13 +140,16 @@ pub async fn cli_upload(
     let mut staged_files: Vec<StagedFile> = Vec::new();
     let mut total_size: i64 = 0;
 
-    let max_size = if token_user.is_some() {
+    let api_key_id_for_quota = token_user.as_ref().and_then(|u| u.api_key_id.clone());
+    let max_size = if api_key_id_for_quota.is_some() {
+        // v1 API key: per-request total cap aligns with the active-storage quota
+        // so the dedicated quota check below is the one that produces a 429.
+        API_KEY_ACTIVE_STORAGE_LIMIT
+    } else if token_user.is_some() {
         CLI_AUTH_MAX_FILE_SIZE
     } else {
         CLI_GUEST_MAX_FILE_SIZE
     };
-
-    let api_key_id_for_quota = token_user.as_ref().and_then(|u| u.api_key_id.clone());
     let mut existing_active_storage: i64 = 0;
     if let Some(ref kid) = api_key_id_for_quota {
         existing_active_storage = repository::sum_active_storage_for_api_key(&state.db, kid)
@@ -449,26 +452,30 @@ pub async fn cli_multipart_init(
         return Err(bad_request("At least one file is required"));
     }
 
-    let max_size = if token_user.is_some() {
-        CLI_AUTH_MAX_FILE_SIZE
-    } else {
-        CLI_GUEST_MAX_FILE_SIZE
-    };
-
     if request.files.iter().any(|f| f.file_size > STANDARD_PER_FILE_LIMIT) {
         return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
     }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
-    if total_size > max_size {
-        return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
-    }
 
-    if let Some(ref kid) = token_user.as_ref().and_then(|u| u.api_key_id.clone()) {
+    // Per-request total cap. v1 API keys are gated by the *active storage quota*
+    // (existing live shares + this request); the per-request total only matters
+    // for personal-token / guest paths which don't carry a quota.
+    let api_key_id = token_user.as_ref().and_then(|u| u.api_key_id.clone());
+    if let Some(ref kid) = api_key_id {
         let existing = repository::sum_active_storage_for_api_key(&state.db, kid)
             .await
             .map_err(|_| internal_error("Failed to compute API key storage usage"))?;
         if existing + total_size > API_KEY_ACTIVE_STORAGE_LIMIT {
             return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
+        }
+    } else {
+        let max_size = if token_user.is_some() {
+            CLI_AUTH_MAX_FILE_SIZE
+        } else {
+            CLI_GUEST_MAX_FILE_SIZE
+        };
+        if total_size > max_size {
+            return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
         }
     }
 
