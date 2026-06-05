@@ -24,11 +24,6 @@ pub enum SignalingMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         password: Option<String>,
     },
-    UploaderInfo {
-        share_code: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        device_info: Option<String>,
-    },
     PeerMatched {
         peer_id: String,
         role: PeerRole,
