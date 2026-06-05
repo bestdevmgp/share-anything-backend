@@ -13,8 +13,21 @@ use crate::handlers::cli::{
 };
 use crate::middleware::personal_token_auth::PersonalTokenUser;
 use crate::models::personal_token::Scope;
-use crate::models::CliUploadHistoryQuery;
+use crate::models::{AppError, CliUploadHistoryQuery};
 use crate::utils::PrettyJson;
+
+/// Convert "this share belongs to another user" (CLI returns `403`) into a
+/// `404` on the v1 surface. This makes share-code presence / ownership
+/// **indistinguishable** to the caller — exactly the contract published in
+/// the OpenAPI docs ("404 in both cases to prevent share-code enumeration").
+/// Without this, an attacker could enumerate which 6-character codes exist by
+/// watching `403` vs `404` responses.
+fn hide_forbidden_as_not_found(e: AppError) -> PublicApiError {
+    match e {
+        AppError::Forbidden(_) => PublicApiError::NotFound("Resource not found".into()),
+        other => other.into(),
+    }
+}
 
 /// List my uploads
 ///
@@ -132,7 +145,7 @@ pub async fn delete_my_upload(
         Path(code),
     )
     .await
-    .map_err(PublicApiError::from)
+    .map_err(hide_forbidden_as_not_found)
 }
 
 /// List downloads of one of my shares
@@ -194,7 +207,7 @@ pub async fn list_share_downloads(
         Path(code),
     )
     .await
-    .map_err(PublicApiError::from)
+    .map_err(hide_forbidden_as_not_found)
 }
 
 /// List my downloads
