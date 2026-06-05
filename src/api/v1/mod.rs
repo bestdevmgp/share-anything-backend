@@ -59,6 +59,8 @@ pub fn router(
         .route("/v1/uploads/multipart/:id/complete", post(handlers::uploads::post_multipart_complete))
         .route("/v1/shares/:code", get(handlers::shares::get_share))
         .route("/v1/shares/:code/download", get(handlers::shares::get_share_download))
+        .route("/v1/shares/:code/download-url", post(handlers::shares::post_share_download_url))
+        .route("/v1/shares/:code/download-complete", post(handlers::shares::post_share_download_complete))
         .route("/v1/me/uploads", get(handlers::history::list_my_uploads))
         .route("/v1/me/uploads/:code", delete(handlers::history::delete_my_upload))
         .route("/v1/me/uploads/:code/downloads", get(handlers::history::list_share_downloads))

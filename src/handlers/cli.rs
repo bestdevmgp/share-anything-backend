@@ -41,7 +41,8 @@ use crate::{
         CliMultipartInitRequest, CliMultipartInitResponse, CliMultipartFileInit,
         CliPresignPartsRequest, CliPresignPartsResponse, CliPartUrl,
         CliCompleteMultipartRequest,
-        CliDownloadQuery, CliUploadHistoryQuery,
+        CliDownloadQuery, CliDownloadUrlResponse, CliDownloadCompleteRequest,
+        CliUploadHistoryQuery,
     },
     services::StorageService,
 };
@@ -871,6 +872,185 @@ pub async fn cli_download(
     builder
         .body(body)
         .map_err(|e| internal_error(format!("Failed to build response: {}", e)))
+}
+
+const CLI_DOWNLOAD_URL_EXPIRY_SECS: u64 = 3600;
+
+/// Issue a short-lived presigned URL for downloading a shared file directly from object storage.
+///
+/// This is the fast path — the CLI fetches the URL here, then `GET`s the file straight from R2
+/// without proxying through this server. Bypassing the backend saves a round trip per byte and
+/// avoids the server's egress as a bottleneck on large files.
+///
+/// **One-time shares are consumed when the URL is issued.** The share row is deleted before
+/// the URL is returned, so a second URL request returns `404`; the underlying object is kept
+/// alive for slightly longer than the URL TTL and then deleted in the background. Issuing a
+/// URL therefore counts as the download for one-time shares — there is no retry window.
+///
+/// For non-one-time shares, **this endpoint does not increment the download count**. Call
+/// `POST /cli/shares/{code}/download-complete` after the file has been fully fetched from R2
+/// so that the count reflects actual completions.
+#[utoipa::path(
+    post,
+    path = "/cli/shares/{code}/download-url",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code"),
+        CliDownloadQuery,
+    ),
+    responses(
+        (status = 200, description = "Presigned download URL issued", body = CliDownloadUrlResponse),
+        (status = 400, description = "P2P share cannot be downloaded via this endpoint"),
+        (status = 401, description = "Password required or incorrect"),
+        (status = 404, description = "Share not found, expired, or one-time consumed")
+    )
+)]
+pub async fn cli_download_url(
+    State(state): State<CliState>,
+    Path(code): Path<String>,
+    Query(query): Query<CliDownloadQuery>,
+    headers: HeaderMap,
+) -> Result<PrettyJson<CliDownloadUrlResponse>, AppError> {
+    let file_shares = repository::find_file_shares_by_code(&state.db, &code)
+        .await
+        .map_err(|_| internal_error("Failed to query files"))?;
+
+    if file_shares.is_empty() {
+        return Err(not_found("File not found or expired"));
+    }
+
+    let file_share = if let Some(file_id) = &query.file_id {
+        file_shares
+            .iter()
+            .find(|f| f.id == *file_id)
+            .ok_or_else(|| not_found("File not found"))?
+    } else {
+        &file_shares[0]
+    };
+
+    if file_share.transfer_type == "p2p" {
+        return Err(bad_request("P2P files cannot be downloaded via CLI"));
+    }
+
+    if let Some(password_hash) = &file_share.password_hash {
+        let password = query
+            .password
+            .as_deref()
+            .or_else(|| {
+                headers
+                    .get("X-File-Password")
+                    .and_then(|v| v.to_str().ok())
+            })
+            .ok_or_else(|| unauthorized("Password required. Use ?password=<pw> or X-File-Password header"))?;
+
+        let is_valid = bcrypt::verify(password, password_hash)
+            .map_err(|_| internal_error("Failed to verify password"))?;
+
+        if !is_valid {
+            return Err(unauthorized("Incorrect password"));
+        }
+    }
+
+    let download_url = state
+        .storage
+        .generate_presigned_get_url(
+            &file_share.storage_key,
+            CLI_DOWNLOAD_URL_EXPIRY_SECS,
+            Some(&file_share.file_name),
+        )
+        .await
+        .map_err(|e| internal_error(format!("Failed to create download URL: {}", e)))?;
+
+    // One-time: delete the share row now so future URL requests 404; defer R2 cleanup until
+    // after the presigned URL has expired so an in-flight download can still finish.
+    if file_share.is_one_time {
+        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
+
+        let storage = state.storage.clone();
+        let db = state.db.clone();
+        let storage_key = file_share.storage_key.clone();
+        let file_id = file_share.id.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                CLI_DOWNLOAD_URL_EXPIRY_SECS + 60,
+            ))
+            .await;
+            let _ = storage.delete_file(&storage_key).await;
+            let _ = repository::delete_file_share(&db, &file_id).await;
+        });
+    }
+
+    Ok(PrettyJson(CliDownloadUrlResponse {
+        download_url,
+        file_id: file_share.id.clone(),
+        file_name: file_share.file_name.clone(),
+        file_size: file_share.file_size,
+        content_type: file_share.file_type.clone(),
+        expires_in_secs: CLI_DOWNLOAD_URL_EXPIRY_SECS,
+    }))
+}
+
+/// Record a successful direct download triggered by `POST /cli/shares/{code}/download-url`.
+///
+/// Inserts a `download_logs` row so the share's download count reflects actual completions.
+/// Returns `204` even when the share has already been deleted (e.g. expired between URL-issue
+/// and ping, or this was a one-time share whose row was removed at URL-issue time) — the call
+/// is best-effort logging and never fails the client.
+#[utoipa::path(
+    post,
+    path = "/cli/shares/{code}/download-complete",
+    tag = "cli",
+    params(
+        ("code" = String, Path, description = "Share code"),
+    ),
+    request_body = CliDownloadCompleteRequest,
+    responses(
+        (status = 204, description = "Completion recorded (or no-op if share is already gone)"),
+    )
+)]
+pub async fn cli_download_complete(
+    State(state): State<CliState>,
+    Path(code): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<CliDownloadCompleteRequest>,
+) -> Result<StatusCode, AppError> {
+    let file_shares = repository::find_file_shares_by_code(&state.db, &code)
+        .await
+        .map_err(|_| internal_error("Failed to query files"))?;
+
+    let Some(file_share) = file_shares.iter().find(|f| f.id == body.file_id) else {
+        return Ok(StatusCode::NO_CONTENT);
+    };
+
+    let ip_address = headers
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim())
+        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
+
+    let _ = repository::create_download_log(
+        &state.db,
+        CreateDownloadLogDto {
+            file_share_id: file_share.id.clone(),
+            downloader_user_id: None,
+            ip_address,
+            user_agent,
+        },
+        device_platform,
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Get file metadata for a share code (used by the CLI before downloading).

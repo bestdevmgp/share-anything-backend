@@ -344,6 +344,8 @@ pub fn create_router(
         .route("/cli/me/uploads/:code/downloads", get(handlers::cli::cli_share_logs))
         .route("/cli/me/downloads", get(handlers::cli::cli_download_history))
         .route("/cli/shares/:code/download", get(handlers::cli::cli_download))
+        .route("/cli/shares/:code/download-url", post(handlers::cli::cli_download_url))
+        .route("/cli/shares/:code/download-complete", post(handlers::cli::cli_download_complete))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             (cli_rate_limiter.clone(), rate_limiter.clone()),

@@ -191,6 +191,37 @@ pub struct CliDownloadQuery {
     pub file_id: Option<String>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CliDownloadUrlResponse {
+    /// Short-lived presigned URL that points directly at object storage. Download the file
+    /// with a plain `GET` — do not attach any auth headers. The URL also sets
+    /// `Content-Disposition` so the file lands with its original name.
+    #[schema(example = "https://...r2.cloudflarestorage.com/bucket/key?X-Amz-Algorithm=...")]
+    pub download_url: String,
+    /// ID of the file this URL is bound to. Echo it back on the completion ping so the
+    /// download count is attributed to the correct file in multi-file shares.
+    #[schema(example = "01HQX3K2N0X8B7H6JZJ5JZ9YK9")]
+    pub file_id: String,
+    #[schema(example = "report.pdf")]
+    pub file_name: String,
+    #[schema(example = 943718400)]
+    pub file_size: i64,
+    #[schema(example = "application/pdf")]
+    pub content_type: String,
+    /// Seconds until the presigned URL expires. The client should finish the download well
+    /// before this elapses.
+    #[schema(example = 3600)]
+    pub expires_in_secs: u64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CliDownloadCompleteRequest {
+    /// `file_id` returned by `POST /cli/shares/{code}/download-url`. Required so the
+    /// completion is attributed to the correct file in a multi-file share.
+    #[schema(example = "01HQX3K2N0X8B7H6JZJ5JZ9YK9")]
+    pub file_id: String,
+}
+
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct CliUploadHistoryQuery {

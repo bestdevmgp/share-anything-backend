@@ -11,10 +11,12 @@ use crate::api::v1::{
     error::PublicApiError,
     V1State,
 };
-use crate::handlers::cli::{cli_file_list, cli_download, CliState};
+use crate::handlers::cli::{
+    cli_download, cli_download_complete, cli_download_url, cli_file_list, CliState,
+};
 use crate::middleware::personal_token_auth::PersonalTokenUser;
 use crate::models::personal_token::Scope;
-use crate::models::CliFileListResponse;
+use crate::models::{CliDownloadCompleteRequest, CliDownloadUrlResponse, CliFileListResponse};
 use crate::utils::PrettyJson;
 
 /// Inspect a share
@@ -161,6 +163,129 @@ pub async fn get_share_download(
         Path(code),
         Query(cli_query),
         headers,
+    )
+    .await
+    .map_err(PublicApiError::from)
+}
+
+/// Issue a presigned download URL
+///
+/// Request a short-lived URL that points directly at object storage. Download the file with
+/// a plain `GET` — do not attach an API key. The presigned URL is the **fast path**; it
+/// bypasses this API server so neither its bandwidth nor latency limits the transfer.
+///
+/// **One-time consumption is atomic and happens at URL-issue time.** For one-time shares,
+/// receiving a `200` here permanently consumes the share — subsequent calls return `404`.
+/// There is no retry window even if the actual R2 download fails.
+///
+/// **Download counting.** This endpoint does **not** record a download for multi-use shares.
+/// Call `POST /v1/shares/{code}/download-complete` after the file has been pulled from R2 so
+/// the count reflects actual completions, not URL issues.
+///
+/// **Required scope:** `read`
+#[utoipa::path(
+    post,
+    path = "/v1/shares/{code}/download-url",
+    tag = "shares",
+    params(
+        ("code" = String, Path, description = "6-character case-sensitive alphanumeric share code"),
+        ("password" = Option<String>, Query, description = "Required when `has_password` is `true`. Supplying a wrong value returns `403`."),
+        ("file_id" = Option<String>, Query, description = "ULID of a single file within the share. Omit to issue a URL for the first file."),
+    ),
+    responses(
+        (status = 200, description = "Presigned download URL issued", body = CliDownloadUrlResponse),
+        (status = 400,
+            description = "This share is configured for P2P transfer and cannot be downloaded via the REST API.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 401,
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 403,
+            description = "Either the API key lacks the `read` scope, or the share is password-protected \
+                           and the `password` parameter was missing/incorrect.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 404,
+            description = "No share exists for this code, the `file_id` does not belong to this share, \
+                           or this was a one-time share that has already been consumed.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+    ),
+    security(("api_key" = []))
+)]
+pub async fn post_share_download_url(
+    State(state): State<V1State>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    Path(code): Path<String>,
+    Query(q): Query<DownloadQuery>,
+    headers: HeaderMap,
+) -> Result<PrettyJson<CliDownloadUrlResponse>, PublicApiError> {
+    let user = require_token(token_user.as_ref())?;
+    require_scope(user, Scope::Read)?;
+    let cli_state = CliState {
+        config: state.config.clone(),
+        db: state.db.clone(),
+        storage: state.storage.clone(),
+    };
+    let cli_query = crate::models::CliDownloadQuery {
+        password: q.password,
+        file_id: q.file_id,
+    };
+    cli_download_url(
+        State(cli_state),
+        Path(code),
+        Query(cli_query),
+        headers,
+    )
+    .await
+    .map_err(PublicApiError::from)
+}
+
+/// Record a completed direct download
+///
+/// Call this after the file has been successfully fetched from the presigned URL returned by
+/// `POST /v1/shares/{code}/download-url`. It writes a `download_logs` row so the share's
+/// download count reflects real completions rather than URL issues.
+///
+/// This call is **best-effort**: it returns `204` even when the share has already been
+/// deleted (one-time consumption, expiry, manual delete), so the CLI does not need to handle
+/// failure here.
+///
+/// **Required scope:** `read`
+#[utoipa::path(
+    post,
+    path = "/v1/shares/{code}/download-complete",
+    tag = "shares",
+    params(("code" = String, Path, description = "6-character case-sensitive alphanumeric share code")),
+    request_body = CliDownloadCompleteRequest,
+    responses(
+        (status = 204, description = "Completion recorded (or no-op if share is already gone)"),
+        (status = 401,
+            description = "API key is missing, malformed (must start with `sak_`), revoked, or expired.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 403,
+            description = "API key does not have the `read` scope.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+    ),
+    security(("api_key" = []))
+)]
+pub async fn post_share_download_complete(
+    State(state): State<V1State>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    Path(code): Path<String>,
+    headers: HeaderMap,
+    axum::Json(body): axum::Json<CliDownloadCompleteRequest>,
+) -> Result<axum::http::StatusCode, PublicApiError> {
+    let user = require_token(token_user.as_ref())?;
+    require_scope(user, Scope::Read)?;
+    let cli_state = CliState {
+        config: state.config.clone(),
+        db: state.db.clone(),
+        storage: state.storage.clone(),
+    };
+    cli_download_complete(
+        State(cli_state),
+        Path(code),
+        headers,
+        axum::Json(body),
     )
     .await
     .map_err(PublicApiError::from)
