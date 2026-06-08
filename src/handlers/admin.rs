@@ -42,7 +42,6 @@ fn verify_admin_password(headers: &HeaderMap) -> Result<(), AppError> {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    // Constant-time comparison using a simple XOR approach to avoid short-circuit
     if provided.len() != expected.len()
         || provided
             .bytes()

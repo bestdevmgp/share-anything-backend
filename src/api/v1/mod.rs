@@ -34,11 +34,6 @@ pub fn router(
     use crate::middleware::v1_auth::v1_auth;
     use crate::middleware::rate_limiter::cli_rate_limit_middleware;
 
-    // Spec §6.4: /v1/* allows open CORS because auth is header-based (API key cannot be
-    // exfiltrated via CSRF). This permissive CorsLayer is applied as the outermost layer
-    // on the v1 sub-router so it handles OPTIONS preflights before the global strict CORS
-    // at the top-level router has a chance to override them.
-    // Expected: OPTIONS /v1/me with Origin: https://example.com → Access-Control-Allow-Origin: *
     let v1_cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
@@ -82,10 +77,6 @@ pub fn router(
         .layer(middleware::from_fn_with_state(v1_auth_state, v1_auth))
         .with_state(state.clone());
 
-    // WebSocket signaling authenticates itself via the Sec-WebSocket-Protocol
-    // handshake header (browsers cannot send custom headers on WebSocket
-    // connections). It must bypass the v1_auth middleware which expects an
-    // `X-API-Key` HTTP header.
     let ws_router = Router::new()
         .route("/v1/ws/signaling", get(handlers::p2p::signaling_ws))
         .with_state(state);

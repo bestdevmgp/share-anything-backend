@@ -1589,7 +1589,6 @@ impl EmailService {
         let duration = expires_at.signed_duration_since(now);
         let days_remaining = duration.num_days().max(0);
 
-        // For KST (ko), display time in KST (UTC+9)
         let display_expires = if notify_language == "ko" || notify_language == "ja" {
             expires_at + chrono::Duration::hours(9)
         } else {
@@ -1730,7 +1729,6 @@ impl EmailService {
                 settings_url = settings_url,
                 frontend_url = frontend_url,
             ),
-            // default: Korean
             _ => format!(
                 r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key 만료 예정 안내</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">

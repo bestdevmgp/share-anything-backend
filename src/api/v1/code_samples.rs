@@ -42,12 +42,6 @@ fn inject(
 }
 
 fn signaling_samples() -> serde_json::Value {
-    // `lang` is a free-form full language name so Scalar groups our custom
-    // samples into a separate "Code Examples" category (it does not merge
-    // them into the auto-generated client tabs even when the value matches a
-    // httpsnippet key). The `label` is what shows up in the dropdown, so we
-    // lead with the language name and keep the library as a secondary hint
-    // in parentheses — this makes the dropdown scannable by language.
     json!([
         { "lang": "JavaScript", "label": "JavaScript - Downloader (Browser)",        "source": JS_DOWNLOADER },
         { "lang": "JavaScript", "label": "JavaScript - Uploader (Browser)",          "source": JS_UPLOADER },
@@ -69,7 +63,6 @@ fn signaling_samples() -> serde_json::Value {
 }
 
 const JS_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Browser JavaScript
-// Receives a P2P share over WebRTC DataChannel and assembles each file as a Blob.
 
 const API_BASE  = 'https://share-api.mingyu.dev';
 const apiKey    = 'sak_xxxxxxxxxxxx';   // your API key
@@ -77,24 +70,17 @@ const shareCode = '482917';
 const password  = undefined;            // set if the share is password-protected
 
 (async () => {
-  // 1. Fresh TURN/STUN credentials (24h TTL, fetch per session).
   const { ice_servers } = await fetch(`${API_BASE}/v1/turn/credentials`, {
     headers: { 'X-API-Key': apiKey },
   }).then(r => r.json());
 
   const pc = new RTCPeerConnection({ iceServers: ice_servers });
 
-  // 2. WebSocket signaling. The api-key is carried via Sec-WebSocket-Protocol
-  //    because browsers cannot set custom headers on WebSocket connections.
   const ws = new WebSocket(
     `${API_BASE.replace(/^http/, 'ws')}/v1/ws/signaling`,
     ['share-anything.v1', `api-key.${apiKey}`],
   );
 
-  // 3. Receive flow on the DataChannel:
-  //    text JSON {fileName,fileSize,fileType,...} → start of a file
-  //    binary chunks                              → file payload
-  //    text "__EOF__"                             → end of current file
   let meta = null;
   let parts = [];
   const received = [];
@@ -105,7 +91,6 @@ const password  = undefined;            // set if the share is password-protecte
         if (data === '__EOF__' && meta) {
           const blob = new Blob(parts, { type: meta.fileType });
           received.push({ name: meta.fileName, blob });
-          // hand off to UI / save-to-disk here
           meta = null;
           parts = [];
         } else {
@@ -117,7 +102,6 @@ const password  = undefined;            // set if the share is password-protecte
     };
   };
 
-  // 4. Trickle our ICE candidates to the uploader.
   pc.onicecandidate = ({ candidate }) => {
     if (candidate && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
@@ -163,7 +147,6 @@ const password  = undefined;            // set if the share is password-protecte
 "#;
 
 const NODE_TS_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Node.js / TypeScript
-// npm i ws @roamhq/wrtc node-fetch
 import WebSocket from 'ws';
 import wrtc from '@roamhq/wrtc';
 import { randomUUID } from 'node:crypto';
@@ -340,15 +323,6 @@ asyncio.run(main())
 "#;
 
 const RUST_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Rust (webrtc-rs)
-// Cargo.toml:
-//   webrtc            = "0.11"
-//   tokio             = { version = "1", features = ["full"] }
-//   tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
-//   reqwest           = { version = "0.12", features = ["json"] }
-//   serde_json        = "1"
-//   uuid              = { version = "1", features = ["v4"] }
-//   anyhow            = "1"
-//   bytes             = "1"
 use std::sync::Arc;
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
@@ -453,7 +427,6 @@ async fn main() -> Result<()> {
 "#;
 
 const GO_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Go (pion/webrtc)
-// go get github.com/pion/webrtc/v3 github.com/gorilla/websocket
 package main
 
 import (
@@ -485,7 +458,6 @@ func main() {
     apiKey := os.Getenv("API_KEY")
     password := "" // set for password-protected shares
 
-    // 1. TURN credentials
     req, _ := http.NewRequest("GET", apiBase+"/v1/turn/credentials", nil)
     req.Header.Set("X-API-Key", apiKey)
     res, err := http.DefaultClient.Do(req)
@@ -522,7 +494,6 @@ func main() {
         })
     })
 
-    // 2. WebSocket signaling
     u, _ := url.Parse(apiBase + "/v1/ws/signaling")
     u.Scheme = "wss"
     hdr := http.Header{}
@@ -575,10 +546,6 @@ func must(err error) { if err != nil { panic(err) } }
 "#;
 
 const KOTLIN_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Kotlin / Spring Boot
-// build.gradle.kts:
-//   implementation("org.springframework.boot:spring-boot-starter-webflux")
-//   implementation("dev.onvoid.webrtc:webrtc-java:0.10.0")
-//   implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 package com.example.shareanything
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -603,7 +570,6 @@ class P2PDownloader(private val mapper: ObjectMapper) {
     private val password: String? = null
 
     fun start() {
-        // 1. Pull TURN credentials over plain WebClient (omitted for brevity) and build:
         val ice = listOf(
             RTCIceServer().apply {
                 urls = listOf("stun:stun.cloudflare.com:3478")
@@ -644,7 +610,6 @@ class P2PDownloader(private val mapper: ObjectMapper) {
                     override fun onBufferedAmountChange(prev: Long) {}
                 })
             }
-            // ... other observer methods omitted
         }
 
         val pc = factory.createPeerConnection(config, observer)
@@ -652,7 +617,6 @@ class P2PDownloader(private val mapper: ObjectMapper) {
         val wsUri = URI.create("${apiBase.replace("http", "ws")}/v1/ws/signaling")
         ReactorNettyWebSocketClient { it.addHeader("Sec-WebSocket-Protocol", "share-anything.v1, api-key.$apiKey") }
             .execute(wsUri, WebSocketHandler { session ->
-                // send downloader_join
                 val join = mutableMapOf<String, Any>(
                     "type" to "downloader_join",
                     "share_code" to shareCode,
@@ -687,16 +651,11 @@ class P2PDownloader(private val mapper: ObjectMapper) {
     }
 
     private fun wsSend(payload: Map<String, Any>) {
-        // Maintain a reference to the active session and write JSON here.
     }
 }
 "#;
 
 const JAVA_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Java / Spring Boot
-// pom.xml:
-//   org.springframework.boot:spring-boot-starter-webflux
-//   dev.onvoid.webrtc:webrtc-java:0.10.0
-//   com.fasterxml.jackson.core:jackson-databind
 package com.example.shareanything;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -720,7 +679,6 @@ public class P2PDownloader {
     private final String password = null;
 
     public void start() throws Exception {
-        // 1. Fetch TURN credentials (omitted here — use WebClient with X-API-Key).
         List<RTCIceServer> ice = List.of(/* populated from /v1/turn/credentials */);
 
         PeerConnectionFactory factory = new PeerConnectionFactory();
@@ -765,7 +723,6 @@ public class P2PDownloader {
                     }
                 });
             }
-            // … other observer methods omitted
         };
 
         RTCPeerConnection pc = factory.createPeerConnection(config, observer);
@@ -816,28 +773,11 @@ public class P2PDownloader {
         return out;
     }
     private void wsSend(Map<String, Object> payload) {
-        // Keep a reference to the active WebSocketSession and write JSON here.
     }
 }
 "#;
 
 const PHP_DOWNLOADER: &str = r#"<?php
-// Share-Anything P2P — PHP
-//
-// ⚠️ IMPORTANT: PHP does not have a production-grade native WebRTC peer
-// implementation (no equivalent of pion/webrtc, aiortc, or webrtc-rs).
-// This example demonstrates ONLY the signaling WebSocket layer — opening
-// the connection with the api-key subprotocol and exchanging messages.
-//
-// For an actual peer-to-peer transfer from PHP, the recommended approaches
-// are:
-//   1. Spawn a Node.js subprocess (`@roamhq/wrtc` example above) and
-//      have PHP drive it over stdio.
-//   2. Run a small headless browser (e.g. Puppeteer) for the WebRTC bits
-//      and have PHP send the share_code + api-key.
-//   3. Offload the user to a browser flow entirely.
-//
-// composer require ratchet/pawl react/event-loop
 require __DIR__ . '/vendor/autoload.php';
 
 use Ratchet\Client\Connector;
@@ -851,7 +791,6 @@ $password  = null;
 $loop = React\EventLoop\Loop::get();
 $connector = new Connector($loop);
 
-// `Sec-WebSocket-Protocol` is what the server uses to authenticate the WS.
 $headers = [
     'Sec-WebSocket-Protocol' => "share-anything.v1, api-key.$apiKey",
 ];
@@ -872,12 +811,8 @@ $connector("wss://share-api.mingyu.dev/v1/ws/signaling", [], $headers)
             $m = json_decode($msg, true);
             switch ($m['type'] ?? '') {
                 case 'peer_matched':
-                    // From here, an offer arrives next. Your PHP code would need
-                    // to hand the SDP/ICE exchange to a real WebRTC peer (see
-                    // the note at the top of this file).
                     break;
                 case 'offer':
-                    // Forward $m['sdp'] to your WebRTC implementation.
                     break;
                 case 'error':
                     echo "signaling error: " . $m['message'] . PHP_EOL;
@@ -897,8 +832,6 @@ $loop->run();
 "#;
 
 const JS_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Browser JavaScript
-// Creates a P2P share and streams one or more File/Blob objects to the
-// downloader over a WebRTC DataChannel.
 
 const API_BASE = 'https://share-api.mingyu.dev';
 const apiKey   = 'sak_xxxxxxxxxxxx';
@@ -908,7 +841,6 @@ const files    = /* HTMLInputElement.files */ [];
 (async () => {
   const auth = { 'X-API-Key': apiKey };
 
-  // 1. Create the P2P session (returns share_code; reserved for 24h).
   const session = await fetch(`${API_BASE}/v1/p2p/sessions`, {
     method: 'POST',
     headers: { ...auth, 'Content-Type': 'application/json' },
@@ -920,7 +852,6 @@ const files    = /* HTMLInputElement.files */ [];
   const shareCode = session.share_code;
   console.log('share with this code:', shareCode);
 
-  // 2. Fresh TURN/STUN credentials.
   const { ice_servers } = await fetch(`${API_BASE}/v1/turn/credentials`, { headers: auth }).then(r => r.json());
 
   const pc = new RTCPeerConnection({ iceServers: ice_servers });
@@ -954,7 +885,6 @@ const files    = /* HTMLInputElement.files */ [];
   ws.onmessage = async ({ data }) => {
     const m = JSON.parse(data);
     if (m.type === 'peer_matched') {
-      // A downloader is here — make the offer.
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       ws.send(JSON.stringify({ type: 'offer', share_code: shareCode, sdp: offer.sdp, peer_id: '' }));
@@ -970,7 +900,6 @@ const files    = /* HTMLInputElement.files */ [];
     }
   };
 
-  // 3. Send files over the DataChannel: metadata JSON → binary chunks → "__EOF__".
   dc.onopen = async () => {
     const CHUNK = 64 * 1024;
     const HIGH  = 1 * 1024 * 1024;
@@ -994,7 +923,6 @@ const files    = /* HTMLInputElement.files */ [];
 "#;
 
 const NODE_TS_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Node.js / TypeScript
-// npm i ws @roamhq/wrtc node-fetch
 import WebSocket from 'ws';
 import wrtc from '@roamhq/wrtc';
 import { randomUUID } from 'node:crypto';
@@ -1187,7 +1115,6 @@ asyncio.run(main())
 "#;
 
 const RUST_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Rust (webrtc-rs)
-// Cargo.toml: see the Downloader sample for crate versions.
 use std::sync::Arc;
 use anyhow::Result;
 use bytes::Bytes;
@@ -1333,7 +1260,6 @@ async fn main() -> Result<()> {
 "#;
 
 const GO_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Go (pion/webrtc)
-// go get github.com/pion/webrtc/v3 github.com/gorilla/websocket
 package main
 
 import (
@@ -1363,7 +1289,6 @@ func main() {
     data, err := os.ReadFile(path); must(err)
     name := filepath.Base(path)
 
-    // 1. Create session
     body, _ := json.Marshal(map[string]any{
         "files": []map[string]any{{"name": name, "size": len(data), "type": "application/octet-stream"}},
     })
@@ -1376,7 +1301,6 @@ func main() {
     must(json.NewDecoder(res.Body).Decode(&session))
     fmt.Println("share_code:", session.ShareCode)
 
-    // 2. ICE servers
     req2, _ := http.NewRequest("GET", apiBase+"/v1/turn/credentials", nil)
     req2.Header.Set("X-API-Key", apiKey)
     res2, err := http.DefaultClient.Do(req2); must(err)
@@ -1391,7 +1315,6 @@ func main() {
     pc, err := webrtc.NewPeerConnection(webrtc.Configuration{ICEServers: ice}); must(err)
     dc, err := pc.CreateDataChannel("share", nil); must(err)
 
-    // 3. WS
     u, _ := url.Parse(apiBase + "/v1/ws/signaling")
     u.Scheme = "wss"
     hdr := http.Header{}
@@ -1459,7 +1382,6 @@ func must(err error) { if err != nil { panic(err) } }
 "#;
 
 const KOTLIN_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Kotlin / Spring Boot
-// build.gradle.kts: see the Downloader sample for dependencies.
 package com.example.shareanything
 
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -1497,7 +1419,6 @@ class P2PUploader(private val mapper: ObjectMapper) {
         val shareCode = session["share_code"] as String
         println("share_code: $shareCode")
 
-        // (Fetch /v1/turn/credentials here and populate `ice` — omitted for brevity.)
         val ice = listOf(RTCIceServer().apply { urls = listOf("stun:stun.cloudflare.com:3478") })
 
         val factory = PeerConnectionFactory()
@@ -1514,7 +1435,6 @@ class P2PUploader(private val mapper: ObjectMapper) {
                     "sdp_m_line_index" to c.sdpMLineIndex, "peer_id" to "",
                 ))
             }
-            // ... other observer methods omitted
         }
         pc = factory.createPeerConnection(config, observer)
         val dcInit = RTCDataChannelInit().apply { ordered = true }
@@ -1580,13 +1500,11 @@ class P2PUploader(private val mapper: ObjectMapper) {
     }
 
     private fun wsSend(payload: Map<String, Any>) {
-        // Keep a reference to the active WebSocketSession and write JSON here.
     }
 }
 "#;
 
 const JAVA_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Java / Spring Boot
-// pom.xml: see the Downloader sample for dependencies.
 package com.example.shareanything;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1626,7 +1544,6 @@ public class P2PUploader {
         String shareCode = (String) session.get("share_code");
         System.out.println("share_code: " + shareCode);
 
-        // (Fetch /v1/turn/credentials here and populate `ice`.)
         List<RTCIceServer> ice = List.of();
 
         PeerConnectionFactory factory = new PeerConnectionFactory();
@@ -1645,7 +1562,6 @@ public class P2PUploader {
                     "sdp_m_line_index", c.sdpMLineIndex, "peer_id", ""
                 ));
             }
-            // ... other observer methods omitted
         };
         pcHolder[0] = factory.createPeerConnection(config, observer);
         RTCDataChannelInit dcInit = new RTCDataChannelInit();
@@ -1714,20 +1630,11 @@ public class P2PUploader {
         try { return mapper.writeValueAsString(o); } catch (Exception e) { throw new RuntimeException(e); }
     }
     private void wsSend(Map<String, Object> payload) {
-        // Keep a reference to the active WebSocketSession and write JSON here.
     }
 }
 "#;
 
 const PHP_UPLOADER: &str = r#"<?php
-// Share-Anything P2P Uploader — PHP
-//
-// ⚠️ Same caveat as the Downloader: PHP lacks a production-grade native
-// WebRTC peer library, so this sample handles ONLY the REST + signaling
-// layers. For the actual byte transfer, hand off to a Node.js subprocess
-// or headless browser (see PHP Downloader note).
-//
-// composer require ratchet/pawl react/event-loop guzzlehttp/guzzle
 require __DIR__ . '/vendor/autoload.php';
 
 use GuzzleHttp\Client;
@@ -1737,7 +1644,6 @@ $apiKey = getenv('API_KEY');
 $path   = './report.pdf';
 $bytes  = file_get_contents($path);
 
-// 1. Create the P2P share via REST.
 $http = new Client(['base_uri' => 'https://share-api.mingyu.dev']);
 $res = $http->post('/v1/p2p/sessions', [
     'headers' => ['X-API-Key' => $apiKey, 'Content-Type' => 'application/json'],
@@ -1753,8 +1659,6 @@ $session = json_decode((string) $res->getBody(), true);
 $shareCode = $session['share_code'];
 echo "share_code: $shareCode\n";
 
-// 2. Open the signaling WebSocket. WebRTC peer/DataChannel work happens
-//    elsewhere (e.g. a Node.js helper process you spawn).
 $loop = React\EventLoop\Loop::get();
 $connector = new Connector($loop);
 $headers = ['Sec-WebSocket-Protocol' => "share-anything.v1, api-key.$apiKey"];
@@ -1772,13 +1676,10 @@ $connector("wss://share-api.mingyu.dev/v1/ws/signaling", [], $headers)
             $m = json_decode($msg, true);
             switch ($m['type'] ?? '') {
                 case 'peer_matched':
-                    // Hand off to your WebRTC helper to createOffer().
                     break;
                 case 'answer':
-                    // Pass $m['sdp'] back to the WebRTC helper as the remote answer.
                     break;
                 case 'ice_candidate':
-                    // Forward to the WebRTC helper.
                     break;
                 case 'error':
                     echo 'signaling error: ' . $m['message'] . PHP_EOL;

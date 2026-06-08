@@ -143,8 +143,6 @@ pub async fn cli_upload(
 
     let api_key_id_for_quota = token_user.as_ref().and_then(|u| u.api_key_id.clone());
     let max_size = if api_key_id_for_quota.is_some() {
-        // v1 API key: per-request total cap aligns with the active-storage quota
-        // so the dedicated quota check below is the one that produces a 429.
         API_KEY_ACTIVE_STORAGE_LIMIT
     } else if token_user.is_some() {
         CLI_AUTH_MAX_FILE_SIZE
@@ -215,20 +213,11 @@ pub async fn cli_upload(
                     &file_name,
                 );
 
-                // `Field<'a>` borrows `multipart` so it cannot be moved into a 'static
-                // closure.  We decouple the lifetime by piping through a bounded
-                // in-memory channel: the forward-future reads from `field` and writes
-                // to `tx`; the upload-future reads from `rx` (which IS 'static) and
-                // writes to R2.  Both futures are driven concurrently with
-                // `futures::future::join` — no extra threads or spawning needed.
 
-                // Channel buffer: 8 × typical TLS record (≈16 KiB) ≈ 128 KiB in-flight.
                 let (mut tx, rx) = futures::channel::mpsc::channel::<
                     Result<bytes::Bytes, axum::extract::multipart::MultipartError>,
                 >(8);
 
-                // Wrap in SyncReceiver so it satisfies the `Sync` bound that
-                // `SdkBody::from_body_0_4` requires.
                 let sync_stream = SyncReceiver(std::sync::Arc::new(std::sync::Mutex::new(rx)));
 
                 let forward_fut = async {
@@ -251,9 +240,6 @@ pub async fn cli_upload(
                 upload_result
                     .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
 
-                // We don't know the exact byte count from the part header reliably;
-                // use part_content_length when available, or 0 as a placeholder.
-                // The DB value is informational; the bytes are safely in R2.
                 let file_size = part_content_length.unwrap_or(0);
                 if file_size > STANDARD_PER_FILE_LIMIT {
                     return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
@@ -458,9 +444,6 @@ pub async fn cli_multipart_init(
     }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
-    // Per-request total cap. v1 API keys are gated by the *active storage quota*
-    // (existing live shares + this request); the per-request total only matters
-    // for personal-token / guest paths which don't carry a quota.
     let api_key_id = token_user.as_ref().and_then(|u| u.api_key_id.clone());
     if let Some(ref kid) = api_key_id {
         let existing = repository::sum_active_storage_for_api_key(&state.db, kid)

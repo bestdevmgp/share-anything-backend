@@ -175,11 +175,6 @@ async fn handle_message(
             }
         }
         SignalingMessage::FileRequest { share_code, file_name } => {
-            // Relay the receiver's "send me this next file on the open DC"
-            // request to the matched uploader. No state change here — the
-            // existing PC+DC remain registered as they were, so the uploader
-            // can keep streaming on the same channel instead of running a
-            // fresh ICE handshake per file (≈5–15s saved per file on TURN).
             relay_to_uploader(
                 &share_code,
                 SignalingMessage::FileRequest {
@@ -363,8 +358,6 @@ async fn handle_transfer_complete(
     state: &SignalingState,
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Forward TransferComplete to the uploader before cleaning up, so the uploader
-    // knows the receiver explicitly ended the session.
     if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
         let _ = state.send_to_peer(
             &uploader_peer_id,
@@ -397,11 +390,6 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         .collect();
 
     for share_code in downloader_share_codes {
-        // Conditional remove: a fresh WebSocket for the next file may already have
-        // re-registered itself under the same `share_code` while this cleanup task
-        // was being scheduled. We must only act if we are still the registered
-        // downloader — otherwise we'd evict the new receiver and stall the next
-        // ICE negotiation. See `SignalingState::remove_downloader_if_matches`.
         if !state.remove_downloader_if_matches(&share_code, peer_id) {
             continue;
         }

@@ -31,8 +31,8 @@ use crate::utils::PrettyJson;
 /// - `has_password: true` means the download endpoint will require a `password` query parameter.
 /// - `is_one_time: true` means the share will be permanently consumed after the first successful
 ///   download — this endpoint itself does **not** consume it.
-/// - A share may have already expired between this call and the subsequent download; callers
-///   should handle `410` on the download endpoint even when this call returns `200`.
+/// - A share may expire or be consumed between this call and the subsequent download; callers
+///   should handle `404` on the download endpoint even when this call returns `200`.
 ///
 /// **Required scope:** `read`
 #[utoipa::path(
@@ -51,11 +51,9 @@ use crate::utils::PrettyJson;
                            Issue a new API key with the `read` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
-            description = "No share exists for this code. Codes are case-sensitive; double-check capitalisation.",
-            body = crate::api::v1::error::PublicErrorEnvelope),
-        (status = 410,
-            description = "The share has passed its expiration timestamp or, for one-time shares, \
-                           has already been downloaded once and consumed.",
+            description = "No share exists for this code, the share has passed its expiration timestamp, \
+                           or it was a one-time share that has already been consumed. Codes are \
+                           case-sensitive; double-check capitalisation.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -100,8 +98,8 @@ pub struct DownloadQuery {
 /// - Supply `file_id` (obtained from `GET /v1/shares/{code}`) to download exactly one file from a
 ///   multi-file share without receiving the full ZIP.
 /// - The `Content-Disposition: attachment; filename="…"` header carries the suggested save name.
-/// - **One-time shares** are consumed **atomically** on the first successful response: concurrent
-///   downloads will see exactly one `200` and one `410`. There is no retry window.
+/// - **One-time shares** are consumed when the row is removed from the database; further requests
+///   return `404`. There is no retry window.
 /// - Password check happens server-side; the password is never forwarded to object storage.
 ///
 /// **Required scope:** `read`
@@ -118,6 +116,9 @@ pub struct DownloadQuery {
         (status = 200, description = "Streamed file bytes. `Content-Type` matches the original upload MIME type. \
                                       `Content-Disposition` carries the suggested filename. \
                                       For multi-file whole-share downloads the content type is `application/zip`."),
+        (status = 400,
+            description = "This share is configured for P2P transfer and cannot be downloaded via the REST API.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
                            Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
@@ -129,13 +130,12 @@ pub struct DownloadQuery {
                            query parameter was missing or incorrect; retry with the correct password.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 404,
-            description = "No share exists for this code, or the `file_id` does not belong to this share. \
-                           Codes are case-sensitive 6-char alphanumeric strings.",
+            description = "No share exists for this code, the `file_id` does not belong to this share, \
+                           the share has passed its expiration timestamp, or it was a one-time share that \
+                           has already been consumed. Codes are case-sensitive 6-char alphanumeric strings.",
             body = crate::api::v1::error::PublicErrorEnvelope),
-        (status = 410,
-            description = "The share has passed its expiration timestamp, or this was a one-time share \
-                           that has already been downloaded. One-time consumption is atomic — only one \
-                           concurrent caller receives a `200`.",
+        (status = 500,
+            description = "Storage backend failed to serve the file.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -207,6 +207,9 @@ pub async fn get_share_download(
         (status = 404,
             description = "No share exists for this code, the `file_id` does not belong to this share, \
                            or this was a one-time share that has already been consumed.",
+            body = crate::api::v1::error::PublicErrorEnvelope),
+        (status = 500,
+            description = "Failed to issue a presigned URL from object storage.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))

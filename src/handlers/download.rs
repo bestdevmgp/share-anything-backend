@@ -704,7 +704,6 @@ pub async fn download_multiple_files(
 
     let device_platform = user_agent.as_ref().map(|ua| parse_device_platform(ua));
 
-    // Pre-collect keys so closures don't capture a double-reference across a lifetime boundary.
     let file_meta: Vec<(usize, String, String)> = files_to_download
         .iter()
         .enumerate()
@@ -736,12 +735,6 @@ pub async fn download_multiple_files(
         .unix_permissions(0o755);
 
     let mut log_dtos: Vec<CreateDownloadLogDto> = Vec::with_capacity(files_to_download.len());
-    // ZIP entry names are extractor-trusted paths — many tools (macOS Archive Utility,
-    // `unzip`, language stdlibs) write them verbatim into the user's filesystem. The
-    // uploader controls `file_name`, so an attacker (or even an honest mistake) could
-    // embed `..` / absolute / Windows-drive paths and escape the chosen extract
-    // directory (CWE-22 / "Zip Slip"). Strip every entry to its basename and reject
-    // path-only names so the archive is safe to expand anywhere.
     let mut used_names: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (idx, file_share) in files_to_download.iter().enumerate() {
