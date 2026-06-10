@@ -336,7 +336,7 @@ pub async fn get_notification_settings(
         .get::<Claims>()
         .ok_or_else(|| unauthorized("Authentication required"))?;
 
-    let (notify_upload, notify_download, notify_download_alert, notify_security, notify_language) =
+    let (notify_upload, notify_download, notify_download_alert, notify_security, notify_language, default_expiration) =
         repository::get_user_notification_settings(&state.db, &user_claims.sub)
             .await
             .map_err(|e| internal_error(format!("Failed to fetch notification settings: {}", e)))?;
@@ -347,6 +347,7 @@ pub async fn get_notification_settings(
         notify_download_alert,
         notify_security,
         notify_language,
+        default_expiration,
     }))
 }
 
@@ -379,6 +380,14 @@ pub async fn update_notification_settings(
     let req: UpdateNotificationSettingsRequest = serde_json::from_slice(&body_bytes)
         .map_err(|_| internal_error("Invalid request format"))?;
 
+    const ALLOWED_EXPIRATIONS: &[&str] = &[
+        "five_minutes", "thirty_minutes", "one_hour", "three_hours",
+        "six_hours", "twelve_hours", "twenty_four_hours",
+    ];
+    if !ALLOWED_EXPIRATIONS.contains(&req.default_expiration.as_str()) {
+        return Err(bad_request("Invalid default_expiration value"));
+    }
+
     repository::update_user_notification_settings(
         &state.db,
         &user_claims.sub,
@@ -387,6 +396,7 @@ pub async fn update_notification_settings(
         req.notify_download_alert,
         req.notify_security,
         &req.notify_language,
+        &req.default_expiration,
     )
     .await
     .map_err(|e| internal_error(format!("Failed to update notification settings: {}", e)))?;
@@ -397,5 +407,6 @@ pub async fn update_notification_settings(
         notify_download_alert: req.notify_download_alert,
         notify_security: req.notify_security,
         notify_language: req.notify_language,
+        default_expiration: req.default_expiration,
     }))
 }

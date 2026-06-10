@@ -139,6 +139,7 @@ impl Modify for SecurityAddon {
         crate::handlers::cli_auth::create_session,
         crate::handlers::cli_auth::check_status,
         crate::handlers::cli_auth::complete_session,
+        crate::handlers::session_token::exchange_session_token,
     ),
     components(
         schemas(
@@ -238,6 +239,8 @@ impl Modify for SecurityAddon {
             crate::models::api_key_application::ApiKeyResponse,
             crate::models::api_key::ApiKeyListItem,
             crate::models::api_key::ApiKeyRevealResponse,
+            crate::handlers::session_token::ExchangeRequest,
+            crate::handlers::session_token::ExchangeResponse,
         )
     ),
     modifiers(&SecurityAddon),

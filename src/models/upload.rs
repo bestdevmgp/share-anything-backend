@@ -23,6 +23,5 @@ pub struct P2PFileInfo {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateP2PSessionRequest {
     pub files: Vec<P2PFileInfo>,
-    pub turnstile_token: String,
     pub password: Option<String>,
 }

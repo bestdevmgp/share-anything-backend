@@ -38,6 +38,7 @@ pub struct User {
     pub notify_download_alert: bool,
     pub notify_security: bool,
     pub notify_language: String,
+    pub default_expiration: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -80,6 +81,7 @@ impl FromRow<'_, sqlx::mysql::MySqlRow> for User {
             notify_download_alert: row.try_get("notify_download_alert")?,
             notify_security: row.try_get("notify_security")?,
             notify_language: row.try_get("notify_language")?,
+            default_expiration: row.try_get("default_expiration")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })
@@ -160,6 +162,8 @@ pub struct NotificationSettingsResponse {
     pub notify_download_alert: bool,
     pub notify_security: bool,
     pub notify_language: String,
+    #[schema(example = "thirty_minutes")]
+    pub default_expiration: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -169,6 +173,8 @@ pub struct UpdateNotificationSettingsRequest {
     pub notify_download_alert: bool,
     pub notify_security: bool,
     pub notify_language: String,
+    #[schema(example = "thirty_minutes")]
+    pub default_expiration: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

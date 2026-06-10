@@ -71,7 +71,6 @@ pub fn create_router(
     };
 
     let download_state = handlers::download::DownloadState {
-        config: config.clone(),
         db: db.clone(),
         storage: storage.clone(),
         signaling: signaling_state.clone(),
@@ -118,9 +117,23 @@ pub fn create_router(
         .route("/auth/email/status/:session_id", get(handlers::auth::email_status))
         .with_state(app_state);
 
+    let session_token_state = handlers::session_token::SessionTokenState {
+        config: config.clone(),
+    };
+    let session_token_routes = Router::new()
+        .route(
+            "/auth/session-token",
+            post(handlers::session_token::exchange_session_token),
+        )
+        .with_state(session_token_state);
+
     let upload_routes = Router::new()
         .route("/file/upload", post(handlers::upload::upload_file))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
@@ -129,6 +142,10 @@ pub fn create_router(
 
     let p2p_upload_routes = Router::new()
         .route("/file/p2p/create", post(handlers::upload::create_p2p_session))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
@@ -141,6 +158,10 @@ pub fn create_router(
         .route("/file/multipart/init", post(handlers::presigned::init_multipart_upload))
         .route("/file/multipart/presign-parts", post(handlers::presigned::get_part_presigned_urls))
         .route("/file/multipart/complete", post(handlers::presigned::complete_multipart_upload))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
             optional_auth,
@@ -160,6 +181,10 @@ pub fn create_router(
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),
             crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
             auth_state.clone(),
@@ -387,6 +412,7 @@ pub fn create_router(
         .merge(install_route)
         .merge(swagger_ui)
         .merge(auth_routes)
+        .merge(session_token_routes)
         .merge(upload_routes)
         .merge(p2p_upload_routes)
         .merge(presigned_routes)
