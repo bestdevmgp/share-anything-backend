@@ -10,6 +10,7 @@ pub struct Config {
     pub s3: S3Config,
     pub cors: CorsConfig,
     pub turnstile: TurnstileConfig,
+    pub session_token: SessionTokenConfig,
     pub cloudflare_turn: CloudflareTurnConfig,
     pub discord: DiscordConfig,
     pub smtp: SmtpConfig,
@@ -92,6 +93,12 @@ pub struct CorsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TurnstileConfig {
     pub secret_key: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SessionTokenConfig {
+    pub jwt_secret: String,
+    pub ttl_seconds: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -186,6 +193,14 @@ impl Config {
             turnstile: TurnstileConfig {
                 secret_key: env::var("TURNSTILE_SECRET_KEY")
                     .expect("TURNSTILE_SECRET_KEY must be set in environment"),
+            },
+            session_token: SessionTokenConfig {
+                jwt_secret: env::var("SESSION_TOKEN_JWT_SECRET")
+                    .expect("SESSION_TOKEN_JWT_SECRET must be set in environment"),
+                ttl_seconds: env::var("SESSION_TOKEN_TTL_SECONDS")
+                    .unwrap_or_else(|_| "1800".to_string())
+                    .parse()
+                    .expect("SESSION_TOKEN_TTL_SECONDS must be an integer"),
             },
             cloudflare_turn: CloudflareTurnConfig {
                 key_id: env::var("CLOUDFLARE_TURN_KEY_ID")

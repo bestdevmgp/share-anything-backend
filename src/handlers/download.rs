@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    config::Config,
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
@@ -19,14 +18,13 @@ use crate::{
         DownloadQuery, VerifyPasswordRequest, DownloadUrlResponse, FileInfoResponse,
     },
     services::{NotificationService, StorageService, signaling::SignalingState, email::FileNotificationInfo},
-    utils::{encode_content_disposition, parse_device_platform, verify_turnstile_token, extract_client_ip},
+    utils::{encode_content_disposition, parse_device_platform},
 };
 use std::io::{Write as _, Cursor};
 use zip::write::{FileOptions, ZipWriter};
 
 #[derive(Clone)]
 pub struct DownloadState {
-    pub config: Arc<Config>,
     pub db: DbPool,
     pub storage: StorageService,
     pub signaling: SignalingState,
@@ -136,19 +134,7 @@ mod zip_entry_tests {
 pub async fn get_file_list(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
-    headers: HeaderMap,
 ) -> Result<Json<FileListResponse>, AppError> {
-    let turnstile_token = headers
-        .get("X-Turnstile-Token")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("Security verification required"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
-
     let rows = repository::find_file_shares_by_code_with_uploader(&state.db, &query.code).await?;
 
     if rows.is_empty() {
@@ -211,19 +197,7 @@ pub async fn get_file_list(
 pub async fn get_file_info(
     State(state): State<DownloadState>,
     Query(query): Query<DownloadQuery>,
-    headers: HeaderMap,
 ) -> Result<Json<FileInfoResponse>, AppError> {
-    let turnstile_token = headers
-        .get("X-Turnstile-Token")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| bad_request("Security verification required"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
-
     let (file_share, uploader_name) =
         repository::find_file_share_by_code_with_uploader(&state.db, &query.code)
             .await?

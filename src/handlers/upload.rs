@@ -1,6 +1,5 @@
 use axum::{
     extract::{Extension, Multipart, Request, State},
-    http::HeaderMap,
     Json,
 };
 use std::sync::Arc;
@@ -11,12 +10,12 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        bad_request, unauthorized, forbidden, internal_error, AppError,
+        bad_request, unauthorized, internal_error, AppError,
         ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType,
         UploadMetadata, CreateP2PSessionRequest,
     },
     services::{generate_qr_code, NotificationService, StorageService},
-    utils::{generate_storage_key, verify_turnstile_token, extract_client_ip},
+    utils::generate_storage_key,
 };
 use chrono::Utc;
 
@@ -45,7 +44,6 @@ pub struct UploadState {
 pub async fn upload_file(
     State(state): State<UploadState>,
     user_claims: Option<Extension<Claims>>,
-    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -62,7 +60,6 @@ pub async fn upload_file(
     let mut expiration: Option<ExpirationPeriod> = None;
     let mut is_one_time: Option<bool> = None;
     let mut transfer_type: Option<TransferType> = None;
-    let mut turnstile_token: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|_| bad_request("Failed to parse multipart data"))? {
         let name = field.name().unwrap_or("").to_string();
@@ -116,12 +113,6 @@ pub async fn upload_file(
                         .map_err(|_| bad_request("Invalid transfer_type value"))?;
                 }
             }
-            "turnstile_token" => {
-                let text = field.text().await.map_err(|_| bad_request("Cannot read turnstile_token field"))?;
-                if !text.is_empty() {
-                    turnstile_token = Some(text);
-                }
-            }
             _ => {}
         }
     }
@@ -129,14 +120,6 @@ pub async fn upload_file(
     if files.is_empty() {
         return Err(bad_request("No files uploaded. At least one file is required."));
     }
-
-    let token = turnstile_token.ok_or_else(|| bad_request("Security verification required"))?;
-
-    let client_ip = extract_client_ip(&headers);
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, &token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     let max_total_size: i64 = if user_claims.is_some() {
         3 * 1024 * 1024 * 1024
@@ -317,7 +300,6 @@ pub async fn upload_file(
 )]
 pub async fn create_p2p_session(
     State(state): State<UploadState>,
-    headers: HeaderMap,
     request_parts: Request,
 ) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let user_claims = request_parts.extensions().get::<Claims>().cloned();
@@ -328,10 +310,6 @@ pub async fn create_p2p_session(
 
     let request: CreateP2PSessionRequest = serde_json::from_slice(&body_bytes)
         .map_err(|_| bad_request("Invalid request format"))?;
-    let client_ip = extract_client_ip(&headers);
-    verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     if request.files.is_empty() {
         return Err(bad_request("File information is required"));

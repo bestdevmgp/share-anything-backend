@@ -172,7 +172,6 @@ pub struct PresignedUploadRequest {
     pub password: Option<String>,
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
-    pub turnstile_token: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -223,7 +222,6 @@ pub struct InitMultipartUploadRequest {
     pub password: Option<String>,
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
-    pub turnstile_token: String,
     pub chunk_size: i64,
 }
 

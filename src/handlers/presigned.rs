@@ -1,6 +1,5 @@
 use axum::{
     extract::{Extension, State},
-    http::HeaderMap,
     Json,
 };
 use std::sync::Arc;
@@ -13,7 +12,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        bad_request, unauthorized, forbidden, internal_error, AppError,
+        bad_request, unauthorized, internal_error, AppError,
         ExpirationPeriod, FileShareResponse, MultipleFileUploadResponse, TransferType,
         PresignedUploadRequest, PresignedUploadResponse, PresignedUploadUrl,
         CompleteUploadRequest,
@@ -22,7 +21,7 @@ use crate::{
         CompleteMultipartUploadRequest,
     },
     services::{generate_qr_code, NotificationService, StorageService},
-    utils::{generate_storage_key, verify_turnstile_token, extract_client_ip},
+    utils::generate_storage_key,
 };
 
 #[derive(Clone)]
@@ -45,7 +44,6 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
         (status = 200, description = "Presigned URLs generated", body = PresignedUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 403, description = "Turnstile verification failed"),
         (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
@@ -53,16 +51,9 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
 pub async fn request_presigned_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
-    headers: HeaderMap,
     Json(request): Json<PresignedUploadRequest>,
 ) -> Result<Json<PresignedUploadResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
-
     let user_claims = user_claims.map(|ext| ext.0.clone());
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     if request.files.is_empty() {
         return Err(bad_request("At least one file is required"));
@@ -89,7 +80,16 @@ pub async fn request_presigned_upload(
         }
         exp
     } else {
-        ExpirationPeriod::FiveMinutes
+        // Derive default: authenticated user's setting, or 30 minutes for guests.
+        if let Some(claims) = user_claims.as_ref() {
+            let user = repository::find_user_by_id(&state.db, &claims.sub)
+                .await?
+                .ok_or_else(|| internal_error("Authenticated user not found"))?;
+            ExpirationPeriod::from_str(&user.default_expiration)
+                .unwrap_or(ExpirationPeriod::ThirtyMinutes)
+        } else {
+            ExpirationPeriod::ThirtyMinutes
+        }
     };
 
     let is_one_time = request.is_one_time.unwrap_or(false);
@@ -304,7 +304,6 @@ pub async fn complete_presigned_upload(
         (status = 200, description = "Multipart upload initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 403, description = "Turnstile verification failed"),
         (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
@@ -312,16 +311,9 @@ pub async fn complete_presigned_upload(
 pub async fn init_multipart_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
-    headers: HeaderMap,
     Json(request): Json<InitMultipartUploadRequest>,
 ) -> Result<Json<InitMultipartUploadResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
-
     let user_claims = user_claims.map(|ext| ext.0.clone());
-
-    verify_turnstile_token(&state.config.turnstile.secret_key, &request.turnstile_token, Some(client_ip.clone()))
-        .await
-        .map_err(|_| forbidden("Security verification failed. Please try again."))?;
 
     if request.files.is_empty() {
         return Err(bad_request("At least one file is required"));
@@ -348,7 +340,16 @@ pub async fn init_multipart_upload(
         }
         exp
     } else {
-        ExpirationPeriod::FiveMinutes
+        // Derive default: authenticated user's setting, or 30 minutes for guests.
+        if let Some(claims) = user_claims.as_ref() {
+            let user = repository::find_user_by_id(&state.db, &claims.sub)
+                .await?
+                .ok_or_else(|| internal_error("Authenticated user not found"))?;
+            ExpirationPeriod::from_str(&user.default_expiration)
+                .unwrap_or(ExpirationPeriod::ThirtyMinutes)
+        } else {
+            ExpirationPeriod::ThirtyMinutes
+        }
     };
 
     let is_one_time = request.is_one_time.unwrap_or(false);

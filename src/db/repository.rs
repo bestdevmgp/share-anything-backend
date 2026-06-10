@@ -72,10 +72,10 @@ pub async fn find_user_by_id(
 pub async fn get_user_notification_settings(
     pool: &MySqlPool,
     user_id: &str,
-) -> Result<(bool, bool, bool, bool, String), sqlx::Error> {
-    let result = sqlx::query_as::<_, (bool, bool, bool, bool, String)>(
+) -> Result<(bool, bool, bool, bool, String, String), sqlx::Error> {
+    let result = sqlx::query_as::<_, (bool, bool, bool, bool, String, String)>(
         r#"
-        SELECT notify_upload, notify_download, notify_download_alert, notify_security, notify_language FROM users WHERE id = ?
+        SELECT notify_upload, notify_download, notify_download_alert, notify_security, notify_language, default_expiration FROM users WHERE id = ?
         "#,
     )
     .bind(user_id)
@@ -163,10 +163,11 @@ pub async fn update_user_notification_settings(
     notify_download_alert: bool,
     notify_security: bool,
     notify_language: &str,
+    default_expiration: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        UPDATE users SET notify_upload = ?, notify_download = ?, notify_download_alert = ?, notify_security = ?, notify_language = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?
+        UPDATE users SET notify_upload = ?, notify_download = ?, notify_download_alert = ?, notify_security = ?, notify_language = ?, default_expiration = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?
         "#,
     )
     .bind(notify_upload)
@@ -174,6 +175,7 @@ pub async fn update_user_notification_settings(
     .bind(notify_download_alert)
     .bind(notify_security)
     .bind(notify_language)
+    .bind(default_expiration)
     .bind(user_id)
     .execute(pool)
     .await?;
