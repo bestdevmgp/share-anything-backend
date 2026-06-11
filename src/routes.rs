@@ -177,6 +177,7 @@ pub fn create_router(
         .route("/files/list", get(handlers::download::get_file_list))
         .route("/file/info", get(handlers::download::get_file_info))
         .route("/file/verify-password", post(handlers::download::verify_password))
+        .route("/shares/:code", delete(handlers::download::delete_share))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),

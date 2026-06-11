@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{Query, Request, State},
+    extract::{Path, Query, Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::Response,
     Json,
@@ -989,4 +989,42 @@ pub async fn get_download_url(
         download_url,
         expires_in_secs: DOWNLOAD_URL_EXPIRY_SECS,
     }))
+}
+
+/// Revoke a share by code. Authorized if the caller owns it (matching user_id)
+/// or uploaded it from this device (matching device_id). Hard-deletes all rows
+/// for the code so downloads stop immediately.
+pub async fn delete_share(
+    State(state): State<DownloadState>,
+    Path(code): Path<String>,
+    request: Request,
+) -> Result<StatusCode, AppError> {
+    let user_id = request.extensions().get::<Claims>().map(|c| c.sub.clone());
+    let device_id = crate::utils::extract_device_id(request.headers());
+
+    let shares = repository::find_file_shares_by_code_for_revoke(&state.db, &code)
+        .await
+        .map_err(|_| internal_error("Failed to fetch share"))?;
+
+    if shares.is_empty() {
+        return Err(not_found("Share not found"));
+    }
+
+    let owner = &shares[0];
+    let authorized = (user_id.is_some() && owner.user_id == user_id)
+        || (device_id.is_some() && owner.device_id == device_id);
+    if !authorized {
+        return Err(forbidden("Not allowed to revoke this share"));
+    }
+
+    let storage_keys = repository::delete_file_shares_by_code(&state.db, &code)
+        .await
+        .map_err(|e| internal_error(format!("Failed to delete share: {}", e)))?;
+
+    // best-effort: rows already deleted; orphaned objects are cleaned by GC
+    if !storage_keys.is_empty() {
+        let _ = state.storage.delete_files(storage_keys).await;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }

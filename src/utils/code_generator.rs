@@ -27,3 +27,11 @@ pub fn parse_device_platform(user_agent: &str) -> String {
         None => "Unknown".to_string(),
     }
 }
+
+pub fn extract_device_id(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get("x-device-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}

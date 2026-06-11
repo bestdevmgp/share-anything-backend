@@ -44,9 +44,12 @@ pub struct UploadState {
 pub async fn upload_file(
     State(state): State<UploadState>,
     user_claims: Option<Extension<Claims>>,
+    headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<MultipleFileUploadResponse>, AppError> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
+
+    let device_id = crate::utils::extract_device_id(&headers);
 
     struct FileData {
         name: String,
@@ -231,6 +234,7 @@ pub async fn upload_file(
             None,
             None,
             idx as i32,
+            device_id.clone(),
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;
@@ -350,6 +354,7 @@ pub async fn create_p2p_session(
             None,
             None,
             idx as i32,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;

@@ -27,6 +27,8 @@ pub struct FileShare {
     pub image_width: Option<i32>,
     pub image_height: Option<i32>,
     pub display_order: i32,
+    #[sqlx(default)]
+    pub device_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

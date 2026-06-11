@@ -202,6 +202,7 @@ pub async fn create_file_share(
     image_width: Option<i32>,
     image_height: Option<i32>,
     display_order: i32,
+    device_id: Option<String>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
@@ -211,8 +212,8 @@ pub async fn create_file_share(
         INSERT INTO file_shares
         (id, share_group_id, user_id, created_via_api_key_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
-         image_width, image_height, display_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         image_width, image_height, display_order, device_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -235,6 +236,7 @@ pub async fn create_file_share(
     .bind(image_width)
     .bind(image_height)
     .bind(display_order)
+    .bind(&device_id)
     .execute(pool)
     .await?;
 
@@ -302,6 +304,16 @@ pub async fn find_file_shares_by_code(
     .bind(share_code)
     .fetch_all(pool)
     .await
+}
+
+pub async fn find_file_shares_by_code_for_revoke(
+    pool: &MySqlPool,
+    code: &str,
+) -> Result<Vec<FileShare>, sqlx::Error> {
+    sqlx::query_as::<_, FileShare>("SELECT * FROM file_shares WHERE share_code = ?")
+        .bind(code)
+        .fetch_all(pool)
+        .await
 }
 
 pub async fn find_file_shares_by_code_with_uploader(
@@ -488,6 +500,30 @@ pub async fn delete_all_user_file_shares(
         }
         q.execute(pool).await?;
     }
+
+    Ok(storage_keys)
+}
+
+pub async fn delete_file_shares_by_code(
+    pool: &MySqlPool,
+    code: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT storage_key FROM file_shares WHERE share_code = ?",
+    )
+    .bind(code)
+    .fetch_all(pool)
+    .await?;
+
+    let storage_keys: Vec<String> =
+        rows.into_iter().map(|r| r.0).filter(|k| !k.is_empty()).collect();
+
+    sqlx::query("DELETE FROM file_shares WHERE share_code = ?")
+        .bind(code)
+        .execute(pool)
+        .await?;
+
+    release_share_code(pool, code).await?;
 
     Ok(storage_keys)
 }

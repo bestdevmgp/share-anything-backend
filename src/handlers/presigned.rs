@@ -181,8 +181,11 @@ pub async fn request_presigned_upload(
 )]
 pub async fn complete_presigned_upload(
     State(state): State<PresignedState>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CompleteUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, AppError> {
+    let device_id = crate::utils::extract_device_id(&headers);
+
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -226,6 +229,7 @@ pub async fn complete_presigned_upload(
             file_info.image_width,
             file_info.image_height,
             idx as i32,
+            device_id.clone(),
         )
         .await
         .map_err(|e| {
@@ -506,8 +510,11 @@ pub async fn get_part_presigned_urls(
 )]
 pub async fn complete_multipart_upload(
     State(state): State<PresignedState>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CompleteMultipartUploadRequest>,
 ) -> Result<Json<MultipleFileUploadResponse>, AppError> {
+    let device_id = crate::utils::extract_device_id(&headers);
+
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|e| {
@@ -566,6 +573,7 @@ pub async fn complete_multipart_upload(
             file_info.image_width,
             file_info.image_height,
             idx as i32,
+            device_id.clone(),
         )
         .await
         .map_err(|e| {
