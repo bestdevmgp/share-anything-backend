@@ -20,6 +20,7 @@ use crate::{
     services::{NotificationService, StorageService, signaling::SignalingState, email::FileNotificationInfo},
     utils::{encode_content_disposition, parse_device_platform},
 };
+use crate::models::signaling::SignalingMessage;
 use std::io::{Write as _, Cursor};
 use zip::write::{FileOptions, ZipWriter};
 
@@ -133,6 +134,7 @@ mod zip_entry_tests {
 )]
 pub async fn get_file_list(
     State(state): State<DownloadState>,
+    headers: HeaderMap,
     Query(query): Query<DownloadQuery>,
 ) -> Result<Json<FileListResponse>, AppError> {
     let rows = repository::find_file_shares_by_code_with_uploader(&state.db, &query.code).await?;
@@ -163,7 +165,25 @@ pub async fn get_file_list(
         .collect();
 
     let uploader_online = if transfer_type == "p2p" {
-        Some(state.signaling.find_uploader(&query.code).is_some())
+        match state.signaling.find_uploader(&query.code) {
+            Some(uploader_peer_id) => {
+                let device_info = headers
+                    .get("x-device-info")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                let _ = state.signaling.send_to_peer(
+                    &uploader_peer_id,
+                    SignalingMessage::DownloaderArrived {
+                        share_code: query.code.clone(),
+                        peer_id: String::new(),
+                        device_info,
+                    },
+                );
+                Some(true)
+            }
+            None => Some(false),
+        }
     } else {
         None
     };
