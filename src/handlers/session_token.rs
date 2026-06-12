@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use crate::{
     config::Config,
     models::{bad_request, forbidden, internal_error, AppError},
-    utils::{extract_client_ip, verify_turnstile_token},
+    utils::{extract_client_ip, origin_to_host, verify_turnstile_token},
 };
 
 #[derive(Clone)]
@@ -54,13 +54,27 @@ pub async fn exchange_session_token(
         return Err(bad_request("turnstile_token is required"));
     }
     let client_ip = extract_client_ip(&headers);
+    // Allow only solves on our own front-end origins (from the CORS allowlist).
+    let allowed_hostnames: Vec<String> = state
+        .config
+        .cors
+        .allowed_origins
+        .iter()
+        .filter_map(|o| origin_to_host(o))
+        .collect();
     verify_turnstile_token(
         &state.config.turnstile.secret_key,
         &req.turnstile_token,
         Some(client_ip),
+        &allowed_hostnames,
+        Some("session"),
     )
     .await
-    .map_err(|e| forbidden(format!("Turnstile verification failed: {}", e)))?;
+    .map_err(|e| {
+        // Log the real reason; return a generic message (no farming oracle).
+        tracing::warn!("Turnstile verification failed: {}", e);
+        forbidden("Turnstile verification failed")
+    })?;
 
     let now = Utc::now();
     let exp = now + Duration::seconds(state.config.session_token.ttl_seconds);

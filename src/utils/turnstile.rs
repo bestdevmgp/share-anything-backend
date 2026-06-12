@@ -14,12 +14,21 @@ struct TurnstileVerifyResponse {
     #[serde(default)]
     #[serde(rename = "error-codes")]
     error_codes: Vec<String>,
+    #[serde(default)]
+    hostname: Option<String>,
+    #[serde(default)]
+    action: Option<String>,
 }
 
+/// Verifies a Turnstile token: `success`, plus the solve's `hostname` (must be
+/// one of ours; skipped when `allowed_hostnames` is empty) and `action` (must
+/// match when non-empty — empty is allowed for deploy-order compatibility).
 pub async fn verify_turnstile_token(
     secret_key: &str,
     token: &str,
     remote_ip: Option<String>,
+    allowed_hostnames: &[String],
+    expected_action: Option<&str>,
 ) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -60,20 +69,63 @@ pub async fn verify_turnstile_token(
         return Err(format!("Turnstile 검증 실패: {}", error_msg));
     }
 
+    if !allowed_hostnames.is_empty() {
+        let hostname = verify_response.hostname.unwrap_or_default();
+        if !allowed_hostnames.iter().any(|h| h == &hostname) {
+            return Err(format!("Turnstile hostname 불일치: {}", hostname));
+        }
+    }
+
+    if let Some(expected) = expected_action {
+        let action = verify_response.action.unwrap_or_default();
+        if !action.is_empty() && action != expected {
+            return Err(format!("Turnstile action 불일치: {}", action));
+        }
+    }
+
     Ok(())
 }
 
+/// Real client IP, preferring Cloudflare's unforgeable `CF-Connecting-IP` over
+/// the client-spoofable `X-Forwarded-For` / `X-Real-IP` fallbacks.
 pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> String {
     headers
-        .get("X-Forwarded-For")
+        .get("CF-Connecting-IP")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
         .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers
+                .get("X-Forwarded-For")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.split(',').next())
+                .map(|s| s.trim().to_string())
+        })
         .or_else(|| {
             headers
                 .get("X-Real-IP")
                 .and_then(|v| v.to_str().ok())
                 .map(|s| s.to_string())
         })
+        .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// `https://share.example.com:443` → `share.example.com`. Derives the Turnstile
+/// hostname allowlist from the CORS origins.
+pub fn origin_to_host(origin: &str) -> Option<String> {
+    let without_scheme = origin.split("://").nth(1).unwrap_or(origin);
+    let host = without_scheme
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if host.is_empty() {
+        None
+    } else {
+        Some(host)
+    }
 }

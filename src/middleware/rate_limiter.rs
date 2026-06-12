@@ -396,12 +396,22 @@ pub async fn cli_rate_limit_middleware(
 }
 
 fn extract_ip(headers: &HeaderMap) -> String {
+    // Prefer Cloudflare's unforgeable CF-Connecting-IP; XFF/X-Real-IP are
+    // client-spoofable fallbacks (spoofing the key dodges per-IP limits/blocks).
     headers
-        .get("X-Forwarded-For")
+        .get("CF-Connecting-IP")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
         .map(|s| s.trim())
+        .or_else(|| {
+            headers
+                .get("X-Forwarded-For")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.split(',').next())
+                .map(|s| s.trim())
+        })
         .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
         .unwrap_or("unknown")
         .to_string()
 }

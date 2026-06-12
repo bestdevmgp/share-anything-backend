@@ -111,10 +111,23 @@ pub fn create_router(
         .route("/auth/apple", get(handlers::auth::apple_login))
         .route("/auth/apple/callback", post(handlers::auth::apple_callback))
         .route("/auth/callback/apple", get(handlers::auth::apple_callback_handler))
-        .route("/auth/email/send", post(handlers::auth::email_send))
         .route("/auth/email/verify", post(handlers::auth::email_verify))
-        .route("/auth/email/verify-code", post(handlers::auth::email_verify_code))
         .route("/auth/email/status/:session_id", get(handlers::auth::email_status))
+        .with_state(app_state.clone());
+
+    // Mail send + code verify trigger outbound work — gate behind a session
+    // token and per-IP rate limit (anti mail-bomb / code brute force).
+    let auth_sensitive_routes = Router::new()
+        .route("/auth/email/send", post(handlers::auth::email_send))
+        .route("/auth/email/verify-code", post(handlers::auth::email_verify_code))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
         .with_state(app_state);
 
     let session_token_state = handlers::session_token::SessionTokenState {
@@ -125,6 +138,10 @@ pub fn create_router(
             "/auth/session-token",
             post(handlers::session_token::exchange_session_token),
         )
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .with_state(session_token_state);
 
     let upload_routes = Router::new()
@@ -257,10 +274,18 @@ pub fn create_router(
 
     let ws_routes = Router::new()
         .route("/ws/signaling", get(handlers::signaling::websocket_handler))
-        .with_state((signaling_state.clone(), db.clone()));
+        .with_state((signaling_state.clone(), db.clone(), config.clone()));
 
     let p2p_routes = Router::new()
         .route("/p2p/status", get(handlers::p2p::check_uploader_status))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            optional_auth,
+        ))
         .with_state(signaling_state.clone());
 
     let turn_state = handlers::turn::TurnState {
@@ -269,6 +294,18 @@ pub fn create_router(
 
     let turn_routes = Router::new()
         .route("/turn/credentials", get(handlers::turn::get_turn_credentials))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            crate::middleware::session_token::require_session_token,
+        ))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            optional_auth,
+        ))
         .with_state(turn_state);
 
     let og_state = handlers::og::OgState {
@@ -413,6 +450,7 @@ pub fn create_router(
         .merge(install_route)
         .merge(swagger_ui)
         .merge(auth_routes)
+        .merge(auth_sensitive_routes)
         .merge(session_token_routes)
         .merge(upload_routes)
         .merge(p2p_upload_routes)

@@ -31,6 +31,19 @@ use crate::{config::Config, handlers::session_token::SessionTokenClaims};
 
 const HEADER: &str = "X-Session-Token";
 
+/// Validates a raw session-token JWT (signature, expiry, kind). Used by the
+/// WebSocket upgrade, which carries the token as a query parameter.
+pub fn validate_session_token(token: &str, secret: &str) -> bool {
+    if token.is_empty() {
+        return false;
+    }
+    let key = DecodingKey::from_secret(secret.as_bytes());
+    match decode::<SessionTokenClaims>(token, &key, &Validation::default()) {
+        Ok(decoded) => decoded.claims.kind == "session",
+        Err(_) => false,
+    }
+}
+
 pub async fn require_session_token(
     State(config): State<Arc<Config>>,
     request: Request,

@@ -42,13 +42,14 @@ fn verify_admin_password(headers: &HeaderMap) -> Result<(), AppError> {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    if provided.len() != expected.len()
-        || provided
-            .bytes()
-            .zip(expected.bytes())
-            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
-            != 0
-    {
+    // SHA-256 digest compare → timing independent of the secret's length.
+    let provided_hash = Sha256::digest(provided.as_bytes());
+    let expected_hash = Sha256::digest(expected.as_bytes());
+    let diff = provided_hash
+        .iter()
+        .zip(expected_hash.iter())
+        .fold(0u8, |acc, (a, b)| acc | (a ^ b));
+    if diff != 0 {
         return Err(unauthorized("Invalid admin password"));
     }
 
