@@ -3431,6 +3431,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "hex",
+ "hmac",
  "http 0.2.12",
  "http-body 0.4.6",
  "http-body-util",

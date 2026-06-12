@@ -101,11 +101,14 @@ pub async fn init_quick_access_upload(
             String::new()
         };
 
+        let upload_signature =
+            crate::utils::sign_storage_key(&state.config.upload_signing.secret, &storage_key);
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
             storage_key,
             upload_id,
             total_parts,
+            upload_signature,
         });
     }
 

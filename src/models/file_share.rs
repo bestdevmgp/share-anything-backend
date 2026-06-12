@@ -233,6 +233,9 @@ pub struct MultipartUploadFileInit {
     pub storage_key: String,
     pub upload_id: String,
     pub total_parts: i32,
+    /// `<exp>.<hmac>` proving to the Worker this storage key was issued by us.
+    /// Empty when signing is disabled.
+    pub upload_signature: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

@@ -11,6 +11,7 @@ pub struct Config {
     pub cors: CorsConfig,
     pub turnstile: TurnstileConfig,
     pub session_token: SessionTokenConfig,
+    pub upload_signing: UploadSigningConfig,
     pub cloudflare_turn: CloudflareTurnConfig,
     pub discord: DiscordConfig,
     pub smtp: SmtpConfig,
@@ -99,6 +100,13 @@ pub struct TurnstileConfig {
 pub struct SessionTokenConfig {
     pub jwt_secret: String,
     pub ttl_seconds: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UploadSigningConfig {
+    /// Shared secret with the upload Worker for signing R2 storage keys. Empty
+    /// disables signing (the Worker then accepts unsigned uploads as before).
+    pub secret: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,6 +209,11 @@ impl Config {
                     .unwrap_or_else(|_| "1800".to_string())
                     .parse()
                     .expect("SESSION_TOKEN_TTL_SECONDS must be an integer"),
+            },
+            upload_signing: UploadSigningConfig {
+                // Optional: when unset, storage keys are returned unsigned and the
+                // Worker keeps accepting unsigned uploads (graceful rollout).
+                secret: env::var("UPLOAD_SIGNING_SECRET").unwrap_or_default(),
             },
             cloudflare_turn: CloudflareTurnConfig {
                 key_id: env::var("CLOUDFLARE_TURN_KEY_ID")
