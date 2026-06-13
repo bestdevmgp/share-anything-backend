@@ -27,6 +27,22 @@ fn extract_cli_platform(user_agent: &str) -> Option<String> {
     }
 }
 
+pub async fn is_valid_personal_token(db: &DbPool, token: &str) -> bool {
+    if !token.starts_with("sat_") && !token.starts_with("sak_") {
+        return false;
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    let token_hash = hex::encode(hasher.finalize());
+    match repository::find_personal_token_by_hash(db, &token_hash).await {
+        Ok(Some(record)) => match record.expires_at {
+            Some(expires_at) => expires_at >= chrono::Utc::now(),
+            None => true,
+        },
+        _ => false,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PersonalTokenUser {
     pub user_id: String,

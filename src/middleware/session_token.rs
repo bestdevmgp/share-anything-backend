@@ -27,7 +27,12 @@ use axum::{
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde_json::json;
 
-use crate::{config::Config, handlers::session_token::SessionTokenClaims};
+use crate::{
+    config::Config,
+    db::DbPool,
+    handlers::session_token::SessionTokenClaims,
+    middleware::personal_token_auth::is_valid_personal_token,
+};
 
 const HEADER: &str = "X-Session-Token";
 
@@ -45,14 +50,22 @@ pub fn validate_session_token(token: &str, secret: &str) -> bool {
 }
 
 pub async fn require_session_token(
-    State(config): State<Arc<Config>>,
+    State((config, db)): State<(Arc<Config>, DbPool)>,
     request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    // If the request already carries a verified user JWT (from the auth middleware
-    // chained before this one), exempt it from session-token verification.
     if request.extensions().get::<crate::middleware::auth::Claims>().is_some() {
         return Ok(next.run(request).await);
+    }
+
+    if let Some(personal_token) = request
+        .headers()
+        .get("X-Personal-Token")
+        .and_then(|v| v.to_str().ok())
+    {
+        if is_valid_personal_token(&db, personal_token).await {
+            return Ok(next.run(request).await);
+        }
     }
 
     let token = match request.headers().get(HEADER).and_then(|v| v.to_str().ok()) {

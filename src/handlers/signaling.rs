@@ -6,7 +6,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use futures::{sink::SinkExt, stream::StreamExt};
@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     db::{repository, DbPool},
+    middleware::personal_token_auth::is_valid_personal_token,
     middleware::session_token::validate_session_token,
     models::signaling::{PeerRole, SignalingMessage},
     services::signaling::SignalingState,
@@ -24,12 +25,17 @@ use crate::{
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
     Query(params): Query<HashMap<String, String>>,
+    headers: HeaderMap,
     State((state, db, config)): State<(SignalingState, DbPool, Arc<Config>)>,
 ) -> Response {
-    // Gate the upgrade on a valid session token (query param, since browsers
-    // can't set WS headers) so bots can't join signaling without Turnstile.
     let token = params.get("token").map(|s| s.as_str()).unwrap_or("");
-    if !validate_session_token(token, &config.session_token.jwt_secret) {
+    let mut authorized = validate_session_token(token, &config.session_token.jwt_secret);
+    if !authorized {
+        if let Some(personal_token) = headers.get("X-Personal-Token").and_then(|v| v.to_str().ok()) {
+            authorized = is_valid_personal_token(&db, personal_token).await;
+        }
+    }
+    if !authorized {
         return (StatusCode::UNAUTHORIZED, "session token required").into_response();
     }
     ws.on_upgrade(move |socket| handle_socket(socket, state, db))

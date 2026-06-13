@@ -115,8 +115,6 @@ pub fn create_router(
         .route("/auth/email/status/:session_id", get(handlers::auth::email_status))
         .with_state(app_state.clone());
 
-    // Mail send + code verify trigger outbound work — gate behind a session
-    // token and per-IP rate limit (anti mail-bomb / code brute force).
     let auth_sensitive_routes = Router::new()
         .route("/auth/email/send", post(handlers::auth::email_send))
         .route("/auth/email/verify-code", post(handlers::auth::email_verify_code))
@@ -125,7 +123,7 @@ pub fn create_router(
             crate::middleware::rate_limiter::rate_limit_middleware,
         ))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .with_state(app_state);
@@ -148,7 +146,7 @@ pub fn create_router(
         .route("/file/upload", post(handlers::upload::upload_file))
         .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
@@ -160,7 +158,7 @@ pub fn create_router(
     let p2p_upload_routes = Router::new()
         .route("/file/p2p/create", post(handlers::upload::create_p2p_session))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
@@ -176,7 +174,7 @@ pub fn create_router(
         .route("/file/multipart/presign-parts", post(handlers::presigned::get_part_presigned_urls))
         .route("/file/multipart/complete", post(handlers::presigned::complete_multipart_upload))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
@@ -201,7 +199,7 @@ pub fn create_router(
             crate::middleware::rate_limiter::rate_limit_middleware,
         ))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
@@ -279,7 +277,7 @@ pub fn create_router(
     let p2p_routes = Router::new()
         .route("/p2p/status", get(handlers::p2p::check_uploader_status))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
@@ -299,7 +297,7 @@ pub fn create_router(
             crate::middleware::rate_limiter::rate_limit_middleware,
         ))
         .layer(middleware::from_fn_with_state(
-            config.clone(),
+            (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
         .layer(middleware::from_fn_with_state(
