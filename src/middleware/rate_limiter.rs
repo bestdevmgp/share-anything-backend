@@ -60,12 +60,16 @@ impl RateLimiter {
     }
 
     pub fn check_rate_limit(&self, ip: &str) -> Result<(), String> {
+        let mut block_expired = false;
         if let Some(blocked_until) = self.blocked_ips.get(ip) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
                 return Err("Your IP has been temporarily blocked due to suspicious activity. Please try again later.".to_string());
             } else {
-                self.blocked_ips.remove(ip);
+                block_expired = true;
             }
+        }
+        if block_expired {
+            self.blocked_ips.remove(ip);
         }
 
         let now = Instant::now();
@@ -205,6 +209,7 @@ impl CliRateLimiter {
     }
 
     pub fn check(&self, key: &str, bucket: Bucket) -> Result<RateLimitStatus, RateLimitStatus> {
+        let mut block_expired = false;
         if let Some(blocked_until) = self.blocked_ips.get(key) {
             if blocked_until.value().elapsed() < Duration::from_secs(600) {
                 let reset_unix = SystemTime::now()
@@ -218,8 +223,11 @@ impl CliRateLimiter {
                     reset_unix,
                 });
             } else {
-                self.blocked_ips.remove(key);
+                block_expired = true;
             }
+        }
+        if block_expired {
+            self.blocked_ips.remove(key);
         }
 
         let now = Instant::now();
