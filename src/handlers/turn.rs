@@ -53,7 +53,6 @@ impl StringOrVec {
 pub async fn get_turn_credentials(
     State(state): State<TurnState>,
 ) -> Result<Json<TurnCredentialsResponse>, AppError> {
-    tracing::info!("[P2P-TURN] credentials requested (key_id={})", state.config.cloudflare_turn.key_id);
     let client = reqwest::Client::new();
 
     let url = format!(
@@ -73,11 +72,10 @@ pub async fn get_turn_credentials(
         .send()
         .await?;
 
-    let status = response.status();
-    tracing::info!("[P2P-TURN] cloudflare responded status={}", status);
-    if !status.is_success() {
+    if !response.status().is_success() {
+        let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
-        tracing::error!("[P2P-TURN] Cloudflare TURN API error: {} - {}", status, error_text);
+        tracing::error!("Cloudflare TURN API error: {} - {}", status, error_text);
         return Err(internal_error(format!("Cloudflare TURN API error: {}", status)));
     }
 
@@ -98,16 +96,6 @@ pub async fn get_turn_credentials(
             credential: server.credential,
         });
     }
-
-    let turn_relays = ice_servers
-        .iter()
-        .filter(|s| s.urls.iter().any(|u| u.starts_with("turn:") || u.starts_with("turns:")))
-        .count();
-    tracing::info!(
-        "[P2P-TURN] returning {} ice servers, {} turn relays",
-        ice_servers.len(),
-        turn_relays
-    );
 
     Ok(Json(TurnCredentialsResponse { ice_servers }))
 }

@@ -172,7 +172,6 @@ pub async fn get_file_list(
                     .and_then(|v| v.to_str().ok())
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty());
-                tracing::info!("[P2P-LIST] file list fetched share={} uploader_online=true device={:?}", query.code, device_info);
                 let _ = state.signaling.send_to_peer(
                     &uploader_peer_id,
                     SignalingMessage::DownloaderArrived {
@@ -183,10 +182,7 @@ pub async fn get_file_list(
                 );
                 Some(true)
             }
-            None => {
-                tracing::info!("[P2P-LIST] file list fetched share={} uploader_online=false", query.code);
-                Some(false)
-            }
+            None => Some(false),
         }
     } else {
         None

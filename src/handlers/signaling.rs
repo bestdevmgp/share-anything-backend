@@ -41,7 +41,6 @@ async fn handle_socket(socket: WebSocket, state: SignalingState, db: DbPool) {
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     state.register_connection(peer_id.clone(), tx);
-    tracing::info!("[P2P-SIG] ws connected peer={}", peer_id);
 
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -93,22 +92,6 @@ pub async fn cleanup_peer_public(peer_id: &str, state: &SignalingState, db: &DbP
     cleanup_peer(peer_id, state, db).await
 }
 
-fn message_label(msg: &SignalingMessage) -> &'static str {
-    match msg {
-        SignalingMessage::UploaderReady { .. } => "uploader_ready",
-        SignalingMessage::DownloaderJoin { .. } => "downloader_join",
-        SignalingMessage::Offer { .. } => "offer",
-        SignalingMessage::Answer { .. } => "answer",
-        SignalingMessage::IceCandidate { .. } => "ice_candidate",
-        SignalingMessage::DownloaderArrived { .. } => "downloader_arrived",
-        SignalingMessage::TransferComplete { .. } => "transfer_complete",
-        SignalingMessage::UploaderCancelled { .. } => "uploader_cancelled",
-        SignalingMessage::FileRequest { .. } => "file_request",
-        SignalingMessage::Ping {} => "ping",
-        _ => "other",
-    }
-}
-
 async fn handle_message(
     text: &str,
     peer_id: &str,
@@ -116,10 +99,6 @@ async fn handle_message(
     db: &DbPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let msg: SignalingMessage = serde_json::from_str(text)?;
-
-    if !matches!(msg, SignalingMessage::Ping {}) {
-        tracing::info!("[P2P-SIG] recv type={} peer={}", message_label(&msg), peer_id);
-    }
 
     match msg {
         SignalingMessage::UploaderReady {
@@ -199,9 +178,7 @@ async fn handle_message(
             handle_transfer_complete(share_code, state, db).await?;
         }
         SignalingMessage::UploaderCancelled { share_code } => {
-            let downloader = state.find_downloader(&share_code);
-            tracing::info!("[P2P-SIG] uploader_cancelled share={} downloader_found={}", share_code, downloader.is_some());
-            if let Some(downloader_peer_id) = downloader {
+            if let Some(downloader_peer_id) = state.find_downloader(&share_code) {
                 let _ = state.send_to_peer(
                     &downloader_peer_id,
                     SignalingMessage::UploaderCancelled {
@@ -247,7 +224,6 @@ async fn handle_uploader_ready(
 
     state.register_uploader_with_device(share_code.clone(), peer_id.to_string(), device_info);
     repository::update_p2p_status(db, &share_code, "waiting", Some(peer_id.to_string())).await?;
-    tracing::info!("[P2P-SIG] uploader registered share={} peer={}", share_code, peer_id);
 
     Ok(())
 }
@@ -273,12 +249,9 @@ async fn handle_downloader_join(
         }
     }
 
-    let uploader = state.find_uploader_with_device(&share_code);
-    tracing::info!(
-        "[P2P-SIG] downloader_join share={} peer={} uploader_found={}",
-        share_code, peer_id, uploader.is_some()
-    );
-    let (uploader_peer_id, uploader_device_info) = uploader.ok_or("Uploader is not online")?;
+    let (uploader_peer_id, uploader_device_info) = state
+        .find_uploader_with_device(&share_code)
+        .ok_or("Uploader is not online")?;
 
     state.register_downloader(share_code.clone(), peer_id.to_string());
 
@@ -303,7 +276,6 @@ async fn handle_downloader_join(
     )?;
 
     repository::update_p2p_status(db, &share_code, "connected", None).await?;
-    tracing::info!("[P2P-SIG] peer_matched sent share={} uploader={} downloader={}", share_code, uploader_peer_id, peer_id);
 
     Ok(())
 }
@@ -314,9 +286,9 @@ async fn handle_downloader_arrived(
     device_info: Option<String>,
     state: &SignalingState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let uploader = state.find_uploader(&share_code);
-    tracing::info!("[P2P-SIG] downloader_arrived share={} peer={} uploader_found={}", share_code, peer_id, uploader.is_some());
-    let uploader_peer_id = uploader.ok_or("Uploader is not online")?;
+    let uploader_peer_id = state
+        .find_uploader(&share_code)
+        .ok_or("Uploader is not online")?;
 
     state.register_arrived_downloader(peer_id.to_string(), share_code.clone());
 
@@ -337,9 +309,9 @@ async fn relay_to_uploader(
     message: SignalingMessage,
     state: &SignalingState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let uploader = state.find_uploader(share_code);
-    tracing::info!("[P2P-SIG] relay->uploader share={} type={} uploader_found={}", share_code, message_label(&message), uploader.is_some());
-    let uploader_peer_id = uploader.ok_or("Uploader is not online")?;
+    let uploader_peer_id = state
+        .find_uploader(share_code)
+        .ok_or("Uploader is not online")?;
 
     state.send_to_peer(&uploader_peer_id, message)?;
 
@@ -352,9 +324,9 @@ async fn relay_to_downloader(
     message: SignalingMessage,
     state: &SignalingState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let downloader = state.find_downloader(share_code);
-    tracing::info!("[P2P-SIG] relay->downloader share={} type={} downloader_found={}", share_code, message_label(&message), downloader.is_some());
-    let downloader_peer_id = downloader.ok_or("Downloader is not online")?;
+    let downloader_peer_id = state
+        .find_downloader(share_code)
+        .ok_or("Downloader is not online")?;
 
     state.send_to_peer(&downloader_peer_id, message)?;
     Ok(())
@@ -372,16 +344,13 @@ async fn relay_ice_candidate(
         .find_uploader(&share_code)
         .ok_or("Uploader is not online")?;
 
-    let from_uploader = peer_id == uploader_peer_id;
-    let target_peer_id = if from_uploader {
+    let target_peer_id = if peer_id == uploader_peer_id {
         state
             .find_downloader(&share_code)
             .ok_or("Downloader is not online")?
     } else {
         uploader_peer_id
     };
-
-    tracing::info!("[P2P-SIG] relay ice share={} dir={}", share_code, if from_uploader { "up->down" } else { "down->up" });
 
     state.send_to_peer(
         &target_peer_id,
@@ -413,7 +382,6 @@ async fn handle_transfer_complete(
 }
 
 async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
-    tracing::info!("[P2P-SIG] ws disconnected peer={} (cleanup)", peer_id);
     let uploader_share_codes: Vec<String> = state
         .uploaders
         .iter()
@@ -425,7 +393,6 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         state.remove_uploader(&share_code);
         state.remove_downloader(&share_code);
         let _ = repository::update_p2p_status(db, &share_code, "failed", None).await;
-        tracing::info!("[P2P-SIG] cleanup removed uploader share={} peer={}", share_code, peer_id);
     }
 
     let downloader_share_codes: Vec<String> = state
@@ -446,7 +413,6 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
                     share_code: share_code.clone(),
                 },
             );
-            tracing::info!("[P2P-SIG] cleanup removed downloader share={} peer={}, sent DownloaderOffline", share_code, peer_id);
         }
         let _ = repository::update_p2p_status(db, &share_code, "waiting", None).await;
     }
