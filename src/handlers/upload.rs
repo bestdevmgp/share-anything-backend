@@ -177,7 +177,9 @@ pub async fn upload_file(
             return Err(unauthorized("Sign in required for password protection"));
         }
         Some(
-            bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
                 .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {
@@ -320,8 +322,11 @@ pub async fn create_p2p_session(
     }
 
     let password_hash = if let Some(password) = &request.password {
+        let password = password.clone();
         Some(
-            bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
                 .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {

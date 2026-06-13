@@ -283,7 +283,12 @@ pub async fn cli_upload(
         if token_user.is_none() {
             return Err(unauthorized("Personal token required to set password"));
         }
-        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
+        Some(
+            tokio::task::spawn_blocking(move || bcrypt::hash(pw, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
+                .map_err(|_| internal_error("Failed to hash password"))?,
+        )
     } else {
         None
     };
@@ -365,7 +370,13 @@ pub async fn cli_p2p_create(
     }
 
     let password_hash = if let Some(pw) = &request.password {
-        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
+        let pw = pw.clone();
+        Some(
+            tokio::task::spawn_blocking(move || bcrypt::hash(pw, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
+                .map_err(|_| internal_error("Failed to hash password"))?,
+        )
     } else {
         None
     };
@@ -514,7 +525,13 @@ pub async fn cli_multipart_init(
     }
 
     let password_hash = if let Some(pw) = &request.password {
-        Some(bcrypt::hash(pw, bcrypt::DEFAULT_COST).map_err(|_| internal_error("Failed to hash password"))?)
+        let pw = pw.clone();
+        Some(
+            tokio::task::spawn_blocking(move || bcrypt::hash(pw, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
+                .map_err(|_| internal_error("Failed to hash password"))?,
+        )
     } else {
         None
     };
@@ -786,7 +803,11 @@ pub async fn cli_download(
             })
             .ok_or_else(|| unauthorized("Password required. Use ?password=&lt;pw&gt; or X-File-Password header"))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Failed to verify password"))?
             .map_err(|_| internal_error("Failed to verify password"))?;
 
         if !is_valid {
@@ -929,7 +950,11 @@ pub async fn cli_download_url(
             })
             .ok_or_else(|| unauthorized("Password required. Use ?password=<pw> or X-File-Password header"))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Failed to verify password"))?
             .map_err(|_| internal_error("Failed to verify password"))?;
 
         if !is_valid {

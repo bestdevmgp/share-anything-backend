@@ -13,7 +13,7 @@ use crate::{
     db::{repository, DbPool},
     middleware::auth::Claims,
     models::{
-        bad_request, unauthorized, forbidden, not_found, internal_error, AppError,
+        bad_request, payload_too_large, unauthorized, forbidden, not_found, internal_error, AppError,
         CreateDownloadLogDto, FileListResponse, FileInfoInGroup, DownloadFilesRequest,
         DownloadQuery, VerifyPasswordRequest, DownloadUrlResponse, FileInfoResponse,
     },
@@ -301,7 +301,11 @@ pub async fn download_single_file(
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Password verification failed"))?
             .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
@@ -448,7 +452,11 @@ pub async fn preview_file(
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Password verification failed"))?
             .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
@@ -520,7 +528,11 @@ pub async fn download_file(
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Password verification failed"))?
             .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {
@@ -667,7 +679,11 @@ pub async fn download_multiple_files(
 
     if let Some(password_hash) = &files_to_download[0].password_hash {
         if let Some(password) = &req.password {
-            let is_valid = bcrypt::verify(password, password_hash)
+            let password = password.to_string();
+            let stored = password_hash.to_string();
+            let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+                .await
+                .map_err(|_| internal_error("Password verification failed"))?
                 .map_err(|_| internal_error("Password verification failed"))?;
 
             if !is_valid {
@@ -676,6 +692,22 @@ pub async fn download_multiple_files(
         } else {
             return Err(unauthorized("Password required"));
         }
+    }
+
+    const MAX_BULK_FILE_COUNT: usize = 50;
+    const MAX_BULK_TOTAL_BYTES: i64 = 150 * 1024 * 1024;
+
+    if files_to_download.len() > MAX_BULK_FILE_COUNT {
+        return Err(bad_request(
+            "Too many files requested. Download at most 50 files at a time.",
+        ));
+    }
+
+    let total_bytes: i64 = files_to_download.iter().map(|f| f.file_size).sum();
+    if total_bytes > MAX_BULK_TOTAL_BYTES {
+        return Err(payload_too_large(
+            "Selected files are too large to download together. Please download them individually.",
+        ));
     }
 
     let ip_address = headers
@@ -840,7 +872,11 @@ pub async fn verify_password(
         return Ok(StatusCode::OK);
     };
 
-    let is_valid = bcrypt::verify(&req.password, hash)
+    let supplied = req.password.clone();
+    let stored = hash.to_string();
+    let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&supplied, &stored))
+        .await
+        .map_err(|_| internal_error("Password verification failed"))?
         .map_err(|_| internal_error("Password verification failed"))?;
 
     if is_valid {
@@ -907,7 +943,11 @@ pub async fn get_download_url(
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| unauthorized("Password required. Set the X-File-Password header."))?;
 
-        let is_valid = bcrypt::verify(password, password_hash)
+        let password = password.to_string();
+        let stored = password_hash.to_string();
+        let is_valid = tokio::task::spawn_blocking(move || bcrypt::verify(&password, &stored))
+            .await
+            .map_err(|_| internal_error("Password verification failed"))?
             .map_err(|_| internal_error("Password verification failed"))?;
 
         if !is_valid {

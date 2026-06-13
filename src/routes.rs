@@ -144,7 +144,7 @@ pub fn create_router(
 
     let upload_routes = Router::new()
         .route("/file/upload", post(handlers::upload::upload_file))
-        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(600 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
@@ -193,7 +193,7 @@ pub fn create_router(
         .route("/file/info", get(handlers::download::get_file_info))
         .route("/file/verify-password", post(handlers::download::verify_password))
         .route("/shares/:code", delete(handlers::download::delete_share))
-        .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(16 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),
             crate::middleware::rate_limiter::rate_limit_middleware,
@@ -407,7 +407,7 @@ pub fn create_router(
         .route("/cli/shares/:code/download", get(handlers::cli::cli_download))
         .route("/cli/shares/:code/download-url", post(handlers::cli::cli_download_url))
         .route("/cli/shares/:code/download-complete", post(handlers::cli::cli_download_complete))
-        .layer(DefaultBodyLimit::max(3 * 1024 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(600 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(
             (cli_rate_limiter.clone(), rate_limiter.clone()),
             crate::middleware::rate_limiter::cli_rate_limit_middleware,

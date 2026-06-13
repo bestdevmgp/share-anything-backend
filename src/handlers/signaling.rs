@@ -249,7 +249,10 @@ async fn handle_downloader_join(
 
     if let Some(stored_hash) = &file_share.password_hash {
         let supplied = password.unwrap_or_default();
-        let matches = bcrypt::verify(&supplied, stored_hash).unwrap_or(false);
+        let stored = stored_hash.to_string();
+        let matches = tokio::task::spawn_blocking(move || bcrypt::verify(&supplied, &stored).unwrap_or(false))
+            .await
+            .unwrap_or(false);
         if !matches {
             return Err("Incorrect password for this share".into());
         }

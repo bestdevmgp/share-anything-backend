@@ -130,8 +130,11 @@ pub async fn request_presigned_upload(
     }
 
     let password_hash = if let Some(password) = &request.password {
+        let password = password.clone();
         Some(
-            bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
                 .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {
@@ -404,8 +407,11 @@ pub async fn init_multipart_upload(
     }
 
     let password_hash = if let Some(password) = &request.password {
+        let password = password.clone();
         Some(
-            bcrypt::hash(password, bcrypt::DEFAULT_COST)
+            tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+                .await
+                .map_err(|_| internal_error("Failed to hash password"))?
                 .map_err(|_| internal_error("Failed to hash password"))?,
         )
     } else {
