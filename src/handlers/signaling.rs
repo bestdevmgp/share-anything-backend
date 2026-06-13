@@ -407,12 +407,20 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
             continue;
         }
         if let Some(uploader_peer_id) = state.find_uploader(&share_code) {
-            let _ = state.send_to_peer(
-                &uploader_peer_id,
+            let still_present = state
+                .arrived_downloaders
+                .iter()
+                .any(|entry| entry.value() == &share_code);
+            let message = if still_present {
+                SignalingMessage::DownloaderPaused {
+                    share_code: share_code.clone(),
+                }
+            } else {
                 SignalingMessage::DownloaderOffline {
                     share_code: share_code.clone(),
-                },
-            );
+                }
+            };
+            let _ = state.send_to_peer(&uploader_peer_id, message);
         }
         let _ = repository::update_p2p_status(db, &share_code, "waiting", None).await;
     }

@@ -61,6 +61,9 @@ pub enum SignalingMessage {
     DownloaderOffline {
         share_code: String,
     },
+    DownloaderPaused {
+        share_code: String,
+    },
     DownloaderArrived {
         share_code: String,
         peer_id: String,
