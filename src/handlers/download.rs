@@ -1041,7 +1041,6 @@ pub async fn delete_share(
         .await
         .map_err(|e| internal_error(format!("Failed to delete share: {}", e)))?;
 
-    // best-effort: rows already deleted; orphaned objects are cleaned by GC
     if !storage_keys.is_empty() {
         let _ = state.storage.delete_files(storage_keys).await;
     }

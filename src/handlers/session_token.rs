@@ -54,7 +54,6 @@ pub async fn exchange_session_token(
         return Err(bad_request("turnstile_token is required"));
     }
     let client_ip = extract_client_ip(&headers);
-    // Allow only solves on our own front-end origins (from the CORS allowlist).
     let allowed_hostnames: Vec<String> = state
         .config
         .cors
@@ -71,7 +70,6 @@ pub async fn exchange_session_token(
     )
     .await
     .map_err(|e| {
-        // Log the real reason; return a generic message (no farming oracle).
         tracing::warn!("Turnstile verification failed: {}", e);
         forbidden("Turnstile verification failed")
     })?;

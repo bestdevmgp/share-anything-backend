@@ -42,7 +42,6 @@ fn verify_admin_password(headers: &HeaderMap) -> Result<(), AppError> {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    // SHA-256 digest compare → timing independent of the secret's length.
     let provided_hash = Sha256::digest(provided.as_bytes());
     let expected_hash = Sha256::digest(expected.as_bytes());
     let diff = provided_hash

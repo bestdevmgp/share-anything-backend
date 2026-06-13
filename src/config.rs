@@ -211,8 +211,6 @@ impl Config {
                     .expect("SESSION_TOKEN_TTL_SECONDS must be an integer"),
             },
             upload_signing: UploadSigningConfig {
-                // Optional: when unset, storage keys are returned unsigned and the
-                // Worker keeps accepting unsigned uploads (graceful rollout).
                 secret: env::var("UPLOAD_SIGNING_SECRET").unwrap_or_default(),
             },
             cloudflare_turn: CloudflareTurnConfig {

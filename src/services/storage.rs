@@ -307,7 +307,7 @@ impl StorageService {
         &self,
         key: &str,
         upload_id: &str,
-        parts: Vec<(i32, String)>, // (part_number, etag)
+        parts: Vec<(i32, String)>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 

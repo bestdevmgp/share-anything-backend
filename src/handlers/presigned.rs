@@ -80,7 +80,6 @@ pub async fn request_presigned_upload(
         }
         exp
     } else {
-        // Derive default: authenticated user's setting, or 30 minutes for guests.
         if let Some(claims) = user_claims.as_ref() {
             let user = repository::find_user_by_id(&state.db, &claims.sub)
                 .await?
@@ -344,7 +343,6 @@ pub async fn init_multipart_upload(
         }
         exp
     } else {
-        // Derive default: authenticated user's setting, or 30 minutes for guests.
         if let Some(claims) = user_claims.as_ref() {
             let user = repository::find_user_by_id(&state.db, &claims.sub)
                 .await?
