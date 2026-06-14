@@ -399,6 +399,14 @@ async fn cleanup_peer(peer_id: &str, state: &SignalingState, db: &DbPool) {
         .collect();
 
     for share_code in uploader_share_codes {
+        if let Some(downloader_peer_id) = state.find_downloader(&share_code) {
+            let _ = state.send_to_peer(
+                &downloader_peer_id,
+                SignalingMessage::UploaderOffline {
+                    share_code: share_code.clone(),
+                },
+            );
+        }
         state.remove_uploader(&share_code);
         state.remove_downloader(&share_code);
         let _ = repository::update_p2p_status(db, &share_code, "failed", None).await;
