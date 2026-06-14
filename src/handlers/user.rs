@@ -51,7 +51,7 @@ pub async fn get_upload_history(
         .get::<Claims>()
         .ok_or_else(|| unauthorized("Authentication required"))?;
 
-    let rows = repository::find_file_shares_with_download_count_by_user(
+    let mut rows = repository::find_file_shares_with_download_count_by_user(
         &state.db,
         &user_claims.sub,
         pagination.limit,
@@ -59,7 +59,14 @@ pub async fn get_upload_history(
     )
     .await?;
 
-    let items: Vec<FileShareWithStats> = rows
+    let qa_rows = repository::find_active_qa_grant_shares_with_download_count_by_user(
+        &state.db,
+        &user_claims.sub,
+    )
+    .await?;
+    rows.extend(qa_rows);
+
+    let mut items: Vec<FileShareWithStats> = rows
         .into_iter()
         .map(|(file_share, download_count)| {
             let download_url = format!(
@@ -89,6 +96,8 @@ pub async fn get_upload_history(
             }
         })
         .collect();
+
+    items.sort_by(|a, b| b.file_share.created_at.cmp(&a.file_share.created_at));
 
     let total = items.len();
 

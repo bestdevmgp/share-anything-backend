@@ -407,6 +407,41 @@ pub async fn find_file_shares_with_download_count_by_user(
         .collect()
 }
 
+pub async fn find_active_qa_grant_shares_with_download_count_by_user(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<(FileShare, i64)>, sqlx::Error> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT fs.*,
+               g.share_code AS grant_code,
+               g.expires_at AS grant_expires_at,
+               g.created_at AS grant_created_at,
+               (SELECT COUNT(*) FROM download_logs dl WHERE dl.file_share_id = fs.id) AS download_count
+        FROM file_shares fs
+        INNER JOIN public_share_grants g ON g.file_share_id = fs.id
+        WHERE fs.user_id = ? AND g.expires_at > UTC_TIMESTAMP()
+        ORDER BY g.created_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let download_count: i64 = row.try_get("download_count")?;
+            let mut file_share = FileShare::from_row(&row)?;
+            file_share.share_code = row.try_get("grant_code")?;
+            file_share.expires_at = row.try_get("grant_expires_at")?;
+            file_share.created_at = row.try_get("grant_created_at")?;
+            Ok((file_share, download_count))
+        })
+        .collect()
+}
+
 pub async fn find_file_shares_by_user(
     pool: &MySqlPool,
     user_id: &str,
@@ -624,6 +659,35 @@ pub async fn delete_expired_public_share_grants(
     }
 
     Ok(result.rows_affected())
+}
+
+pub async fn find_file_share_by_grant_code(
+    pool: &MySqlPool,
+    code: &str,
+) -> Result<Option<FileShare>, sqlx::Error> {
+    sqlx::query_as::<_, FileShare>(
+        r#"
+        SELECT fs.* FROM file_shares fs
+        INNER JOIN public_share_grants g ON g.file_share_id = fs.id
+        WHERE g.share_code = ?
+        LIMIT 1
+        "#,
+    )
+    .bind(code)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn delete_public_share_grant_by_code(
+    pool: &MySqlPool,
+    code: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM public_share_grants WHERE share_code = ?")
+        .bind(code)
+        .execute(pool)
+        .await?;
+    release_share_code(pool, code).await?;
+    Ok(())
 }
 
 const MAX_SHARE_CODE_RESERVATION_ATTEMPTS: u32 = 16;
