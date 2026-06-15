@@ -109,6 +109,7 @@ pub async fn init_quick_access_upload(
             upload_id,
             total_parts,
             upload_signature,
+            relative_path: String::new(),
         });
     }
 

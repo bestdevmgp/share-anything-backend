@@ -203,6 +203,7 @@ pub async fn create_file_share(
     image_height: Option<i32>,
     display_order: i32,
     device_id: Option<String>,
+    relative_path: Option<String>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
@@ -212,8 +213,8 @@ pub async fn create_file_share(
         INSERT INTO file_shares
         (id, share_group_id, user_id, created_via_api_key_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
-         image_width, image_height, display_order, device_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         image_width, image_height, display_order, device_id, relative_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -237,6 +238,7 @@ pub async fn create_file_share(
     .bind(image_height)
     .bind(display_order)
     .bind(&device_id)
+    .bind(&relative_path)
     .execute(pool)
     .await?;
 

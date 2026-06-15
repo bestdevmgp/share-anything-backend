@@ -326,6 +326,7 @@ pub async fn cli_upload(
             None,
             idx as i32,
             None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -408,6 +409,7 @@ pub async fn cli_p2p_create(
             None,
             None,
             idx as i32,
+            None,
             None,
         )
         .await
@@ -720,6 +722,7 @@ pub async fn cli_complete_multipart(
             None,
             None,
             idx as i32,
+            None,
             None,
         )
         .await

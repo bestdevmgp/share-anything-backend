@@ -232,6 +232,7 @@ pub async fn complete_presigned_upload(
             file_info.image_height,
             idx as i32,
             device_id.clone(),
+            None,
         )
         .await
         .map_err(|e| {
@@ -397,12 +398,19 @@ pub async fn init_multipart_upload(
 
         let upload_signature =
             crate::utils::sign_storage_key(&state.config.upload_signing.secret, &storage_key);
+
+        let relative_path = crate::utils::normalize_relative_path(
+            file_info.relative_path.as_deref(),
+        )
+        .unwrap_or_default();
+
         files.push(MultipartUploadFileInit {
             file_name: file_info.file_name.clone(),
             storage_key,
             upload_id,
             total_parts,
             upload_signature,
+            relative_path,
         });
     }
 
@@ -561,6 +569,9 @@ pub async fn complete_multipart_upload(
                 })?;
         }
 
+        let relative_path =
+            crate::utils::normalize_relative_path(file_info.relative_path.as_deref());
+
         let file_share = repository::create_file_share(
             &state.db,
             Some(share_group_id.clone()),
@@ -581,6 +592,7 @@ pub async fn complete_multipart_upload(
             file_info.image_height,
             idx as i32,
             device_id.clone(),
+            relative_path,
         )
         .await
         .map_err(|e| {

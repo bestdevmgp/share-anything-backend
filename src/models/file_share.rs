@@ -29,6 +29,8 @@ pub struct FileShare {
     pub display_order: i32,
     #[sqlx(default)]
     pub device_id: Option<String>,
+    #[sqlx(default)]
+    pub relative_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -151,6 +153,7 @@ pub struct FileInfoInGroup {
     pub image_width: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_height: Option<i32>,
+    pub relative_path: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -215,6 +218,8 @@ pub struct MultipartUploadFileInfo {
     pub file_name: String,
     pub file_size: i64,
     pub content_type: String,
+    #[serde(default)]
+    pub relative_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -236,6 +241,7 @@ pub struct MultipartUploadFileInit {
     /// `<exp>.<hmac>` proving to the Worker this storage key was issued by us.
     /// Empty when signing is disabled.
     pub upload_signature: String,
+    pub relative_path: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -285,6 +291,8 @@ pub struct CompleteMultipartFileInfo {
     pub image_width: Option<i32>,
     #[serde(default)]
     pub image_height: Option<i32>,
+    #[serde(default)]
+    pub relative_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

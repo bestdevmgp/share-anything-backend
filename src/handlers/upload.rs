@@ -237,6 +237,7 @@ pub async fn upload_file(
             None,
             idx as i32,
             device_id.clone(),
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;
@@ -359,6 +360,7 @@ pub async fn create_p2p_session(
             None,
             None,
             idx as i32,
+            None,
             None,
         )
         .await

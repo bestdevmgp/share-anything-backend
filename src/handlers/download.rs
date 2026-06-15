@@ -161,6 +161,7 @@ pub async fn get_file_list(
             file_type: f.file_type.clone(),
             image_width: f.image_width,
             image_height: f.image_height,
+            relative_path: f.relative_path.clone().unwrap_or_default(),
         })
         .collect();
 
