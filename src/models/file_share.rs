@@ -103,6 +103,7 @@ pub struct FileShareResponse {
     pub file_type: String,
     pub transfer_type: String,
     pub description: Option<String>,
+    pub relative_path: Option<String>,
     pub has_password: bool,
     pub is_one_time: bool,
     #[serde(serialize_with = "crate::utils::serialize_as_kst")]

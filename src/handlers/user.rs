@@ -84,6 +84,7 @@ pub async fn get_upload_history(
                     file_type: file_share.file_type,
                     transfer_type: file_share.transfer_type,
                     description: file_share.description,
+                    relative_path: file_share.relative_path,
                     has_password: file_share.password_hash.is_some(),
                     is_one_time: file_share.is_one_time,
                     expires_at: file_share.expires_at,
