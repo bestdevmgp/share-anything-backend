@@ -80,7 +80,7 @@ pub async fn list_my_uploads(
     };
     cli_upload_history(
         State(cli_state),
-        axum::extract::Extension(user.clone()),
+        Some(axum::extract::Extension(user.clone())),
         Query(q),
     )
     .await
@@ -141,7 +141,7 @@ pub async fn delete_my_upload(
     };
     cli_delete_upload(
         State(cli_state),
-        axum::extract::Extension(user.clone()),
+        Some(axum::extract::Extension(user.clone())),
         Path(code),
     )
     .await
@@ -203,7 +203,7 @@ pub async fn list_share_downloads(
     };
     cli_share_logs(
         State(cli_state),
-        axum::extract::Extension(user.clone()),
+        Some(axum::extract::Extension(user.clone())),
         Path(code),
     )
     .await
@@ -261,7 +261,7 @@ pub async fn list_my_downloads(
     };
     cli_download_history(
         State(cli_state),
-        axum::extract::Extension(user.clone()),
+        Some(axum::extract::Extension(user.clone())),
         Query(q),
     )
     .await

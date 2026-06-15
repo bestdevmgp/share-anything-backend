@@ -1159,9 +1159,11 @@ pub async fn cli_file_list(
 )]
 pub async fn cli_upload_history(
     State(state): State<CliState>,
-    token_user: axum::extract::Extension<PersonalTokenUser>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Query(query): Query<CliUploadHistoryQuery>,
 ) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let token_user = token_user
+        .ok_or_else(|| unauthorized("Personal token required. Set the 'X-Personal-Token' header."))?;
     let limit = query.limit.unwrap_or(20).min(100);
     let offset = query.offset.unwrap_or(0);
 
@@ -1205,9 +1207,11 @@ pub async fn cli_upload_history(
 )]
 pub async fn cli_share_logs(
     State(state): State<CliState>,
-    token_user: axum::extract::Extension<PersonalTokenUser>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Path(share_code): Path<String>,
 ) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let token_user = token_user
+        .ok_or_else(|| unauthorized("Personal token required. Set the 'X-Personal-Token' header."))?;
     let file_shares = repository::find_file_shares_by_code(&state.db, &share_code)
         .await
         .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
@@ -1270,9 +1274,11 @@ pub async fn cli_share_logs(
 )]
 pub async fn cli_delete_upload(
     State(state): State<CliState>,
-    token_user: axum::extract::Extension<PersonalTokenUser>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Path(share_code): Path<String>,
 ) -> Result<StatusCode, AppError> {
+    let token_user = token_user
+        .ok_or_else(|| unauthorized("Personal token required. Set the 'X-Personal-Token' header."))?;
     let file_shares = repository::find_file_shares_by_code(&state.db, &share_code)
         .await
         .map_err(|e| internal_error(format!("Failed to look up share: {}", e)))?;
@@ -1316,9 +1322,11 @@ pub async fn cli_delete_upload(
 )]
 pub async fn cli_download_history(
     State(state): State<CliState>,
-    token_user: axum::extract::Extension<PersonalTokenUser>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
     Query(query): Query<CliUploadHistoryQuery>,
 ) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let token_user = token_user
+        .ok_or_else(|| unauthorized("Personal token required. Set the 'X-Personal-Token' header."))?;
     let limit = query.limit.unwrap_or(20).min(100);
     let offset = query.offset.unwrap_or(0);
 
@@ -1360,8 +1368,10 @@ pub async fn cli_download_history(
 )]
 pub async fn cli_me(
     State(state): State<CliState>,
-    token_user: axum::extract::Extension<PersonalTokenUser>,
+    token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
 ) -> Result<PrettyJson<serde_json::Value>, AppError> {
+    let token_user = token_user
+        .ok_or_else(|| unauthorized("Personal token required. Set the 'X-Personal-Token' header."))?;
     let user = repository::find_user_by_id(&state.db, &token_user.user_id)
         .await
         .map_err(|e| internal_error(format!("Failed to fetch user: {}", e)))?
