@@ -41,6 +41,17 @@ pub async fn websocket_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, state, db))
 }
 
+/// CLI signaling upgrade — anonymous (no token), unlike the session-token-gated
+/// [`websocket_handler`]. Password-protected shares are still enforced in
+/// `handle_downloader_join`; the shared `SignalingState` matches peers across
+/// endpoints.
+pub async fn cli_websocket_handler(
+    ws: WebSocketUpgrade,
+    State((state, db, _config)): State<(SignalingState, DbPool, Arc<Config>)>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, state, db))
+}
+
 async fn handle_socket(socket: WebSocket, state: SignalingState, db: DbPool) {
     let (mut sender, mut receiver) = socket.split();
     let peer_id = Uuid::new_v4().to_string();

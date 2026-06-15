@@ -304,7 +304,23 @@ pub fn create_router(
             auth_state.clone(),
             optional_auth,
         ))
+        .with_state(turn_state.clone());
+
+    // CLI-specific TURN + signaling. Unlike the web's session-token-gated
+    // `/turn/credentials` and `/ws/signaling`, these accept anonymous callers
+    // so a not-logged-in CLI user can receive a secure (P2P) share. They share
+    // the same `signaling_state`, so peers still match across endpoints.
+    let cli_turn_routes = Router::new()
+        .route("/cli/turn/credentials", get(handlers::turn::get_turn_credentials))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .with_state(turn_state);
+
+    let cli_ws_routes = Router::new()
+        .route("/cli/ws/signaling", get(handlers::signaling::cli_websocket_handler))
+        .with_state((signaling_state.clone(), db.clone(), config.clone()));
 
     let og_state = handlers::og::OgState {
         config: config.clone(),
@@ -468,6 +484,8 @@ pub fn create_router(
         .merge(ws_routes)
         .merge(p2p_routes)
         .merge(turn_routes)
+        .merge(cli_turn_routes)
+        .merge(cli_ws_routes)
         .merge(og_routes)
         .layer(axum::middleware::from_fn(
             crate::middleware::swagger_basic_auth::swagger_basic_auth,
