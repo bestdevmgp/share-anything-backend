@@ -2005,3 +2005,38 @@ pub async fn purge_expired_api_key_reveals(pool: &MySqlPool) -> Result<u64, sqlx
     .await?;
     Ok(result.rows_affected())
 }
+
+pub async fn get_daily_upload_usage(
+    pool: &MySqlPool,
+    identity: &str,
+    usage_date: chrono::NaiveDate,
+) -> Result<i64, sqlx::Error> {
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT bytes_used FROM daily_upload_usage WHERE identity = ? AND usage_date = ?",
+    )
+    .bind(identity)
+    .bind(usage_date)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| r.0).unwrap_or(0))
+}
+
+pub async fn add_daily_upload_usage(
+    pool: &MySqlPool,
+    identity: &str,
+    usage_date: chrono::NaiveDate,
+    bytes: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"INSERT INTO daily_upload_usage (identity, usage_date, bytes_used)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE bytes_used = bytes_used + ?"#,
+    )
+    .bind(identity)
+    .bind(usage_date)
+    .bind(bytes)
+    .bind(bytes)
+    .execute(pool)
+    .await?;
+    Ok(())
+}

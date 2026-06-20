@@ -87,9 +87,9 @@ impl From<CliUploadResponse> for V1UploadResponse {
                            Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 413,
-            description = "A single file exceeds the per-file size limit. \
+            description = "A single file exceeds the upload size limit. \
                            `error.code` = `file_too_large`; \
-                           `error.message` = `Per-file size limit exceeded.` \
+                           `error.message` = `Upload size limit exceeded.` \
                            Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
@@ -119,6 +119,7 @@ pub async fn post_upload(
     let response = cli_upload(
         State(cli_state),
         Some(axum::extract::Extension(user.clone())),
+        axum::http::HeaderMap::new(),
         multipart,
     )
     .await
@@ -180,9 +181,9 @@ pub async fn post_upload(
                            Issue a new API key with the `upload` scope checked.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 413,
-            description = "A single file in the manifest exceeds the per-file size limit. \
+            description = "A single file in the manifest exceeds the upload size limit. \
                            `error.code` = `file_too_large`; \
-                           `error.message` = `Per-file size limit exceeded.` \
+                           `error.message` = `Upload size limit exceeded.` \
                            Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
@@ -211,6 +212,7 @@ pub async fn post_multipart_init(
     cli_multipart_init(
         State(cli_state),
         Some(axum::extract::Extension(user.clone())),
+        axum::http::HeaderMap::new(),
         Json(req),
     )
     .await
@@ -364,6 +366,7 @@ pub async fn post_multipart_complete(
     let response = cli_complete_multipart(
         State(cli_state),
         Some(axum::extract::Extension(user.clone())),
+        axum::http::HeaderMap::new(),
         Json(req),
     )
     .await

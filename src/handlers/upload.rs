@@ -35,7 +35,7 @@ pub struct UploadState {
         (status = 200, description = "Files uploaded successfully", body = MultipleFileUploadResponse),
         (status = 400, description = "Bad request - missing or invalid file"),
         (status = 401, description = "Unauthorized - custom expiration/password requires authentication"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(
         ("bearer_auth" = [])
@@ -124,20 +124,7 @@ pub async fn upload_file(
         return Err(bad_request("No files uploaded. At least one file is required."));
     }
 
-    let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024
-    } else {
-        500 * 1024 * 1024
-    };
-
-    if files.iter().any(|f| (f.data.len() as i64) > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
     let total_size: i64 = files.iter().map(|f| f.data.len() as i64).sum();
-
-    if total_size > max_total_size {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
 
     let metadata = UploadMetadata {
         description,
@@ -157,6 +144,17 @@ pub async fn upload_file(
     };
 
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);
+
+    // Standard (server) uploads count against the daily quota; P2P is exempt.
+    if matches!(transfer_type, TransferType::Server) {
+        crate::utils::enforce_daily_quota(
+            &state.db,
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            &headers,
+            total_size,
+        )
+        .await?;
+    }
 
     let is_one_time = if matches!(transfer_type, TransferType::P2p) {
         true
@@ -271,6 +269,16 @@ pub async fn upload_file(
     for file in &mut uploaded_files {
         file.download_url = download_url.clone();
         file.qr_code = qr_code.clone();
+    }
+
+    if matches!(transfer_type, TransferType::Server) {
+        crate::utils::record_daily_usage(
+            &state.db,
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            &headers,
+            total_size,
+        )
+        .await;
     }
 
     if let Some(ref claims) = user_claims {

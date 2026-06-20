@@ -38,7 +38,7 @@ pub struct QuickAccessState {
         (status = 200, description = "Upload session initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
@@ -63,15 +63,18 @@ pub async fn init_quick_access_upload(
         return Err(bad_request("At least one file is required"));
     }
 
-    let max_total_size: i64 = 3 * 1024 * 1024 * 1024;
-    if req.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
     let total_size: i64 = req.files.iter().map(|f| f.file_size).sum();
 
-    if total_size > max_total_size {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
+    // Quick Access is a signed-in standard upload; count it against the daily
+    // quota (identity is the user, so no client IP is needed). Completion is
+    // recorded by the shared complete_multipart_upload handler.
+    crate::utils::enforce_daily_quota(
+        &state.db,
+        Some(&user_claims.sub),
+        &axum::http::HeaderMap::new(),
+        total_size,
+    )
+    .await?;
 
     let share_code = repository::reserve_share_code(&state.db).await?;
 

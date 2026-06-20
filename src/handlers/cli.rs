@@ -68,12 +68,12 @@ pub struct CliState {
     pub storage: StorageService,
 }
 
-const CLI_GUEST_MAX_FILE_SIZE: i64 = 100 * 1024 * 1024;
-const CLI_AUTH_MAX_FILE_SIZE: i64 = 3 * 1024 * 1024 * 1024;
+// There is no per-file or per-session size limit for standard uploads; they are
+// bounded only by the daily quota (see utils::upload_quota). API-key (OpenAPI)
+// uploads are instead bounded by the per-key active-storage limit below.
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
-pub const STANDARD_PER_FILE_LIMIT: i64 = 3 * 1024 * 1024 * 1024;
-pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 8 * 1024 * 1024 * 1024;
-pub const FILE_TOO_LARGE_MESSAGE: &str = "Per-file size limit exceeded.";
+// OpenAPI (API key): total size of all unexpired shares per key.
+pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 500 * 1024 * 1024 * 1024;
 pub const STORAGE_QUOTA_MESSAGE: &str = "API key storage quota exceeded.";
 
 fn format_expires_at(dt: DateTime<Utc>) -> String {
@@ -113,7 +113,7 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
         (status = 200, description = "Files uploaded", body = CliUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Storage upload failed")
     )
@@ -121,6 +121,7 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
 pub async fn cli_upload(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<PrettyJson<CliUploadResponse>, AppError> {
     use futures::{SinkExt, StreamExt};
@@ -142,13 +143,6 @@ pub async fn cli_upload(
     let mut total_size: i64 = 0;
 
     let api_key_id_for_quota = token_user.as_ref().and_then(|u| u.api_key_id.clone());
-    let max_size = if api_key_id_for_quota.is_some() {
-        API_KEY_ACTIVE_STORAGE_LIMIT
-    } else if token_user.is_some() {
-        CLI_AUTH_MAX_FILE_SIZE
-    } else {
-        CLI_GUEST_MAX_FILE_SIZE
-    };
     let mut existing_active_storage: i64 = 0;
     if let Some(ref kid) = api_key_id_for_quota {
         existing_active_storage = repository::sum_active_storage_for_api_key(&state.db, kid)
@@ -158,6 +152,20 @@ pub async fn cli_upload(
             return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
         }
     }
+
+    // Daily standard-upload quota (1TB signed-in / 10GB guest, KST). Excludes API-key uploads,
+    // which have their own per-key storage quota.
+    let daily_identity = crate::utils::quota_identity(
+        token_user.as_ref().map(|u| u.user_id.as_str()),
+        &headers,
+    );
+    let daily_used: i64 = if api_key_id_for_quota.is_none() {
+        repository::get_daily_upload_usage(&state.db, &daily_identity, crate::utils::kst_today())
+            .await
+            .unwrap_or(0)
+    } else {
+        0
+    };
 
     while let Some(field) = multipart
         .next_field()
@@ -241,17 +249,17 @@ pub async fn cli_upload(
                     .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
 
                 let file_size = part_content_length.unwrap_or(0);
-                if file_size > STANDARD_PER_FILE_LIMIT {
-                    return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
-                }
                 total_size += file_size;
-                if total_size > max_size {
-                    return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
-                }
                 if api_key_id_for_quota.is_some()
                     && existing_active_storage + total_size > API_KEY_ACTIVE_STORAGE_LIMIT
                 {
                     return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
+                }
+                if api_key_id_for_quota.is_none()
+                    && daily_used + total_size
+                        > crate::utils::daily_limit_for(token_user.as_ref().map(|u| u.user_id.as_str()))
+                {
+                    return Err(crate::models::daily_quota_exceeded(crate::utils::DAILY_QUOTA_MESSAGE));
                 }
 
                 staged_files.push(StagedFile {
@@ -332,6 +340,16 @@ pub async fn cli_upload(
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
 
         uploaded_files.push(file_share.file_name);
+    }
+
+    if api_key_id_for_quota.is_none() {
+        crate::utils::record_daily_usage(
+            &state.db,
+            token_user.as_ref().map(|u| u.user_id.as_str()),
+            &headers,
+            total_size,
+        )
+        .await;
     }
 
     let download_url = format!("{}/cli/shares/{}/download", state.config.server.base_url, share_code);
@@ -438,7 +456,7 @@ pub async fn cli_p2p_create(
         (status = 200, description = "Upload session created", body = CliMultipartInitResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
         (status = 500, description = "Failed to create multipart upload on storage")
     )
@@ -446,6 +464,7 @@ pub async fn cli_p2p_create(
 pub async fn cli_multipart_init(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CliMultipartInitRequest>,
 ) -> Result<Json<CliMultipartInitResponse>, AppError> {
     let token_user = token_user.map(|ext| ext.0.clone());
@@ -454,9 +473,6 @@ pub async fn cli_multipart_init(
         return Err(bad_request("At least one file is required"));
     }
 
-    if request.files.iter().any(|f| f.file_size > STANDARD_PER_FILE_LIMIT) {
-        return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
-    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
     let api_key_id = token_user.as_ref().and_then(|u| u.api_key_id.clone());
@@ -467,15 +483,17 @@ pub async fn cli_multipart_init(
         if existing + total_size > API_KEY_ACTIVE_STORAGE_LIMIT {
             return Err(crate::models::storage_quota_exceeded(STORAGE_QUOTA_MESSAGE));
         }
-    } else {
-        let max_size = if token_user.is_some() {
-            CLI_AUTH_MAX_FILE_SIZE
-        } else {
-            CLI_GUEST_MAX_FILE_SIZE
-        };
-        if total_size > max_size {
-            return Err(crate::models::payload_too_large(FILE_TOO_LARGE_MESSAGE));
-        }
+    }
+
+    // Daily standard-upload quota (1TB signed-in / 10GB guest, KST), excluding API-key uploads.
+    if api_key_id.is_none() {
+        crate::utils::enforce_daily_quota(
+            &state.db,
+            token_user.as_ref().map(|u| u.user_id.as_str()),
+            &headers,
+            total_size,
+        )
+        .await?;
     }
 
     let expiration = if let Some(exp_str) = &request.expiration {
@@ -656,6 +674,7 @@ pub async fn cli_presign_parts(
 pub async fn cli_complete_multipart(
     State(state): State<CliState>,
     token_user: Option<axum::extract::Extension<PersonalTokenUser>>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CliCompleteMultipartRequest>,
 ) -> Result<PrettyJson<CliUploadResponse>, AppError> {
     let session = repository::get_upload_session(&state.db, &request.upload_session_id)
@@ -734,6 +753,18 @@ pub async fn cli_complete_multipart(
     repository::complete_upload_session(&state.db, &request.upload_session_id)
         .await
         .map_err(|_| internal_error("Failed to complete upload session"))?;
+
+    // Count this finished standard upload toward the uploader's daily quota
+    // (excludes API-key uploads). The completed-guard above limits it to once.
+    if api_key_id.is_none() {
+        crate::utils::record_daily_usage(
+            &state.db,
+            session.user_id.as_deref(),
+            &headers,
+            request.files.iter().map(|f| f.file_size).sum(),
+        )
+        .await;
+    }
 
     let download_url = format!(
         "{}/cli/shares/{}/download",

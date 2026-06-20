@@ -1,5 +1,6 @@
 use axum::{
     extract::{Extension, State},
+    http::HeaderMap,
     Json,
 };
 use std::sync::Arc;
@@ -44,13 +45,14 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
         (status = 200, description = "Presigned URLs generated", body = PresignedUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
 pub async fn request_presigned_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
+    headers: HeaderMap,
     Json(request): Json<PresignedUploadRequest>,
 ) -> Result<Json<PresignedUploadResponse>, AppError> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -59,20 +61,15 @@ pub async fn request_presigned_upload(
         return Err(bad_request("At least one file is required"));
     }
 
-    let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024
-    } else {
-        500 * 1024 * 1024
-    };
-
-    if request.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
-    if total_size > max_total_size {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
+    crate::utils::enforce_daily_quota(
+        &state.db,
+        user_claims.as_ref().map(|c| c.sub.as_str()),
+        &headers,
+        total_size,
+    )
+    .await?;
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
@@ -266,6 +263,16 @@ pub async fn complete_presigned_upload(
             internal_error("Failed to complete upload session")
         })?;
 
+    // Count this finished standard upload toward the uploader's daily quota,
+    // after the session is marked completed so a retry cannot double-count.
+    crate::utils::record_daily_usage(
+        &state.db,
+        session.user_id.as_deref(),
+        &headers,
+        request.files.iter().map(|f| f.file_size).sum(),
+    )
+    .await;
+
     let download_url = format!(
         "{}/download?code={}",
         state.config.server.base_url, session.share_code
@@ -312,13 +319,14 @@ pub async fn complete_presigned_upload(
         (status = 200, description = "Multipart upload initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Authentication required for some options"),
-        (status = 413, description = "`file_too_large` — per-file size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(("bearer_auth" = []))
 )]
 pub async fn init_multipart_upload(
     State(state): State<PresignedState>,
     user_claims: Option<Extension<Claims>>,
+    headers: HeaderMap,
     Json(request): Json<InitMultipartUploadRequest>,
 ) -> Result<Json<InitMultipartUploadResponse>, AppError> {
     let user_claims = user_claims.map(|ext| ext.0.clone());
@@ -327,20 +335,15 @@ pub async fn init_multipart_upload(
         return Err(bad_request("At least one file is required"));
     }
 
-    let max_total_size: i64 = if user_claims.is_some() {
-        3 * 1024 * 1024 * 1024
-    } else {
-        500 * 1024 * 1024
-    };
-
-    if request.files.iter().any(|f| f.file_size > crate::handlers::cli::STANDARD_PER_FILE_LIMIT) {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
     let total_size: i64 = request.files.iter().map(|f| f.file_size).sum();
 
-    if total_size > max_total_size {
-        return Err(crate::models::payload_too_large(crate::handlers::cli::FILE_TOO_LARGE_MESSAGE));
-    }
+    crate::utils::enforce_daily_quota(
+        &state.db,
+        user_claims.as_ref().map(|c| c.sub.as_str()),
+        &headers,
+        total_size,
+    )
+    .await?;
 
     let expiration = if let Some(exp) = request.expiration {
         if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
@@ -626,6 +629,16 @@ pub async fn complete_multipart_upload(
             error!(error = %e, "Failed to complete upload session");
             internal_error("Failed to complete upload session")
         })?;
+
+    // Count this finished standard upload toward the uploader's daily quota,
+    // after the session is marked completed so a retry cannot double-count.
+    crate::utils::record_daily_usage(
+        &state.db,
+        session.user_id.as_deref(),
+        &headers,
+        request.files.iter().map(|f| f.file_size).sum(),
+    )
+    .await;
 
     let download_url = format!(
         "{}/download?code={}",

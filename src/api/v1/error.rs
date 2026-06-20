@@ -87,7 +87,7 @@ impl PublicApiError {
             | Self::NotFound(m)
             | Self::Conflict(m)
             | Self::Gone(m) => m.clone(),
-            Self::FileTooLarge => "Per-file size limit exceeded.".to_string(),
+            Self::FileTooLarge => "Upload size limit exceeded.".to_string(),
             Self::StorageQuotaExceeded => "API key storage quota exceeded.".to_string(),
             Self::P2PConnectionLimit => "Too many concurrent P2P connections.".to_string(),
             Self::P2PAttemptLimit => "Too many P2P connection attempts.".to_string(),
@@ -125,6 +125,7 @@ impl From<AppError> for PublicApiError {
             AppError::Gone(_) => PublicApiError::Gone("Resource is no longer available".into()),
             AppError::PayloadTooLarge(_) => PublicApiError::FileTooLarge,
             AppError::StorageQuotaExceeded(_) => PublicApiError::StorageQuotaExceeded,
+            AppError::DailyQuotaExceeded(_) => PublicApiError::TooManyRequests,
             AppError::TooManyRequests(_) => PublicApiError::TooManyRequests,
             AppError::Internal(_) | AppError::Database(_) | AppError::Http(_) => {
                 tracing::error!(error = ?e, "v1 internal error");
