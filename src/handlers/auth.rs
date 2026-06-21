@@ -35,22 +35,6 @@ pub struct AppState {
     pub auth: Arc<AuthService>,
 }
 
-fn extract_client_ip(headers: &HeaderMap) -> String {
-    if let Some(forwarded) = headers.get("x-forwarded-for") {
-        if let Ok(value) = forwarded.to_str() {
-            if let Some(ip) = value.split(',').next() {
-                return ip.trim().to_string();
-            }
-        }
-    }
-    if let Some(real_ip) = headers.get("x-real-ip") {
-        if let Ok(value) = real_ip.to_str() {
-            return value.trim().to_string();
-        }
-    }
-    "unknown".to_string()
-}
-
 #[utoipa::path(
     get,
     path = "/auth/google",
@@ -128,7 +112,7 @@ pub async fn google_callback_handler(
     headers: HeaderMap,
     Query(query): Query<GoogleCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::google::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
@@ -223,7 +207,7 @@ pub async fn naver_callback_handler(
     headers: HeaderMap,
     Query(query): Query<NaverCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::naver::fetch_user_info(&state.config, &query.code, &query.state).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
@@ -319,7 +303,7 @@ pub async fn kakao_callback_handler(
     headers: HeaderMap,
     Query(query): Query<KakaoCallbackQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::kakao::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
@@ -420,7 +404,7 @@ pub async fn apple_callback_handler(
     headers: HeaderMap,
     Query(query): Query<AppleCallbackHandlerQuery>,
 ) -> Result<Json<AuthResponse>, AppError> {
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::apple::fetch_user_info(
         &state.config,
@@ -516,7 +500,7 @@ pub async fn email_send(
         return Err(StatusCode::BAD_REQUEST.into());
     }
 
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let lang = extract_accept_language(&headers);
 
     if let Ok(Some(_)) = repository::find_recent_email_auth_session(&state.db, &email).await {
@@ -591,7 +575,7 @@ pub async fn email_verify(
         .as_ref()
         .map_or(false, |did| !did.is_empty() && did == &session.device_id);
 
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
 
     if same_device {
@@ -655,7 +639,7 @@ pub async fn email_verify_code(
 
     repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
 
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let (outcome, existing_provider) = state
         .auth

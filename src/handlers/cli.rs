@@ -849,14 +849,7 @@ pub async fn cli_download(
         }
     }
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
-        .unwrap_or("unknown")
-        .to_string();
+    let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
         .get(header::USER_AGENT)
@@ -1065,14 +1058,7 @@ pub async fn cli_download_complete(
         return Ok(StatusCode::NO_CONTENT);
     };
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
-        .unwrap_or("unknown")
-        .to_string();
+    let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
         .get(header::USER_AGENT)

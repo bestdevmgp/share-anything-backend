@@ -316,18 +316,7 @@ pub async fn download_single_file(
 
     let user_claims = request.extensions().get::<Claims>().cloned();
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| {
-            headers
-                .get("X-Real-IP")
-                .and_then(|v| v.to_str().ok())
-        })
-        .unwrap_or("unknown")
-        .to_string();
+    let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
         .get(header::USER_AGENT)
@@ -543,18 +532,7 @@ pub async fn download_file(
 
     let user_claims = request.extensions().get::<Claims>().cloned();
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| {
-            headers
-                .get("X-Real-IP")
-                .and_then(|v| v.to_str().ok())
-        })
-        .unwrap_or("unknown")
-        .to_string();
+    let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
         .get(header::USER_AGENT)
@@ -711,18 +689,7 @@ pub async fn download_multiple_files(
         ));
     }
 
-    let ip_address = headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(|s| s.trim())
-        .or_else(|| {
-            headers
-                .get("X-Real-IP")
-                .and_then(|v| v.to_str().ok())
-        })
-        .unwrap_or("unknown")
-        .to_string();
+    let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
         .get(header::USER_AGENT)
@@ -965,18 +932,7 @@ pub async fn get_download_url(
     if !preview {
         let user_claims = request.extensions().get::<Claims>().cloned();
 
-        let ip_address = headers
-            .get("X-Forwarded-For")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.split(',').next())
-            .map(|s| s.trim())
-            .or_else(|| {
-                headers
-                    .get("X-Real-IP")
-                    .and_then(|v| v.to_str().ok())
-            })
-            .unwrap_or("unknown")
-            .to_string();
+        let ip_address = crate::utils::client_ip(&headers);
 
         let user_agent = headers
             .get(header::USER_AGENT)

@@ -25,14 +25,6 @@ pub struct ApiKeyState {
     pub discord: Arc<DiscordNotifier>,
 }
 
-fn extract_ip(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("X-Forwarded-For")
-        .or_else(|| headers.get("X-Real-IP"))
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-}
-
 /// Submit an API key application
 ///
 /// Creates a new application for an API key tied to a third-party service.
@@ -104,7 +96,7 @@ pub async fn apply(
         ));
     }
 
-    let ip = extract_ip(&headers);
+    let ip = crate::utils::client_ip_opt(&headers);
     let platform = headers
         .get("User-Agent")
         .and_then(|v| v.to_str().ok())

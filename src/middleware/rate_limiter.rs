@@ -317,7 +317,7 @@ pub async fn cli_rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    let ip = extract_ip(&headers);
+    let ip = crate::utils::client_ip(&headers);
     if rate_limiter.check_blocked(&ip).is_err() {
         let body = json!({
             "error": {
@@ -403,32 +403,13 @@ pub async fn cli_rate_limit_middleware(
     }
 }
 
-fn extract_ip(headers: &HeaderMap) -> String {
-    headers
-        .get("CF-Connecting-IP")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim())
-        .or_else(|| {
-            headers
-                .get("X-Forwarded-For")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.split(',').next())
-                .map(|s| s.trim())
-        })
-        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("unknown")
-        .to_string()
-}
-
 pub async fn rate_limit_middleware(
     State(rate_limiter): State<RateLimiter>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
-    let ip = extract_ip(&headers);
+    let ip = crate::utils::client_ip(&headers);
 
     if let Err(error_message) = rate_limiter.check_rate_limit(&ip) {
         let code = if error_message.contains("blocked") { "ip_blocked" } else { "RATE_LIMIT_EXCEEDED" };

@@ -52,45 +52,12 @@ pub fn next_kst_reset() -> chrono::DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
-/// Trusted client IP from proxy headers, used as the anonymous quota identity.
-///
-/// The origin sits behind Cloudflare, which sets `CF-Connecting-IP` to the real
-/// client IP and overwrites any client-supplied value — so it cannot be spoofed
-/// (whereas the *first* hop of `X-Forwarded-For` is attacker-controllable, since
-/// proxies append rather than replace it). Order of trust:
-///   1. `CF-Connecting-IP` (Cloudflare-set; spoof-proof behind CF)
-///   2. `X-Real-IP` (reverse proxy `$remote_addr`)
-///   3. the *last* `X-Forwarded-For` hop (the one the trusted proxy appended)
-/// Falls back to "unknown".
-///
-/// NOTE: this assumes the origin only accepts traffic from Cloudflare. If the
-/// EC2 origin is reachable directly, lock its firewall to Cloudflare IP ranges
-/// (or enable Authenticated Origin Pulls) so `CF-Connecting-IP` stays trusted.
-pub fn client_ip(headers: &HeaderMap) -> String {
-    headers
-        .get("CF-Connecting-IP")
-        .and_then(|v| v.to_str().ok())
-        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            headers
-                .get("X-Forwarded-For")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.rsplit(',').next())
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-        })
-        .unwrap_or("unknown")
-        .to_string()
-}
-
 /// Identity the daily quota is scoped to: the signed-in user when present,
-/// otherwise the anonymous client's IP.
+/// otherwise the anonymous client's IP (see [`crate::utils::client_ip`]).
 pub fn quota_identity(user_id: Option<&str>, headers: &HeaderMap) -> String {
     match user_id {
         Some(uid) => format!("user:{}", uid),
-        None => format!("ip:{}", client_ip(headers)),
+        None => format!("ip:{}", crate::utils::client_ip(headers)),
     }
 }
 

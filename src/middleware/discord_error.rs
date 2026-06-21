@@ -4,26 +4,10 @@ use std::sync::Arc;
 
 use crate::services::discord::DiscordNotifier;
 
-fn extract_client_ip(headers: &axum::http::HeaderMap) -> String {
-    if let Some(forwarded) = headers.get("x-forwarded-for") {
-        if let Ok(value) = forwarded.to_str() {
-            if let Some(ip) = value.split(',').next() {
-                return ip.trim().to_string();
-            }
-        }
-    }
-    if let Some(real_ip) = headers.get("x-real-ip") {
-        if let Ok(value) = real_ip.to_str() {
-            return value.trim().to_string();
-        }
-    }
-    "unknown".to_string()
-}
-
 pub async fn discord_error_middleware(request: Request, next: Next) -> Response {
     let method = request.method().to_string();
     let uri = request.uri().path().to_string();
-    let ip = extract_client_ip(request.headers());
+    let ip = crate::utils::client_ip(request.headers());
     let discord = request.extensions().get::<Arc<DiscordNotifier>>().cloned();
 
     let response = next.run(request).await;

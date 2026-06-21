@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use crate::{
     config::Config,
     models::{bad_request, forbidden, internal_error, AppError},
-    utils::{extract_client_ip, origin_to_host, verify_turnstile_token},
+    utils::{origin_to_host, verify_turnstile_token},
 };
 
 #[derive(Clone)]
@@ -53,7 +53,7 @@ pub async fn exchange_session_token(
     if req.turnstile_token.is_empty() {
         return Err(bad_request("turnstile_token is required"));
     }
-    let client_ip = extract_client_ip(&headers);
+    let client_ip = crate::utils::client_ip(&headers);
     let allowed_hostnames: Vec<String> = state
         .config
         .cors

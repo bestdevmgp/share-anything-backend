@@ -16,7 +16,7 @@ use crate::{
     services::{
         discord::DiscordNotifier, email::EmailService, geolocation::GeolocationService,
     },
-    utils::extract_client_ip,
+    utils::client_ip,
 };
 
 const REACTIVATION_WINDOW_DAYS: i64 = 14;
@@ -194,7 +194,7 @@ impl AuthService {
         is_new_user: bool,
         headers: &HeaderMap,
     ) -> Result<String, AppError> {
-        let ip = extract_client_ip(headers);
+        let ip = client_ip(headers);
         let user_agent = extract_user_agent(headers);
         let user_agent_hash = hash_ua(&user_agent);
         let device_id = resolve_device_id(headers, &user_agent_hash);

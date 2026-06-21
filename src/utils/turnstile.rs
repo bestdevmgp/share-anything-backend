@@ -86,30 +86,6 @@ pub async fn verify_turnstile_token(
     Ok(())
 }
 
-/// Real client IP, preferring Cloudflare's unforgeable `CF-Connecting-IP` over
-/// the client-spoofable `X-Forwarded-For` / `X-Real-IP` fallbacks.
-pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> String {
-    headers
-        .get("CF-Connecting-IP")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim().to_string())
-        .or_else(|| {
-            headers
-                .get("X-Forwarded-For")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.split(',').next())
-                .map(|s| s.trim().to_string())
-        })
-        .or_else(|| {
-            headers
-                .get("X-Real-IP")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
-        })
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
 /// `https://share.example.com:443` → `share.example.com`. Derives the Turnstile
 /// hostname allowlist from the CORS origins.
 pub fn origin_to_host(origin: &str) -> Option<String> {
