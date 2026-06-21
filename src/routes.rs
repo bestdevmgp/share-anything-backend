@@ -183,6 +183,14 @@ pub fn create_router(
         ))
         .with_state(presigned_state);
 
+    let quota_routes = Router::new()
+        .route("/file/quota", get(handlers::quota::get_daily_quota))
+        .layer(middleware::from_fn_with_state(
+            auth_state.clone(),
+            optional_auth,
+        ))
+        .with_state(db.clone());
+
     let download_routes = Router::new()
         .route("/download", get(handlers::download::download_file))
         .route("/download/file", get(handlers::download::download_single_file))
@@ -469,6 +477,7 @@ pub fn create_router(
         .merge(upload_routes)
         .merge(p2p_upload_routes)
         .merge(presigned_routes)
+        .merge(quota_routes)
         .merge(download_routes)
         .merge(user_routes)
         .merge(sessions_routes)

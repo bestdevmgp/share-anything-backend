@@ -33,17 +33,54 @@ pub fn kst_today() -> NaiveDate {
     Utc::now().with_timezone(&kst).date_naive()
 }
 
-/// Best-effort client IP from proxy headers (nginx sets X-Forwarded-For /
-/// X-Real-IP). Falls back to "unknown".
+/// The next KST-midnight reset instant, as a UTC timestamp. Clients display
+/// "resets at ..." countdowns from this.
+pub fn next_kst_reset() -> chrono::DateTime<Utc> {
+    use chrono::TimeZone;
+    let kst = FixedOffset::east_opt(9 * 3600).expect("valid KST offset");
+    let tomorrow_kst = Utc::now()
+        .with_timezone(&kst)
+        .date_naive()
+        .succ_opt()
+        .expect("valid next day");
+    let midnight = tomorrow_kst
+        .and_hms_opt(0, 0, 0)
+        .expect("valid midnight");
+    kst.from_local_datetime(&midnight)
+        .single()
+        .expect("unambiguous fixed-offset midnight")
+        .with_timezone(&Utc)
+}
+
+/// Trusted client IP from proxy headers, used as the anonymous quota identity.
+///
+/// The origin sits behind Cloudflare, which sets `CF-Connecting-IP` to the real
+/// client IP and overwrites any client-supplied value — so it cannot be spoofed
+/// (whereas the *first* hop of `X-Forwarded-For` is attacker-controllable, since
+/// proxies append rather than replace it). Order of trust:
+///   1. `CF-Connecting-IP` (Cloudflare-set; spoof-proof behind CF)
+///   2. `X-Real-IP` (reverse proxy `$remote_addr`)
+///   3. the *last* `X-Forwarded-For` hop (the one the trusted proxy appended)
+/// Falls back to "unknown".
+///
+/// NOTE: this assumes the origin only accepts traffic from Cloudflare. If the
+/// EC2 origin is reachable directly, lock its firewall to Cloudflare IP ranges
+/// (or enable Authenticated Origin Pulls) so `CF-Connecting-IP` stays trusted.
 pub fn client_ip(headers: &HeaderMap) -> String {
     headers
-        .get("X-Forwarded-For")
+        .get("CF-Connecting-IP")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
+        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .or_else(|| headers.get("X-Real-IP").and_then(|v| v.to_str().ok()))
-        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            headers
+                .get("X-Forwarded-For")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.rsplit(',').next())
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+        })
         .unwrap_or("unknown")
         .to_string()
 }
