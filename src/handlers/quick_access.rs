@@ -65,9 +65,6 @@ pub async fn init_quick_access_upload(
 
     let total_size: i64 = req.files.iter().map(|f| f.file_size).sum();
 
-    // Quick Access is a signed-in standard upload; count it against the daily
-    // quota (identity is the user, so no client IP is needed). Completion is
-    // recorded by the shared complete_multipart_upload handler.
     crate::utils::enforce_daily_quota(
         &state.db,
         Some(&user_claims.sub),

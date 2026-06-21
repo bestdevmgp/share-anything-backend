@@ -145,7 +145,6 @@ pub async fn upload_file(
 
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);
 
-    // Standard (server) uploads count against the daily quota; P2P is exempt.
     if matches!(transfer_type, TransferType::Server) {
         crate::utils::enforce_daily_quota(
             &state.db,

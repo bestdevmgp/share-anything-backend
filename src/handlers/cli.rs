@@ -68,11 +68,8 @@ pub struct CliState {
     pub storage: StorageService,
 }
 
-// There is no per-file or per-session size limit for standard uploads; they are
-// bounded only by the daily quota (see utils::upload_quota). API-key (OpenAPI)
-// uploads are instead bounded by the per-key active-storage limit below.
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
-// OpenAPI (API key): total size of all unexpired shares per key.
+// API-key (OpenAPI) cap: total size of all unexpired shares per key.
 pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 500 * 1024 * 1024 * 1024;
 pub const STORAGE_QUOTA_MESSAGE: &str = "API key storage quota exceeded.";
 
@@ -153,8 +150,6 @@ pub async fn cli_upload(
         }
     }
 
-    // Daily standard-upload quota (1TB signed-in / 10GB guest, KST). Excludes API-key uploads,
-    // which have their own per-key storage quota.
     let daily_identity = crate::utils::quota_identity(
         token_user.as_ref().map(|u| u.user_id.as_str()),
         &headers,
@@ -485,7 +480,6 @@ pub async fn cli_multipart_init(
         }
     }
 
-    // Daily standard-upload quota (1TB signed-in / 10GB guest, KST), excluding API-key uploads.
     if api_key_id.is_none() {
         crate::utils::enforce_daily_quota(
             &state.db,

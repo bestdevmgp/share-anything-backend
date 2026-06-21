@@ -263,8 +263,7 @@ pub async fn complete_presigned_upload(
             internal_error("Failed to complete upload session")
         })?;
 
-    // Count this finished standard upload toward the uploader's daily quota,
-    // after the session is marked completed so a retry cannot double-count.
+    // Record after completion so a retry can't double-count.
     crate::utils::record_daily_usage(
         &state.db,
         session.user_id.as_deref(),
@@ -630,8 +629,7 @@ pub async fn complete_multipart_upload(
             internal_error("Failed to complete upload session")
         })?;
 
-    // Count this finished standard upload toward the uploader's daily quota,
-    // after the session is marked completed so a retry cannot double-count.
+    // Record after completion so a retry can't double-count.
     crate::utils::record_daily_usage(
         &state.db,
         session.user_id.as_deref(),
