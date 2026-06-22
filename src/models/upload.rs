@@ -18,6 +18,8 @@ pub struct P2PFileInfo {
     pub size: i64,
     #[serde(rename = "type")]
     pub content_type: String,
+    #[serde(default)]
+    pub relative_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

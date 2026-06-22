@@ -369,7 +369,7 @@ pub async fn create_p2p_session(
             None,
             idx as i32,
             None,
-            None,
+            crate::utils::normalize_relative_path(file_info.relative_path.as_deref()),
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;

@@ -423,7 +423,7 @@ pub async fn cli_p2p_create(
             None,
             idx as i32,
             None,
-            None,
+            crate::utils::normalize_relative_path(file_info.relative_path.as_deref()),
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
