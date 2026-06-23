@@ -538,6 +538,8 @@ pub async fn delete_all_user_file_shares(
         q.execute(pool).await?;
     }
 
+    delete_empty_folders_by_codes(pool, &share_codes).await?;
+
     Ok(storage_keys)
 }
 
@@ -608,6 +610,8 @@ pub async fn delete_expired_file_shares(
         }
         q.execute(pool).await?;
     }
+
+    delete_empty_folders_by_codes(pool, &share_codes).await?;
 
     Ok(storage_keys)
 }
@@ -721,6 +725,63 @@ pub async fn release_share_code(pool: &MySqlPool, code: &str) -> Result<(), sqlx
         .bind(code)
         .execute(pool)
         .await?;
+    delete_empty_folders_by_code(pool, code).await?;
+    Ok(())
+}
+
+pub async fn create_empty_folders(
+    pool: &MySqlPool,
+    share_code: &str,
+    paths: &[String],
+) -> Result<(), sqlx::Error> {
+    for path in paths {
+        sqlx::query("INSERT IGNORE INTO empty_folders (share_code, relative_path) VALUES (?, ?)")
+            .bind(share_code)
+            .bind(path)
+            .execute(pool)
+            .await?;
+    }
+    Ok(())
+}
+
+pub async fn find_empty_folders_by_code(
+    pool: &MySqlPool,
+    share_code: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT relative_path FROM empty_folders WHERE share_code = ? ORDER BY relative_path ASC",
+    )
+    .bind(share_code)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.0).collect())
+}
+
+pub async fn delete_empty_folders_by_code(
+    pool: &MySqlPool,
+    share_code: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM empty_folders WHERE share_code = ?")
+        .bind(share_code)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+async fn delete_empty_folders_by_codes(
+    pool: &MySqlPool,
+    codes: &[String],
+) -> Result<(), sqlx::Error> {
+    if codes.is_empty() {
+        return Ok(());
+    }
+    let placeholders = vec!["?"; codes.len()].join(", ");
+    let sql = format!("DELETE FROM empty_folders WHERE share_code IN ({})", placeholders);
+    let mut q = sqlx::query(&sql);
+    for code in codes {
+        q = q.bind(code);
+    }
+    q.execute(pool).await?;
     Ok(())
 }
 

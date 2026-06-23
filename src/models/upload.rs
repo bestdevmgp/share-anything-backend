@@ -26,4 +26,6 @@ pub struct P2PFileInfo {
 pub struct CreateP2PSessionRequest {
     pub files: Vec<P2PFileInfo>,
     pub password: Option<String>,
+    #[serde(default)]
+    pub empty_folders: Vec<String>,
 }

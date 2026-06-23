@@ -142,6 +142,7 @@ pub struct FileListResponse {
     pub expires_at: DateTime<Utc>,
     pub uploader_name: Option<String>,
     pub uploader_online: Option<bool>,
+    pub empty_folders: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -301,6 +302,8 @@ pub struct CompleteMultipartUploadRequest {
     pub upload_session_id: String,
     pub share_code: String,
     pub files: Vec<CompleteMultipartFileInfo>,
+    #[serde(default)]
+    pub empty_folders: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

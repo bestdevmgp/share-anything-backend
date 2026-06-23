@@ -393,6 +393,13 @@ pub async fn create_p2p_session(
         });
     }
 
+    let empty_folders = crate::utils::normalize_empty_folders(&request.empty_folders);
+    if !empty_folders.is_empty() {
+        repository::create_empty_folders(&state.db, &share_code, &empty_folders)
+            .await
+            .map_err(|e| internal_error(format!("Failed to save empty folders: {}", e)))?;
+    }
+
     let download_url = format!(
         "{}/download?code={}",
         state.config.server.base_url, share_code

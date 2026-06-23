@@ -52,6 +52,24 @@ pub fn normalize_relative_path(raw: Option<&str>) -> Option<String> {
     }
 }
 
+pub const MAX_EMPTY_FOLDERS: usize = 1024;
+
+pub fn normalize_empty_folders(paths: &[String]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for raw in paths {
+        if let Some(path) = normalize_relative_path(Some(raw)) {
+            if seen.insert(path.clone()) {
+                out.push(path);
+                if out.len() >= MAX_EMPTY_FOLDERS {
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn encode_content_disposition(disposition_type: &str, filename: &str) -> String {
     if filename.is_ascii() {
         format!("{}; filename=\"{}\"", disposition_type, filename)
@@ -120,6 +138,26 @@ mod tests {
             normalize_relative_path(Some("\\a\\b")),
             Some("a/b".to_string())
         );
+    }
+
+    #[test]
+    fn test_normalize_empty_folders() {
+        let input = vec![
+            "project/logs".to_string(),
+            "project/logs".to_string(),
+            "".to_string(),
+            "../escape".to_string(),
+            "docs\\drafts".to_string(),
+        ];
+        assert_eq!(
+            normalize_empty_folders(&input),
+            vec!["project/logs".to_string(), "docs/drafts".to_string()]
+        );
+
+        let many: Vec<String> = (0..(MAX_EMPTY_FOLDERS + 50))
+            .map(|i| format!("dir{}", i))
+            .collect();
+        assert_eq!(normalize_empty_folders(&many).len(), MAX_EMPTY_FOLDERS);
     }
 
     #[test]

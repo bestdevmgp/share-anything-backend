@@ -629,6 +629,16 @@ pub async fn complete_multipart_upload(
             internal_error("Failed to complete upload session")
         })?;
 
+    let empty_folders = crate::utils::normalize_empty_folders(&request.empty_folders);
+    if !empty_folders.is_empty() {
+        repository::create_empty_folders(&state.db, &session.share_code, &empty_folders)
+            .await
+            .map_err(|e| {
+                error!(error = %e, "Failed to save empty folders");
+                internal_error(format!("Failed to save empty folders: {}", e))
+            })?;
+    }
+
     // Record after completion so a retry can't double-count.
     crate::utils::record_daily_usage(
         &state.db,

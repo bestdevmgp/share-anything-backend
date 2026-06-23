@@ -50,6 +50,8 @@ pub struct CliFileListResponse {
     /// `p2p` (use the WebRTC signaling flow at `GET /v1/ws/signaling`).
     #[schema(example = "server")]
     pub transfer_type: String,
+    #[schema(example = json!(["project/logs"]))]
+    pub empty_folders: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -66,6 +68,8 @@ pub struct CliP2PFileInfo {
 pub struct CliP2PCreateRequest {
     pub files: Vec<CliP2PFileInfo>,
     pub password: Option<String>,
+    #[serde(default)]
+    pub empty_folders: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

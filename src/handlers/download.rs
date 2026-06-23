@@ -165,6 +165,10 @@ pub async fn get_file_list(
         })
         .collect();
 
+    let empty_folders = repository::find_empty_folders_by_code(&state.db, &query.code)
+        .await
+        .unwrap_or_default();
+
     let uploader_online = if transfer_type == "p2p" {
         match state.signaling.find_uploader(&query.code) {
             Some(uploader_peer_id) => {
@@ -200,6 +204,7 @@ pub async fn get_file_list(
         expires_at,
         uploader_name,
         uploader_online,
+        empty_folders,
     }))
 }
 

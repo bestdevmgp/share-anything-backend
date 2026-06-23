@@ -431,6 +431,13 @@ pub async fn cli_p2p_create(
         file_names.push(file_share.file_name);
     }
 
+    let empty_folders = crate::utils::normalize_empty_folders(&request.empty_folders);
+    if !empty_folders.is_empty() {
+        repository::create_empty_folders(&state.db, &share_code, &empty_folders)
+            .await
+            .map_err(|e| internal_error(format!("Failed to save empty folders: {}", e)))?;
+    }
+
     Ok(PrettyJson(CliP2PCreateResponse {
         share_code,
         files: file_names,
@@ -1149,6 +1156,10 @@ pub async fn cli_file_list(
 
     let total_count = files.len();
 
+    let empty_folders = repository::find_empty_folders_by_code(&state.db, &code)
+        .await
+        .unwrap_or_default();
+
     Ok(PrettyJson(CliFileListResponse {
         share_code: code,
         files,
@@ -1157,6 +1168,7 @@ pub async fn cli_file_list(
         is_one_time: first.is_one_time,
         expires_at: format_expires_at(first.expires_at),
         transfer_type: first.transfer_type.clone(),
+        empty_folders,
     }))
 }
 
