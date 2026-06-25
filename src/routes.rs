@@ -463,9 +463,11 @@ pub fn create_router(
     let health_checks_route = Router::new()
         .route("/health/db", get(handlers::health::health_db))
         .route("/health/r2", get(handlers::health::health_r2))
+        .route("/health/turn", get(handlers::health::health_turn))
         .with_state(handlers::health::HealthState {
             db: db.clone(),
             storage: storage.clone(),
+            config: config.clone(),
         });
 
     let swagger_ui = SwaggerUi::new("/swagger-ui")

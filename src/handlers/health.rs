@@ -18,8 +18,10 @@ use axum::{
     Json,
 };
 use serde_json::json;
+use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::Config;
 use crate::db::DbPool;
 use crate::services::StorageService;
 
@@ -31,6 +33,7 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 pub struct HealthState {
     pub db: DbPool,
     pub storage: StorageService,
+    pub config: Arc<Config>,
 }
 
 fn ok() -> Response {
@@ -74,6 +77,42 @@ pub async fn health_r2(State(state): State<HealthState>) -> Response {
         Ok(false) => unavailable(),
         Err(_) => {
             tracing::warn!("R2 health check timed out after {:?}", PROBE_TIMEOUT);
+            unavailable()
+        }
+    }
+}
+
+/// `GET /health/turn` — P2P transfer dependency: verifies the backend can mint TURN
+/// credentials from Cloudflare's RTC API (a successful `generate-ice-servers` call
+/// proves reachability + a valid Turn key/token). No credentials are returned to the
+/// caller — the body is a minimal `{status}`. P2P/secure transfer can't connect peers
+/// without this; standard uploads are unaffected.
+pub async fn health_turn(State(state): State<HealthState>) -> Response {
+    let url = format!(
+        "https://rtc.live.cloudflare.com/v1/turn/keys/{}/credentials/generate-ice-servers",
+        state.config.cloudflare_turn.key_id
+    );
+    let req = reqwest::Client::new()
+        .post(&url)
+        .header(
+            "Authorization",
+            format!("Bearer {}", state.config.cloudflare_turn.api_token),
+        )
+        .json(&json!({ "ttl": 600 }))
+        .send();
+
+    match tokio::time::timeout(PROBE_TIMEOUT, req).await {
+        Ok(Ok(resp)) if resp.status().is_success() => ok(),
+        Ok(Ok(resp)) => {
+            tracing::warn!("TURN health check: Cloudflare RTC returned {}", resp.status());
+            unavailable()
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("TURN health check request failed: {}", e);
+            unavailable()
+        }
+        Err(_) => {
+            tracing::warn!("TURN health check timed out after {:?}", PROBE_TIMEOUT);
             unavailable()
         }
     }
