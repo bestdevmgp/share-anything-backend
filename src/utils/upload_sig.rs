@@ -33,8 +33,6 @@ pub fn sign_storage_key(secret: &str, storage_key: &str) -> String {
 mod tests {
     use super::hmac_hex;
 
-    // Cross-language vector: must equal Node `crypto.createHmac` / WebCrypto /
-    // openssl for the same (secret, message). Guards the Worker<->backend match.
     #[test]
     fn hmac_matches_known_vector() {
         assert_eq!(

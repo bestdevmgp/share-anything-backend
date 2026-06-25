@@ -85,10 +85,6 @@ pub fn router(
         .route("/v1/openapi.json", get(docs::openapi_json))
         .route("/reference", get(docs::scalar_html));
 
-    // Public-API-surface health probe. Mounted OUTSIDE the v1_auth layer so it
-    // confirms the /v1 router serves unauthenticated requests. Static (no DB/R2
-    // I/O) so it can't false-positive the API-surface check on a dependency blip —
-    // /health/db and /health/r2 cover those.
     let public_router = Router::new().route(
         "/v1/health",
         get(|| async { axum::Json(serde_json::json!({ "status": "healthy" })) }),

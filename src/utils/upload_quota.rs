@@ -4,9 +4,8 @@ use chrono::{FixedOffset, NaiveDate, Utc};
 use crate::db::{repository, DbPool};
 use crate::models::error::{daily_quota_exceeded, AppError};
 
-// Sole gate for standard uploads (web + CLI); P2P and OpenAPI are exempt.
-pub const DAILY_LIMIT_AUTHED: i64 = 1024 * 1024 * 1024 * 1024; // 1 TB
-pub const DAILY_LIMIT_GUEST: i64 = 10 * 1024 * 1024 * 1024; // 10 GB
+pub const DAILY_LIMIT_AUTHED: i64 = 1024 * 1024 * 1024 * 1024;
+pub const DAILY_LIMIT_GUEST: i64 = 10 * 1024 * 1024 * 1024;
 
 pub fn daily_limit_for(user_id: Option<&str>) -> i64 {
     if user_id.is_some() {
@@ -62,7 +61,6 @@ pub async fn enforce_daily_quota(
     Ok(())
 }
 
-// Best-effort: a bookkeeping failure must not fail an already-finished upload.
 pub async fn record_daily_usage(
     db: &DbPool,
     user_id: Option<&str>,

@@ -152,11 +152,6 @@ pub async fn get_file_list(
     let transfer_type = first_file.transfer_type.clone();
     let expires_at = first_file.expires_at;
 
-    // Embed a short-lived presigned INLINE URL per file so the client can preview
-    // instantly without a per-click /download/url round-trip. Skip it for
-    // password-protected files (a presigned URL would bypass the password check) and
-    // p2p shares (files aren't in object storage); the client then falls back to the
-    // password-validated /download/url path for those.
     let is_p2p = transfer_type == "p2p";
     let mut files: Vec<FileInfoInGroup> = Vec::with_capacity(rows.len());
     for (f, _) in rows.iter() {

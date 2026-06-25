@@ -69,7 +69,6 @@ pub struct CliState {
 }
 
 const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
-// API-key (OpenAPI) cap: total size of all unexpired shares per key.
 pub const API_KEY_ACTIVE_STORAGE_LIMIT: i64 = 500 * 1024 * 1024 * 1024;
 pub const STORAGE_QUOTA_MESSAGE: &str = "API key storage quota exceeded.";
 
@@ -755,8 +754,6 @@ pub async fn cli_complete_multipart(
         .await
         .map_err(|_| internal_error("Failed to complete upload session"))?;
 
-    // Count this finished standard upload toward the uploader's daily quota
-    // (excludes API-key uploads). The completed-guard above limits it to once.
     if api_key_id.is_none() {
         crate::utils::record_daily_usage(
             &state.db,

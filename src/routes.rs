@@ -314,10 +314,6 @@ pub fn create_router(
         ))
         .with_state(turn_state.clone());
 
-    // CLI-specific TURN + signaling. Unlike the web's session-token-gated
-    // `/turn/credentials` and `/ws/signaling`, these accept anonymous callers
-    // so a not-logged-in CLI user can receive a secure (P2P) share. They share
-    // the same `signaling_state`, so peers still match across endpoints.
     let cli_turn_routes = Router::new()
         .route("/cli/turn/credentials", get(handlers::turn::get_turn_credentials))
         .layer(middleware::from_fn_with_state(
@@ -464,8 +460,6 @@ pub fn create_router(
 
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
-    // Dependency-specific probes, kept separate from the dependency-free /health
-    // above. Unauthenticated + cheap; "down" returns a manual 503 (see handler).
     let health_checks_route = Router::new()
         .route("/health/db", get(handlers::health::health_db))
         .route("/health/r2", get(handlers::health::health_r2))

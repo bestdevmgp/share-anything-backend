@@ -66,7 +66,6 @@ pub async fn get_upload_history(
     .await?;
     rows.extend(qa_rows);
 
-    // Mirrors DOWNLOAD_URL_EXPIRY_SECS in handlers/download.rs (kept local to avoid coupling).
     const PREVIEW_URL_EXPIRY_SECS: u64 = 3600;
     let mut items: Vec<FileShareWithStats> = Vec::with_capacity(rows.len());
     for (file_share, download_count) in rows.into_iter() {
@@ -76,9 +75,6 @@ pub async fn get_upload_history(
         );
         let qr_code = generate_qr_code(&download_url).ok();
 
-        // Inline preview URL so the upload-history page can preview without a per-click
-        // /download/url round-trip. Skipped (empty) for password-protected files (a presigned
-        // URL would bypass the password check) and p2p shares (no object storage).
         let preview_url = if file_share.transfer_type == "p2p" || file_share.password_hash.is_some() {
             String::new()
         } else {

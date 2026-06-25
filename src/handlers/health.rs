@@ -71,7 +71,6 @@ pub async fn health_db(State(state): State<HealthState>) -> Response {
 pub async fn health_r2(State(state): State<HealthState>) -> Response {
     match tokio::time::timeout(PROBE_TIMEOUT, state.storage.health_check()).await {
         Ok(true) => ok(),
-        // `health_check` already logged the underlying SdkError server-side.
         Ok(false) => unavailable(),
         Err(_) => {
             tracing::warn!("R2 health check timed out after {:?}", PROBE_TIMEOUT);
