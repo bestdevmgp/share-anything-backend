@@ -17,3 +17,4 @@ pub mod cli_auth;
 pub mod sessions;
 pub mod device_confirm;
 pub mod session_token;
+pub mod health;

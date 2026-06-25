@@ -223,6 +223,35 @@ impl StorageService {
             .is_ok()
     }
 
+    /// Cheap R2/S3 connectivity probe for uptime monitoring. Issues a `HeadObject`
+    /// on a reserved, non-existent key: a `404 NotFound` response proves R2 is
+    /// reachable AND the credentials are valid (the key is simply absent), while an
+    /// auth (403) or network error means unhealthy. No object enumeration, no data
+    /// transfer. `HeadObject` is used on purpose (not `HeadBucket`): it is already
+    /// exercised by `key_exists`, so it is known to be within the app's object-scoped
+    /// R2 token permissions, whereas a bucket-level op could be forbidden. The
+    /// underlying error is logged server-side and never surfaced in the public body.
+    pub async fn health_check(&self) -> bool {
+        match self
+            .client
+            .head_object()
+            .bucket(&self.bucket_name)
+            .key(".health-probe")
+            .send()
+            .await
+        {
+            Ok(_) => true,
+            Err(err) => {
+                if err.as_service_error().map(|e| e.is_not_found()).unwrap_or(false) {
+                    true
+                } else {
+                    tracing::warn!("R2 health check (head_object) failed: {}", err);
+                    false
+                }
+            }
+        }
+    }
+
     pub async fn create_multipart_upload(
         &self,
         key: &str,

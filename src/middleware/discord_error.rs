@@ -12,7 +12,12 @@ pub async fn discord_error_middleware(request: Request, next: Next) -> Response 
 
     let response = next.run(request).await;
 
-    if response.status().is_server_error() {
+    // Health probes are polled frequently by uptime monitors; a real DB/R2 outage
+    // would otherwise post one Discord alert per poll. The monitor itself is the
+    // alert channel for these, so skip Discord notification for /health* paths.
+    let is_health = uri == "/health" || uri.starts_with("/health/") || uri == "/v1/health";
+
+    if !is_health && response.status().is_server_error() {
         if let Some(discord) = discord {
             let status = response.status().to_string();
 

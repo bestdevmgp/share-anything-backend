@@ -464,11 +464,22 @@ pub fn create_router(
 
     let health_route = Router::new().route("/health", get(|| async { "OK" }));
 
+    // Dependency-specific probes, kept separate from the dependency-free /health
+    // above. Unauthenticated + cheap; "down" returns a manual 503 (see handler).
+    let health_checks_route = Router::new()
+        .route("/health/db", get(handlers::health::health_db))
+        .route("/health/r2", get(handlers::health::health_r2))
+        .with_state(handlers::health::HealthState {
+            db: db.clone(),
+            storage: storage.clone(),
+        });
+
     let swagger_ui = SwaggerUi::new("/swagger-ui")
         .url("/api-docs/openapi.json", ApiDoc::openapi());
 
     Router::new()
         .merge(health_route)
+        .merge(health_checks_route)
         .merge(install_route)
         .merge(swagger_ui)
         .merge(auth_routes)
