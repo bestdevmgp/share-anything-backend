@@ -120,6 +120,11 @@ pub struct FileShareWithStats {
     #[serde(flatten)]
     pub file_share: FileShareResponse,
     pub download_count: i64,
+    /// Short-lived presigned INLINE preview URL so the upload-history page can preview
+    /// without a per-click /download/url round-trip. Empty (omitted) for password-protected
+    /// or p2p shares — the client falls back to the /download/url path.
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub preview_url: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

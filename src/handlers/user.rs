@@ -66,37 +66,51 @@ pub async fn get_upload_history(
     .await?;
     rows.extend(qa_rows);
 
-    let mut items: Vec<FileShareWithStats> = rows
-        .into_iter()
-        .map(|(file_share, download_count)| {
-            let download_url = format!(
-                "{}/download?code={}",
-                state.config.server.base_url, file_share.share_code
-            );
-            let qr_code = generate_qr_code(&download_url).ok();
+    // Mirrors DOWNLOAD_URL_EXPIRY_SECS in handlers/download.rs (kept local to avoid coupling).
+    const PREVIEW_URL_EXPIRY_SECS: u64 = 3600;
+    let mut items: Vec<FileShareWithStats> = Vec::with_capacity(rows.len());
+    for (file_share, download_count) in rows.into_iter() {
+        let download_url = format!(
+            "{}/download?code={}",
+            state.config.server.base_url, file_share.share_code
+        );
+        let qr_code = generate_qr_code(&download_url).ok();
 
-            FileShareWithStats {
-                file_share: FileShareResponse {
-                    id: file_share.id,
-                    share_code: file_share.share_code,
-                    file_name: file_share.file_name,
-                    file_size: file_share.file_size,
-                    file_type: file_share.file_type,
-                    transfer_type: file_share.transfer_type,
-                    description: file_share.description,
-                    relative_path: file_share.relative_path,
-                    has_password: file_share.password_hash.is_some(),
-                    is_one_time: file_share.is_one_time,
-                    expires_at: file_share.expires_at,
-                    created_at: file_share.created_at,
-                    download_url,
-                    qr_code,
-                    uploader_online: None,
-                },
-                download_count,
-            }
-        })
-        .collect();
+        // Inline preview URL so the upload-history page can preview without a per-click
+        // /download/url round-trip. Skipped (empty) for password-protected files (a presigned
+        // URL would bypass the password check) and p2p shares (no object storage).
+        let preview_url = if file_share.transfer_type == "p2p" || file_share.password_hash.is_some() {
+            String::new()
+        } else {
+            state
+                .storage
+                .generate_presigned_get_url(&file_share.storage_key, PREVIEW_URL_EXPIRY_SECS, None)
+                .await
+                .unwrap_or_default()
+        };
+
+        items.push(FileShareWithStats {
+            file_share: FileShareResponse {
+                id: file_share.id,
+                share_code: file_share.share_code,
+                file_name: file_share.file_name,
+                file_size: file_share.file_size,
+                file_type: file_share.file_type,
+                transfer_type: file_share.transfer_type,
+                description: file_share.description,
+                relative_path: file_share.relative_path,
+                has_password: file_share.password_hash.is_some(),
+                is_one_time: file_share.is_one_time,
+                expires_at: file_share.expires_at,
+                created_at: file_share.created_at,
+                download_url,
+                qr_code,
+                uploader_online: None,
+            },
+            download_count,
+            preview_url,
+        });
+    }
 
     items.sort_by(|a, b| b.file_share.created_at.cmp(&a.file_share.created_at));
 
