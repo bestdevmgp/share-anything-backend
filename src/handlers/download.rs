@@ -152,9 +152,24 @@ pub async fn get_file_list(
     let transfer_type = first_file.transfer_type.clone();
     let expires_at = first_file.expires_at;
 
-    let files: Vec<FileInfoInGroup> = rows
-        .iter()
-        .map(|(f, _)| FileInfoInGroup {
+    // Embed a short-lived presigned INLINE URL per file so the client can preview
+    // instantly without a per-click /download/url round-trip. Skip it for
+    // password-protected files (a presigned URL would bypass the password check) and
+    // p2p shares (files aren't in object storage); the client then falls back to the
+    // password-validated /download/url path for those.
+    let is_p2p = transfer_type == "p2p";
+    let mut files: Vec<FileInfoInGroup> = Vec::with_capacity(rows.len());
+    for (f, _) in rows.iter() {
+        let preview_url = if is_p2p || f.password_hash.is_some() {
+            String::new()
+        } else {
+            state
+                .storage
+                .generate_presigned_get_url(&f.storage_key, DOWNLOAD_URL_EXPIRY_SECS, None)
+                .await
+                .unwrap_or_default()
+        };
+        files.push(FileInfoInGroup {
             id: f.id.clone(),
             file_name: f.file_name.clone(),
             file_size: f.file_size,
@@ -162,8 +177,9 @@ pub async fn get_file_list(
             image_width: f.image_width,
             image_height: f.image_height,
             relative_path: f.relative_path.clone().unwrap_or_default(),
-        })
-        .collect();
+            preview_url,
+        });
+    }
 
     let empty_folders = repository::find_empty_folders_by_code(&state.db, &query.code)
         .await

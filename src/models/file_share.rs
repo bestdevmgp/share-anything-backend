@@ -156,6 +156,12 @@ pub struct FileInfoInGroup {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_height: Option<i32>,
     pub relative_path: String,
+    /// Short-lived presigned INLINE URL so the client can preview the file instantly
+    /// without a per-click /download/url round-trip. Empty (and omitted) for
+    /// password-protected or p2p shares — the client then falls back to the
+    /// password-validated /download/url path.
+    #[serde(skip_serializing_if = "String::is_empty", default)]
+    pub preview_url: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
