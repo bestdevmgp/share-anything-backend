@@ -120,7 +120,7 @@ pub async fn google_callback_handler(
     let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
-        Json(state.auth.build_response(outcome, jwt)),
+        Json(state.auth.build_response(outcome)),
     ))
 }
 
@@ -219,7 +219,7 @@ pub async fn naver_callback_handler(
     let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
-        Json(state.auth.build_response(outcome, jwt)),
+        Json(state.auth.build_response(outcome)),
     ))
 }
 
@@ -319,7 +319,7 @@ pub async fn kakao_callback_handler(
     let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
-        Json(state.auth.build_response(outcome, jwt)),
+        Json(state.auth.build_response(outcome)),
     ))
 }
 
@@ -429,7 +429,7 @@ pub async fn apple_callback_handler(
     let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
-        Json(state.auth.build_response(outcome, jwt)),
+        Json(state.auth.build_response(outcome)),
     ))
 }
 
@@ -478,11 +478,9 @@ fn is_valid_email(email: &str) -> bool {
 
 fn build_email_auth_data(
     user: &crate::models::User,
-    jwt: String,
     existing_provider: Option<String>,
 ) -> EmailAuthData {
     EmailAuthData {
-        token: jwt,
         user: EmailAuthUser {
             id: user.id.clone(),
             email: user.email.clone(),
@@ -608,7 +606,7 @@ pub async fn email_verify(
             [(axum::http::header::SET_COOKIE, cookie)],
             Json(EmailVerifyResponse {
                 same_device: true,
-                auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
+                auth: Some(build_email_auth_data(&outcome.user, existing_provider)),
                 verification_code: None,
             }),
         )
@@ -673,7 +671,6 @@ pub async fn email_verify_code(
     Ok((
         [(axum::http::header::SET_COOKIE, cookie)],
         Json(EmailVerifyCodeResponse {
-            token: jwt,
             user: EmailAuthUser {
                 id: outcome.user.id,
                 email: outcome.user.email,
@@ -726,7 +723,7 @@ pub async fn email_status(
             [(axum::http::header::SET_COOKIE, cookie)],
             Json(EmailStatusResponse {
                 status: "completed".to_string(),
-                auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
+                auth: Some(build_email_auth_data(&outcome.user, existing_provider)),
             }),
         )
             .into_response())
@@ -742,14 +739,17 @@ pub async fn email_status(
 #[derive(serde::Serialize)]
 pub struct MeResponse {
     pub user: Option<crate::models::auth::UserResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 pub async fn get_me(
     State(state): State<AppState>,
+    headers: HeaderMap,
     claims: Option<axum::Extension<crate::middleware::auth::Claims>>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let user = match claims {
-        Some(axum::Extension(c)) => repository::find_user_by_id(&state.db, &c.sub)
+    if let Some(axum::Extension(c)) = claims {
+        let user = repository::find_user_by_id(&state.db, &c.sub)
             .await?
             .map(|u| crate::models::auth::UserResponse {
                 id: u.id,
@@ -757,10 +757,17 @@ pub async fn get_me(
                 name: u.name,
                 profile_image: u.profile_image,
                 oauth_provider: u.oauth_provider.to_string(),
-            }),
+            });
+        return Ok(Json(MeResponse { user, reason: None }));
+    }
+    let reason = match crate::middleware::auth::extract_jwt(&headers) {
         None => None,
+        Some(token) => match crate::middleware::auth::verify_jwt(&token, &state.config.jwt.secret) {
+            Ok(_) => Some("revoked".to_string()),
+            Err(_) => Some("expired".to_string()),
+        },
     };
-    Ok(Json(MeResponse { user }))
+    Ok(Json(MeResponse { user: None, reason }))
 }
 
 pub async fn logout(

@@ -75,7 +75,6 @@ pub struct EmailVerifyResponse {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct EmailVerifyCodeResponse {
-    pub token: String,
     pub user: EmailAuthUser,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub existing_provider: Option<String>,
@@ -83,7 +82,6 @@ pub struct EmailVerifyCodeResponse {
 
 #[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct EmailAuthData {
-    pub token: String,
     pub user: EmailAuthUser,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub existing_provider: Option<String>,

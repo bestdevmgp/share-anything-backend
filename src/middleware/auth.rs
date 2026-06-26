@@ -17,7 +17,7 @@ use crate::{
     models::AppError,
 };
 
-fn extract_jwt(headers: &HeaderMap) -> Option<String> {
+pub fn extract_jwt(headers: &HeaderMap) -> Option<String> {
     if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {

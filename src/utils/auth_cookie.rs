@@ -1,6 +1,6 @@
 use axum::http::{header, HeaderMap};
 
-pub const AUTH_COOKIE: &str = "auth_token";
+pub const AUTH_COOKIE: &str = "__Host-auth_token";
 
 pub fn build_auth_cookie(jwt: &str, max_age_secs: i64) -> String {
     format!(
@@ -21,6 +21,7 @@ pub fn read_auth_cookie(headers: &HeaderMap) -> Option<String> {
     let prefix = format!("{}=", AUTH_COOKIE);
     for part in cookie_header.split(';') {
         if let Some(value) = part.trim().strip_prefix(&prefix) {
+            let value = value.trim_matches('"');
             if !value.is_empty() {
                 return Some(value.to_string());
             }

@@ -299,9 +299,8 @@ impl AuthService {
         );
     }
 
-    pub fn build_response(&self, outcome: AuthOutcome, jwt: String) -> AuthResponse {
+    pub fn build_response(&self, outcome: AuthOutcome) -> AuthResponse {
         AuthResponse {
-            token: jwt,
             user: UserResponse {
                 id: outcome.user.id,
                 email: outcome.user.email,

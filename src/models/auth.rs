@@ -42,7 +42,6 @@ pub struct AppleCallbackHandlerQuery {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthResponse {
-    pub token: String,
     pub user: UserResponse,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reactivated: Option<bool>,
