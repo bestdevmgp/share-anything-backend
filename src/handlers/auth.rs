@@ -20,7 +20,7 @@ use crate::{
             EmailVerifyRequest, EmailVerifyResponse,
         },
         OAuthLoginQuery, GoogleCallbackQuery, NaverCallbackQuery, KakaoCallbackQuery,
-        AppleCallbackForm, AppleCallbackHandlerQuery, AuthResponse,
+        AppleCallbackForm, AppleCallbackHandlerQuery,
     },
     services::auth::AuthService,
     services::email::EmailService,
@@ -111,13 +111,17 @@ pub async fn google_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<GoogleCallbackQuery>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::google::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
-    Ok(Json(state.auth.build_response(outcome, jwt)))
+    let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(state.auth.build_response(outcome, jwt)),
+    ))
 }
 
 fn create_google_oauth_client(config: &Config) -> BasicClient {
@@ -206,13 +210,17 @@ pub async fn naver_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<NaverCallbackQuery>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::naver::fetch_user_info(&state.config, &query.code, &query.state).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
-    Ok(Json(state.auth.build_response(outcome, jwt)))
+    let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(state.auth.build_response(outcome, jwt)),
+    ))
 }
 
 fn create_naver_oauth_client(config: &Config) -> BasicClient {
@@ -302,13 +310,17 @@ pub async fn kakao_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<KakaoCallbackQuery>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::kakao::fetch_user_info(&state.config, &query.code).await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
-    Ok(Json(state.auth.build_response(outcome, jwt)))
+    let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(state.auth.build_response(outcome, jwt)),
+    ))
 }
 
 fn create_kakao_oauth_client(config: &Config) -> BasicClient {
@@ -403,7 +415,7 @@ pub async fn apple_callback_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<AppleCallbackHandlerQuery>,
-) -> Result<Json<AuthResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
     let info = oauth::apple::fetch_user_info(
@@ -414,7 +426,11 @@ pub async fn apple_callback_handler(
     .await?;
     let outcome = state.auth.upsert_oauth_user(info, &client_ip, &welcome_lang).await?;
     let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
-    Ok(Json(state.auth.build_response(outcome, jwt)))
+    let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(state.auth.build_response(outcome, jwt)),
+    ))
 }
 
 fn create_apple_oauth_client(config: &Config) -> BasicClient {
@@ -557,7 +573,7 @@ pub async fn email_verify(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<EmailVerifyRequest>,
-) -> Result<Json<EmailVerifyResponse>, AppError> {
+) -> Result<axum::response::Response, AppError> {
     let session = repository::find_email_auth_session_by_token(&state.db, &body.token)
         .await
         .map_err(|e| {
@@ -587,11 +603,16 @@ pub async fn email_verify(
             .await?;
         let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
 
-        Ok(Json(EmailVerifyResponse {
-            same_device: true,
-            auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
-            verification_code: None,
-        }))
+        let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+        Ok((
+            [(axum::http::header::SET_COOKIE, cookie)],
+            Json(EmailVerifyResponse {
+                same_device: true,
+                auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
+                verification_code: None,
+            }),
+        )
+            .into_response())
     } else {
         repository::update_email_auth_session_status(&state.db, &session.id, "verified").await?;
 
@@ -599,7 +620,8 @@ pub async fn email_verify(
             same_device: false,
             auth: None,
             verification_code: Some(session.verification_code.clone()),
-        }))
+        })
+        .into_response())
     }
 }
 
@@ -620,7 +642,7 @@ pub async fn email_verify_code(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<EmailVerifyCodeRequest>,
-) -> Result<Json<EmailVerifyCodeResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let session = repository::find_email_auth_session_by_id(&state.db, &body.session_id)
         .await
         .map_err(|e| {
@@ -647,17 +669,21 @@ pub async fn email_verify_code(
         .await?;
     let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
 
-    Ok(Json(EmailVerifyCodeResponse {
-        token: jwt,
-        user: EmailAuthUser {
-            id: outcome.user.id,
-            email: outcome.user.email,
-            name: outcome.user.name,
-            profile_image: outcome.user.profile_image,
-            oauth_provider: outcome.user.oauth_provider.to_string(),
-        },
-        existing_provider,
-    }))
+    let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+    Ok((
+        [(axum::http::header::SET_COOKIE, cookie)],
+        Json(EmailVerifyCodeResponse {
+            token: jwt,
+            user: EmailAuthUser {
+                id: outcome.user.id,
+                email: outcome.user.email,
+                name: outcome.user.name,
+                profile_image: outcome.user.profile_image,
+                oauth_provider: outcome.user.oauth_provider.to_string(),
+            },
+            existing_provider,
+        }),
+    ))
 }
 
 /// Poll the status of an email auth session.
@@ -679,7 +705,7 @@ pub async fn email_status(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(session_id): Path<String>,
-) -> Result<Json<EmailStatusResponse>, AppError> {
+) -> Result<axum::response::Response, AppError> {
     let session = repository::find_email_auth_session_by_id(&state.db, &session_id)
         .await
         .map_err(|e| {
@@ -695,14 +721,60 @@ pub async fn email_status(
             .await?;
         let jwt = state.auth.create_session_token(&outcome.user, outcome.is_new_user, &headers).await?;
 
-        Ok(Json(EmailStatusResponse {
-            status: "completed".to_string(),
-            auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
-        }))
+        let cookie = crate::utils::auth_cookie::build_auth_cookie(&jwt, state.config.jwt.expiration_hours * 3600);
+        Ok((
+            [(axum::http::header::SET_COOKIE, cookie)],
+            Json(EmailStatusResponse {
+                status: "completed".to_string(),
+                auth: Some(build_email_auth_data(&outcome.user, jwt, existing_provider)),
+            }),
+        )
+            .into_response())
     } else {
         Ok(Json(EmailStatusResponse {
             status: session.status,
             auth: None,
-        }))
+        })
+        .into_response())
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct MeResponse {
+    pub user: Option<crate::models::auth::UserResponse>,
+}
+
+pub async fn get_me(
+    State(state): State<AppState>,
+    claims: Option<axum::Extension<crate::middleware::auth::Claims>>,
+) -> Result<Json<MeResponse>, AppError> {
+    let user = match claims {
+        Some(axum::Extension(c)) => repository::find_user_by_id(&state.db, &c.sub)
+            .await?
+            .map(|u| crate::models::auth::UserResponse {
+                id: u.id,
+                email: u.email,
+                name: u.name,
+                profile_image: u.profile_image,
+                oauth_provider: u.oauth_provider.to_string(),
+            }),
+        None => None,
+    };
+    Ok(Json(MeResponse { user }))
+}
+
+pub async fn logout(
+    State(state): State<AppState>,
+    claims: Option<axum::Extension<crate::middleware::auth::Claims>>,
+) -> impl IntoResponse {
+    if let Some(axum::Extension(c)) = claims {
+        let _ = repository::delete_session(&state.db, &c.sub, &c.jti).await;
+    }
+    (
+        [(
+            axum::http::header::SET_COOKIE,
+            crate::utils::auth_cookie::clear_auth_cookie(),
+        )],
+        Json(serde_json::json!({ "ok": true })),
+    )
 }

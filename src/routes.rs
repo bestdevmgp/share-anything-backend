@@ -126,6 +126,12 @@ pub fn create_router(
             (config.clone(), db.clone()),
             crate::middleware::session_token::require_session_token,
         ))
+        .with_state(app_state.clone());
+
+    let me_routes = Router::new()
+        .route("/auth/me", get(handlers::auth::get_me))
+        .route("/auth/logout", post(handlers::auth::logout))
+        .layer(middleware::from_fn_with_state(auth_state.clone(), optional_auth))
         .with_state(app_state);
 
     let session_token_state = handlers::session_token::SessionTokenState {
@@ -484,6 +490,7 @@ pub fn create_router(
         .merge(swagger_ui)
         .merge(auth_routes)
         .merge(auth_sensitive_routes)
+        .merge(me_routes)
         .merge(session_token_routes)
         .merge(upload_routes)
         .merge(p2p_upload_routes)

@@ -1,3 +1,4 @@
+pub mod auth_cookie;
 pub mod code_generator;
 pub mod filename;
 pub mod request_ip;

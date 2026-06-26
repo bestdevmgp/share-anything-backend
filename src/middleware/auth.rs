@@ -1,19 +1,46 @@
 use axum::{
     extract::{Request, State},
-    http::header,
+    http::{header, HeaderMap, StatusCode},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
+    Json,
 };
 use chrono::Utc;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::{
     config::Config,
     db::{repository, DbPool},
-    models::{unauthorized, AppError},
+    models::AppError,
 };
+
+fn extract_jwt(headers: &HeaderMap) -> Option<String> {
+    if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return Some(token.to_string());
+            }
+        }
+    }
+    crate::utils::auth_cookie::read_auth_cookie(headers)
+}
+
+fn auth_401(code: &str, message: &str, clear_cookie: bool) -> Response {
+    let body = Json(json!({ "code": code, "message": message }));
+    if clear_cookie {
+        (
+            StatusCode::UNAUTHORIZED,
+            [(header::SET_COOKIE, crate::utils::auth_cookie::clear_auth_cookie())],
+            body,
+        )
+            .into_response()
+    } else {
+        (StatusCode::UNAUTHORIZED, body).into_response()
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -36,15 +63,11 @@ pub async fn optional_auth(
     mut request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    if let Some(auth_header) = request.headers().get(header::AUTHORIZATION) {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                if let Ok(claims) = verify_jwt(token, &state.config.jwt.secret) {
-                    if session_active(&state.db, &claims.jti).await {
-                        spawn_touch_session(&state.db, &claims.jti);
-                        request.extensions_mut().insert(claims);
-                    }
-                }
+    if let Some(token) = extract_jwt(request.headers()) {
+        if let Ok(claims) = verify_jwt(&token, &state.config.jwt.secret) {
+            if session_active(&state.db, &claims.jti).await {
+                spawn_touch_session(&state.db, &claims.jti);
+                request.extensions_mut().insert(claims);
             }
         }
     }
@@ -57,24 +80,28 @@ pub async fn require_auth(
     mut request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let auth_header = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .ok_or_else(|| unauthorized("Authentication required"))?;
+    let token = match extract_jwt(request.headers()) {
+        Some(t) => t,
+        None => return Ok(auth_401("AUTH_REQUIRED", "Authentication required", false)),
+    };
 
-    let auth_str = auth_header
-        .to_str()
-        .map_err(|_| unauthorized("Invalid authentication header"))?;
-
-    let token = auth_str
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| unauthorized("Bearer token required"))?;
-
-    let claims = verify_jwt(token, &state.config.jwt.secret)
-        .map_err(|_| unauthorized("Invalid authentication token"))?;
+    let claims = match verify_jwt(&token, &state.config.jwt.secret) {
+        Ok(c) => c,
+        Err(_) => {
+            return Ok(auth_401(
+                "AUTH_TOKEN_EXPIRED",
+                "Invalid or expired authentication token",
+                true,
+            ))
+        }
+    };
 
     if !session_active(&state.db, &claims.jti).await {
-        return Err(unauthorized("Session expired. Please sign in again."));
+        return Ok(auth_401(
+            "AUTH_SESSION_REVOKED",
+            "Session ended. Please sign in again.",
+            true,
+        ));
     }
 
     spawn_touch_session(&state.db, &claims.jti);
