@@ -82,8 +82,8 @@ impl AppError {
             | Self::PayloadTooLarge(m)
             | Self::StorageQuotaExceeded(m)
             | Self::DailyQuotaExceeded(m)
-            | Self::TooManyRequests(m)
-            | Self::Internal(m) => m.clone(),
+            | Self::TooManyRequests(m) => m.clone(),
+            Self::Internal(_) => "An internal error occurred.".to_string(),
             Self::Database(_) => "An internal database error occurred.".to_string(),
             Self::Http(_) => "An external request failed.".to_string(),
         }

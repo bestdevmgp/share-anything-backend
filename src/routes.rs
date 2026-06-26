@@ -464,6 +464,10 @@ pub fn create_router(
         .route("/health/db", get(handlers::health::health_db))
         .route("/health/r2", get(handlers::health::health_r2))
         .route("/health/turn", get(handlers::health::health_turn))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .with_state(handlers::health::HealthState {
             db: db.clone(),
             storage: storage.clone(),
