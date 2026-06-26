@@ -18,13 +18,6 @@ use crate::{
 };
 
 pub fn extract_jwt(headers: &HeaderMap) -> Option<String> {
-    if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
-        if let Ok(auth_str) = auth_header.to_str() {
-            if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                return Some(token.to_string());
-            }
-        }
-    }
     crate::utils::auth_cookie::read_auth_cookie(headers)
 }
 
