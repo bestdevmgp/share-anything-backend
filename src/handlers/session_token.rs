@@ -61,15 +61,34 @@ pub async fn exchange_session_token(
         .iter()
         .filter_map(|o| origin_to_host(o))
         .collect();
-    verify_turnstile_token(
+    let primary = verify_turnstile_token(
         &state.config.turnstile.secret_key,
         &req.turnstile_token,
-        Some(client_ip),
+        Some(client_ip.clone()),
         &allowed_hostnames,
         Some("session"),
     )
-    .await
-    .map_err(|e| {
+    .await;
+    let verified = match primary {
+        Ok(()) => Ok(()),
+        Err(primary_err) => {
+            let interactive_key = &state.config.turnstile.interactive_secret_key;
+            if interactive_key.is_empty() {
+                Err(primary_err)
+            } else {
+                verify_turnstile_token(
+                    interactive_key,
+                    &req.turnstile_token,
+                    Some(client_ip),
+                    &allowed_hostnames,
+                    Some("session"),
+                )
+                .await
+                .map_err(|fallback_err| format!("{} / {}", primary_err, fallback_err))
+            }
+        }
+    };
+    verified.map_err(|e| {
         tracing::warn!("Turnstile verification failed: {}", e);
         forbidden("Turnstile verification failed")
     })?;

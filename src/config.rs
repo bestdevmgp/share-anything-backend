@@ -94,6 +94,7 @@ pub struct CorsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct TurnstileConfig {
     pub secret_key: String,
+    pub interactive_secret_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -201,6 +202,8 @@ impl Config {
             turnstile: TurnstileConfig {
                 secret_key: env::var("TURNSTILE_SECRET_KEY")
                     .expect("TURNSTILE_SECRET_KEY must be set in environment"),
+                interactive_secret_key: env::var("TURNSTILE_INTERACTIVE_SECRET_KEY")
+                    .unwrap_or_default(),
             },
             session_token: SessionTokenConfig {
                 jwt_secret: env::var("SESSION_TOKEN_JWT_SECRET")
