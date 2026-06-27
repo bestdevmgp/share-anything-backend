@@ -39,11 +39,11 @@ fn get_welcome_translations(lang: &str) -> &'static WelcomeTranslations {
             feature_server_title: "서버 업로드",
             feature_server_desc: "파일을 업로드하고 공유 코드로 다운로드하세요. 하루 최대 1TB까지 보낼 수 있어요.",
             feature_p2p_title: "P2P 보안 전송",
-            feature_p2p_desc: "서버를 거치지 않고 상대방에게 직접 파일을 전송합니다. 용량 제한 없이 무료로 빠르게 공유해보세요. 모든 보안 전송 파일은 WebRTC DTLS로 종단간 암호화됩니다.",
+            feature_p2p_desc: "서버를 거치지 않고 상대방에게 직접 파일을 전송해요. 용량 제한 없이 무료로 빠르게 공유해보세요. 모든 보안 전송 파일은 WebRTC DTLS로 종단간 암호화돼요.",
             feature_qa_title: "Quick Access",
             feature_qa_desc: "여러 기기에서 같은 계정으로 로그인하여 파일을 빠르게 저장하고 어디서든 접근하세요.",
             cta: "ShareAnything 시작하기",
-            footer: "본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일입니다.",
+            footer: "본 메일은 ShareAnything 회원가입 시 자동으로 발송되는 메일이에요.",
         },
         "ja" => &WelcomeTranslations {
             tagline: "シンプルで安全なファイル共有サービス",
@@ -156,8 +156,8 @@ fn get_api_key_approved_translations(lang: &str) -> &'static ApiKeyApprovedTrans
         },
         _ => &ApiKeyApprovedTranslations {
             cta: "API Key 확인하기",
-            expiry_notice: "이 링크는 7일 후 만료됩니다.",
-            footer: "본 메일은 API Key 신청 승인 시 자동으로 발송되는 알림 메일입니다.",
+            expiry_notice: "이 링크는 7일 후 만료돼요.",
+            footer: "본 메일은 API Key 신청 승인 시 자동으로 발송되는 알림 메일이에요.",
         },
     }
 }
@@ -181,7 +181,7 @@ fn api_key_approved_intro(lang: &str, name: &str, service_name: &str) -> String 
             name, service_name
         ),
         _ => format!(
-            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 승인되었습니다.<br>아래 버튼을 눌러 API Key를 확인하세요.",
+            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 승인되었어요.<br>아래 버튼을 눌러 API Key를 확인하세요.",
             name, service_name
         ),
     }
@@ -193,7 +193,7 @@ fn api_key_approved_subject(lang: &str, service_name: &str) -> String {
         "ja" => format!("[ShareAnything] 「{}」の API Key 申請が承認されました。", service_name),
         "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请已批准。", service_name),
         "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請已核准。", service_name),
-        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 승인되었습니다.", service_name),
+        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 승인되었어요.", service_name),
     }
 }
 
@@ -239,7 +239,7 @@ fn get_api_key_rejected_translations(lang: &str) -> &'static ApiKeyRejectedTrans
         _ => &ApiKeyRejectedTranslations {
             reason_label: "반려 사유",
             cta: "신청 내역 확인하기",
-            footer: "본 메일은 API Key 신청 반려 시 자동으로 발송되는 알림 메일입니다.",
+            footer: "본 메일은 API Key 신청 반려 시 자동으로 발송되는 알림 메일이에요.",
         },
     }
 }
@@ -263,7 +263,7 @@ fn api_key_rejected_intro(lang: &str, name: &str, service_name: &str) -> String 
             name, service_name
         ),
         _ => format!(
-            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 반려되었습니다.<br>아래 반려 사유를 참고하여 수정 후 재신청할 수 있습니다.",
+            "{}님, 신청하신 \"<strong>{}</strong>\"에 대한 OpenAPI Key 발급 신청이 반려되었어요.<br>아래 반려 사유를 참고하여 수정 후 재신청할 수 있어요.",
             name, service_name
         ),
     }
@@ -275,7 +275,7 @@ fn api_key_rejected_subject(lang: &str, service_name: &str) -> String {
         "ja" => format!("[ShareAnything] 「{}」の API Key 申請が却下されました。", service_name),
         "zh-CN" => format!("[ShareAnything] \"{}\" 的 API Key 申请未通过。", service_name),
         "zh-TW" => format!("[ShareAnything] \"{}\" 的 API Key 申請未通過。", service_name),
-        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 반려되었습니다.", service_name),
+        _ => format!("[ShareAnything] \"{}\"에 대한 API Key 신청이 반려되었어요.", service_name),
     }
 }
 
@@ -325,9 +325,9 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
             location_label: "위치",
             time_label: "로그인 시간",
             note: "회원님이 로그인한 것이 맞나요? 로그인 하지 않았다면 아래 버튼을 눌러주세요.",
-            revoke_button: "내가 로그인 하지 않았습니다.",
-            expiry_note: "이 링크는 7일 후 만료됩니다.",
-            footer: "이 메일은 새 기기 로그인 감지 시 자동으로 발송되는 알림 메일입니다.",
+            revoke_button: "내가 로그인 하지 않았어요.",
+            expiry_note: "이 링크는 7일 후 만료돼요.",
+            footer: "이 메일은 새 기기 로그인 감지 시 자동으로 발송되는 알림 메일이에요.",
         },
         "ja" => &DeviceConfirmTranslations {
             title: "[ログイン情報]",
@@ -378,7 +378,7 @@ fn get_device_confirm_translations(lang: &str) -> &'static DeviceConfirmTranslat
 
 fn device_confirm_subject(lang: &str) -> &'static str {
     match lang {
-        "ko" => "[보안알림] 새로운 환경에서 로그인 되었습니다.",
+        "ko" => "[보안알림] 새로운 환경에서 로그인 되었어요.",
         "ja" => "[セキュリティ] 新しい環境からのログインがありました",
         "zh-CN" => "[安全提醒] 您的账号有新的登录",
         "zh-TW" => "[安全提醒] 您的帳號有新的登入",
@@ -584,14 +584,14 @@ fn get_email_translations(lang: &str) -> &'static EmailTranslations {
             upload_desc: "업로드된 파일 정보를 확인하세요.",
             upload_history_link_text: "업로드 기록 페이지",
             upload_cta: "파일 다운로드",
-            upload_footer: "본 메일은 파일 업로드 시 자동으로 발송되는 알림 메일입니다.",
+            upload_footer: "본 메일은 파일 업로드 시 자동으로 발송되는 알림 메일이에요.",
 
             download_desc: "다운로드된 파일 정보를 확인하세요.",
             download_cta: "ShareAnything 이동",
-            download_footer: "본 메일은 파일 다운로드 시 자동으로 발송되는 알림 메일입니다.",
+            download_footer: "본 메일은 파일 다운로드 시 자동으로 발송되는 알림 메일이에요.",
 
             alert_cta: "파일 확인하기",
-            alert_footer: "본 메일은 파일 다운로드 시 업로더에게 자동으로 발송되는 알림 메일입니다.",
+            alert_footer: "본 메일은 파일 다운로드 시 업로더에게 자동으로 발송되는 알림 메일이에요.",
         },
     }
 }
@@ -628,9 +628,9 @@ fn upload_title(lang: &str, count: usize) -> String {
         }
         _ => {
             if count == 1 {
-                "파일 업로드가 완료되었습니다.".to_string()
+                "파일 업로드가 완료되었어요.".to_string()
             } else {
-                format!("{}개의 파일 업로드가 완료되었습니다.", count)
+                format!("{}개의 파일 업로드가 완료되었어요.", count)
             }
         }
     }
@@ -668,9 +668,9 @@ fn upload_subject(lang: &str, file_name: &str, count: usize) -> String {
         }
         _ => {
             if count == 1 {
-                format!("\"{}\" 파일 업로드가 완료되었습니다.", file_name)
+                format!("\"{}\" 파일 업로드가 완료되었어요.", file_name)
             } else {
-                format!("{}개의 파일 업로드가 완료되었습니다.", count)
+                format!("{}개의 파일 업로드가 완료되었어요.", count)
             }
         }
     }
@@ -693,7 +693,7 @@ fn download_title(lang: &str, file_name: &str, count: usize) -> String {
             "ja" => "ファイルのダウンロードが完了しました。".to_string(),
             "zh-CN" => "文件下载完成。".to_string(),
             "zh-TW" => "檔案下載完成。".to_string(),
-            _ => "파일 다운로드가 완료되었습니다.".to_string(),
+            _ => "파일 다운로드가 완료되었어요.".to_string(),
         };
     }
     let rep = rep_phrase(lang, file_name, count - 1);
@@ -702,7 +702,7 @@ fn download_title(lang: &str, file_name: &str, count: usize) -> String {
         "ja" => format!("{}をダウンロードしました。", rep),
         "zh-CN" => format!("已下载{}。", rep),
         "zh-TW" => format!("已下載{}。", rep),
-        _ => format!("{} 다운로드가 완료되었습니다.", rep),
+        _ => format!("{} 파일 다운로드가 완료되었어요.", rep),
     }
 }
 
@@ -713,7 +713,7 @@ fn download_subject(lang: &str, file_name: &str, count: usize) -> String {
             "ja" => format!("「{}」のダウンロードが完了しました", file_name),
             "zh-CN" => format!("\"{}\" 下载完成", file_name),
             "zh-TW" => format!("\"{}\" 下載完成", file_name),
-            _ => format!("\"{}\" 파일 다운로드가 완료되었습니다.", file_name),
+            _ => format!("\"{}\" 파일 다운로드가 완료되었어요.", file_name),
         };
     }
     let rep = rep_phrase(lang, file_name, count - 1);
@@ -722,7 +722,7 @@ fn download_subject(lang: &str, file_name: &str, count: usize) -> String {
         "ja" => format!("{}のダウンロードが完了しました", rep),
         "zh-CN" => format!("{}下载完成", rep),
         "zh-TW" => format!("{}下載完成", rep),
-        _ => format!("{} 다운로드가 완료되었습니다.", rep),
+        _ => format!("{} 파일 다운로드가 완료되었어요.", rep),
     }
 }
 
@@ -733,7 +733,7 @@ fn alert_title(lang: &str, file_name: &str, count: usize) -> String {
             "ja" => "ファイルがダウンロードされました。".to_string(),
             "zh-CN" => "文件已被下载。".to_string(),
             "zh-TW" => "檔案已被下載。".to_string(),
-            _ => "파일이 다운로드되었습니다.".to_string(),
+            _ => format!("회원님이 공유한 \"{}\" 파일이 다운로드되었어요.", file_name),
         };
     }
     let rep = rep_phrase(lang, file_name, count - 1);
@@ -742,7 +742,7 @@ fn alert_title(lang: &str, file_name: &str, count: usize) -> String {
         "ja" => format!("{}がダウンロードされました。", rep),
         "zh-CN" => format!("{}已被下载。", rep),
         "zh-TW" => format!("{}已被下載。", rep),
-        _ => format!("{}가 다운로드되었습니다.", rep),
+        _ => format!("회원님이 공유한 {} 파일이 다운로드되었어요.", rep),
     }
 }
 
@@ -786,12 +786,12 @@ fn alert_subject(lang: &str, downloader_name: Option<&str>, file_name: &str, cou
         }
         _ => match downloader_name {
             Some(name) => match &rep {
-                Some(r) => format!("{}님이 {}를 다운로드하였습니다.", name, r),
-                None => format!("{}님이 \"{}\" 파일을 다운로드하였습니다.", name, file_name),
+                Some(r) => format!("{}님이 {} 파일을 다운로드했어요.", name, r),
+                None => format!("{}님이 \"{}\" 파일을 다운로드했어요.", name, file_name),
             },
             None => match &rep {
-                Some(r) => format!("익명의 사용자가 {}를 다운로드하였습니다.", r),
-                None => format!("익명의 사용자가 \"{}\" 파일을 다운로드하였습니다.", file_name),
+                Some(r) => format!("익명의 사용자가 {} 파일을 다운로드했어요.", r),
+                None => format!("익명의 사용자가 \"{}\" 파일을 다운로드했어요.", file_name),
             },
         },
     }
@@ -816,8 +816,8 @@ fn alert_desc(lang: &str, downloader_name: Option<&str>) -> String {
             None => "匿名使用者下載了您的檔案。".to_string(),
         },
         _ => match downloader_name {
-            Some(name) => format!("{}님이 회원님의 파일을 다운로드하였습니다.", name),
-            None => "익명의 사용자가 회원님의 파일을 다운로드하였습니다.".to_string(),
+            Some(name) => format!("{}님이 회원님의 파일을 다운로드했어요.", name),
+            None => "익명의 사용자가 회원님의 파일을 다운로드했어요.".to_string(),
         },
     }
 }
@@ -892,7 +892,7 @@ fn notification_disable_hint_html(lang: &str, frontend_url: &str) -> String {
         "ja" => format!("{}で通知を解除できます。", link("設定")),
         "zh-CN" => format!("您可以在{}中关闭通知。", link("设置")),
         "zh-TW" => format!("您可以在{}中關閉通知。", link("設定")),
-        _ => format!("{}에서 알림을 해제할 수 있습니다.", link("설정")),
+        _ => format!("{}에서 알림을 해제할 수 있어요.", link("설정")),
     }
 }
 
@@ -1424,7 +1424,7 @@ impl EmailService {
                 "로그인 인증",
                 "아래 버튼을 클릭하여 로그인하세요.",
                 "로그인",
-                "이 링크는 10분 후 만료됩니다. 본인이 요청하지 않았다면 이 이메일을 무시해 주세요.",
+                "이 링크는 10분 후 만료돼요. 본인이 요청하지 않았다면 이 이메일을 무시해 주세요.",
             ),
         };
 
@@ -1522,7 +1522,7 @@ impl EmailService {
             "ja" => "[ShareAnything] API Keyがまもなく期限切れになります",
             "zh-CN" => "[ShareAnything] 您的 API Key 即将过期",
             "zh-TW" => "[ShareAnything] 您的 API Key 即將過期",
-            _ => "[ShareAnything] API Key가 곧 만료됩니다",
+            _ => "[ShareAnything] API Key가 곧 만료돼요",
         };
 
         let now = chrono::Utc::now();
@@ -1673,12 +1673,12 @@ impl EmailService {
                 r#"<!DOCTYPE html><html lang="{html_lang}"><head><meta charset="UTF-8"><title>API Key 만료 예정 안내</title></head><body style="font-family:sans-serif;background:#f9fafb;padding:40px 0;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;border:1px solid #e5e7eb;">
 <p style="margin:0 0 16px;font-size:15px;color:#111827;">안녕하세요, {user_name}님.</p>
-<p style="margin:0 0 16px;font-size:15px;color:#111827;">'{service_name}' 서비스에서 사용 중인 API Key가 <strong>{days_remaining}일 후</strong>에 만료됩니다.</p>
+<p style="margin:0 0 16px;font-size:15px;color:#111827;">'{service_name}' 서비스에서 사용 중인 API Key가 <strong>{days_remaining}일 후</strong>에 만료돼요.</p>
 <p style="margin:0 0 16px;font-size:14px;color:#374151;">키 정보:<br>
 &nbsp;&nbsp;- 식별자: <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">{key_prefix}...</code><br>
 &nbsp;&nbsp;- 만료 일시: <strong>{formatted_expires_at}</strong></p>
-<p style="margin:0 0 16px;font-size:14px;color:#374151;">키가 만료되면 OpenAPI 호출이 더 이상 작동하지 않습니다. 계속 사용하시려면 새 API Key를 발급받아 주세요.</p>
-<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">설정 → API Keys</a>에서 새 키를 신청할 수 있습니다.</p>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;">키가 만료되면 OpenAPI 호출이 더 이상 작동하지 않아요. 계속 사용하시려면 새 API Key를 발급받아 주세요.</p>
+<p style="margin:0 0 24px;font-size:14px;color:#374151;"><a href="{settings_url}" style="color:#2563eb;text-decoration:underline;">설정 → API Keys</a>에서 새 키를 신청할 수 있어요.</p>
 <p style="margin:0;font-size:14px;color:#374151;">감사합니다.<br>ShareAnything 팀 드림.</p>
 <hr style="margin:32px 0;border:none;border-top:1px solid #e5e7eb;">
 <p style="margin:0;font-size:12px;color:#9ca3af;">© ShareAnything &nbsp;·&nbsp; <a href="{frontend_url}" style="color:#9ca3af;">{frontend_url}</a></p>
