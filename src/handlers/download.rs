@@ -825,6 +825,65 @@ pub async fn download_multiple_files(
     Ok(response)
 }
 
+/// Send ONE aggregated "files downloaded" notification for a multi-file download event.
+///
+/// The client fetches each presigned URL with `defer_notify=true` (so no per-file email
+/// fires) and then calls this once with the full id list, producing a single
+/// "{representative} +N" notification instead of one email per file.
+pub async fn notify_download_event(
+    State(state): State<DownloadState>,
+    headers: HeaderMap,
+    request: Request,
+) -> Result<StatusCode, AppError> {
+    let user_claims = request.extensions().get::<Claims>().cloned();
+
+    let body_bytes = axum::body::to_bytes(request.into_body(), usize::MAX)
+        .await
+        .map_err(|_| bad_request("Cannot read request body"))?;
+    let req: DownloadFilesRequest = serde_json::from_slice(&body_bytes)
+        .map_err(|_| bad_request("Invalid request format"))?;
+
+    if req.file_ids.is_empty() {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let all_files = repository::find_file_shares_by_code(&state.db, &req.code)
+        .await
+        .map_err(|_| internal_error("Failed to fetch file"))?;
+
+    let files: Vec<_> = all_files
+        .iter()
+        .filter(|f| req.file_ids.contains(&f.id))
+        .collect();
+    if files.is_empty() {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let notification_files: Vec<FileNotificationInfo> = files
+        .iter()
+        .map(|f| FileNotificationInfo {
+            file_name: f.file_name.clone(),
+            file_size: f.file_size,
+            file_type: f.file_type.clone(),
+        })
+        .collect();
+
+    let ip_address = crate::utils::client_ip(&headers);
+
+    state
+        .notifications
+        .notify_download(
+            &req.code,
+            notification_files,
+            user_claims.as_ref().map(|c| c.sub.as_str()),
+            files[0].user_id.as_deref(),
+            &ip_address,
+        )
+        .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[utoipa::path(
     post,
     path = "/file/verify-password",
@@ -945,6 +1004,15 @@ pub async fn get_download_url(
         .unwrap_or("false")
         == "true";
 
+    // Multi-file downloads set defer_notify so the client can send ONE aggregated
+    // "N files downloaded" email afterwards instead of firing a per-file notification
+    // for every presigned URL it requests. The download itself is still logged.
+    let defer_notify = params
+        .get("defer_notify")
+        .and_then(|v| v.as_str())
+        .unwrap_or("false")
+        == "true";
+
     if !preview {
         let user_claims = request.extensions().get::<Claims>().cloned();
 
@@ -971,20 +1039,22 @@ pub async fn get_download_url(
         )
         .await;
 
-        state
-            .notifications
-            .notify_download(
-                code,
-                vec![FileNotificationInfo {
-                    file_name: file_share.file_name.clone(),
-                    file_size: file_share.file_size,
-                    file_type: file_share.file_type.clone(),
-                }],
-                user_claims.as_ref().map(|c| c.sub.as_str()),
-                file_share.user_id.as_deref(),
-                &ip_address_for_alert,
-            )
-            .await;
+        if !defer_notify {
+            state
+                .notifications
+                .notify_download(
+                    code,
+                    vec![FileNotificationInfo {
+                        file_name: file_share.file_name.clone(),
+                        file_size: file_share.file_size,
+                        file_type: file_share.file_type.clone(),
+                    }],
+                    user_claims.as_ref().map(|c| c.sub.as_str()),
+                    file_share.user_id.as_deref(),
+                    &ip_address_for_alert,
+                )
+                .await;
+        }
     }
 
     let inline = params

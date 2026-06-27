@@ -202,6 +202,7 @@ pub fn create_router(
         .route("/download/file", get(handlers::download::download_single_file))
         .route("/download/url", get(handlers::download::get_download_url))
         .route("/download/bulk", post(handlers::download::download_multiple_files))
+        .route("/download/notify", post(handlers::download::notify_download_event))
         .route("/preview/file", get(handlers::download::preview_file))
         .route("/files/list", get(handlers::download::get_file_list))
         .route("/file/info", get(handlers::download::get_file_info))
