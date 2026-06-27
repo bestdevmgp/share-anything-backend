@@ -676,183 +676,123 @@ fn upload_subject(lang: &str, file_name: &str, count: usize) -> String {
     }
 }
 
-fn download_title(lang: &str, count: usize) -> String {
+fn rep_phrase(lang: &str, file_name: &str, others: usize) -> String {
     match lang {
-        "en" => {
-            if count == 1 {
-                "File download complete.".to_string()
-            } else {
-                format!("{} files downloaded.", count)
-            }
-        }
-        "ja" => {
-            if count == 1 {
-                "ファイルのダウンロードが完了しました。".to_string()
-            } else {
-                format!("{}個のファイルをダウンロードしました。", count)
-            }
-        }
-        "zh-CN" => {
-            if count == 1 {
-                "文件下载完成。".to_string()
-            } else {
-                format!("已下载{}个文件。", count)
-            }
-        }
-        "zh-TW" => {
-            if count == 1 {
-                "檔案下載完成。".to_string()
-            } else {
-                format!("已下載{}個檔案。", count)
-            }
-        }
-        _ => {
-            if count == 1 {
-                "파일 다운로드가 완료되었습니다.".to_string()
-            } else {
-                format!("{}개의 파일 다운로드가 완료되었습니다.", count)
-            }
-        }
+        "en" => format!("\"{}\" and {} more", file_name, others),
+        "ja" => format!("「{}」他{}件", file_name, others),
+        "zh-CN" => format!("\"{}\"等{}个文件", file_name, others),
+        "zh-TW" => format!("\"{}\"等{}個檔案", file_name, others),
+        _ => format!("\"{}\" 외 {}개", file_name, others),
+    }
+}
+
+fn download_title(lang: &str, file_name: &str, count: usize) -> String {
+    if count == 1 {
+        return match lang {
+            "en" => "File download complete.".to_string(),
+            "ja" => "ファイルのダウンロードが完了しました。".to_string(),
+            "zh-CN" => "文件下载完成。".to_string(),
+            "zh-TW" => "檔案下載完成。".to_string(),
+            _ => "파일 다운로드가 완료되었습니다.".to_string(),
+        };
+    }
+    let rep = rep_phrase(lang, file_name, count - 1);
+    match lang {
+        "en" => format!("{} downloaded.", rep),
+        "ja" => format!("{}をダウンロードしました。", rep),
+        "zh-CN" => format!("已下载{}。", rep),
+        "zh-TW" => format!("已下載{}。", rep),
+        _ => format!("{} 다운로드가 완료되었습니다.", rep),
     }
 }
 
 fn download_subject(lang: &str, file_name: &str, count: usize) -> String {
+    if count == 1 {
+        return match lang {
+            "en" => format!("\"{}\" download complete", file_name),
+            "ja" => format!("「{}」のダウンロードが完了しました", file_name),
+            "zh-CN" => format!("\"{}\" 下载完成", file_name),
+            "zh-TW" => format!("\"{}\" 下載完成", file_name),
+            _ => format!("\"{}\" 파일 다운로드가 완료되었습니다.", file_name),
+        };
+    }
+    let rep = rep_phrase(lang, file_name, count - 1);
     match lang {
-        "en" => {
-            if count == 1 {
-                format!("\"{}\" download complete", file_name)
-            } else {
-                format!("{} files download complete", count)
-            }
-        }
-        "ja" => {
-            if count == 1 {
-                format!("「{}」のダウンロードが完了しました", file_name)
-            } else {
-                format!("{}個のファイルのダウンロードが完了しました", count)
-            }
-        }
-        "zh-CN" => {
-            if count == 1 {
-                format!("\"{}\" 下载完成", file_name)
-            } else {
-                format!("{}个文件下载完成", count)
-            }
-        }
-        "zh-TW" => {
-            if count == 1 {
-                format!("\"{}\" 下載完成", file_name)
-            } else {
-                format!("{}個檔案下載完成", count)
-            }
-        }
-        _ => {
-            if count == 1 {
-                format!("\"{}\" 파일 다운로드가 완료되었습니다.", file_name)
-            } else {
-                format!("{}개의 파일 다운로드가 완료되었습니다.", count)
-            }
-        }
+        "en" => format!("{} downloaded", rep),
+        "ja" => format!("{}のダウンロードが完了しました", rep),
+        "zh-CN" => format!("{}下载完成", rep),
+        "zh-TW" => format!("{}下載完成", rep),
+        _ => format!("{} 다운로드가 완료되었습니다.", rep),
     }
 }
 
-fn alert_title(lang: &str, count: usize) -> String {
+fn alert_title(lang: &str, file_name: &str, count: usize) -> String {
+    if count == 1 {
+        return match lang {
+            "en" => "Your file was downloaded.".to_string(),
+            "ja" => "ファイルがダウンロードされました。".to_string(),
+            "zh-CN" => "文件已被下载。".to_string(),
+            "zh-TW" => "檔案已被下載。".to_string(),
+            _ => "파일이 다운로드되었습니다.".to_string(),
+        };
+    }
+    let rep = rep_phrase(lang, file_name, count - 1);
     match lang {
-        "en" => {
-            if count == 1 {
-                "Your file was downloaded.".to_string()
-            } else {
-                format!("{} of your files were downloaded.", count)
-            }
-        }
-        "ja" => {
-            if count == 1 {
-                "ファイルがダウンロードされました。".to_string()
-            } else {
-                format!("{}個のファイルがダウンロードされました。", count)
-            }
-        }
-        "zh-CN" => {
-            if count == 1 {
-                "文件已被下载。".to_string()
-            } else {
-                format!("{}个文件已被下载。", count)
-            }
-        }
-        "zh-TW" => {
-            if count == 1 {
-                "檔案已被下載。".to_string()
-            } else {
-                format!("{}個檔案已被下載。", count)
-            }
-        }
-        _ => {
-            if count == 1 {
-                "파일이 다운로드되었습니다.".to_string()
-            } else {
-                format!("{}개의 파일이 다운로드되었습니다.", count)
-            }
-        }
+        "en" => format!("{} were downloaded.", rep),
+        "ja" => format!("{}がダウンロードされました。", rep),
+        "zh-CN" => format!("{}已被下载。", rep),
+        "zh-TW" => format!("{}已被下載。", rep),
+        _ => format!("{}가 다운로드되었습니다.", rep),
     }
 }
 
 fn alert_subject(lang: &str, downloader_name: Option<&str>, file_name: &str, count: usize) -> String {
+    let rep = if count > 1 {
+        Some(rep_phrase(lang, file_name, count - 1))
+    } else {
+        None
+    };
     match lang {
         "en" => {
             let who = downloader_name.unwrap_or("An anonymous user");
-            if count == 1 {
-                format!("{} downloaded \"{}\"", who, file_name)
-            } else {
-                format!("{} downloaded {} files", who, count)
+            match &rep {
+                Some(r) => format!("{} downloaded {}", who, r),
+                None => format!("{} downloaded \"{}\"", who, file_name),
             }
         }
         "ja" => match downloader_name {
-            Some(name) => {
-                if count == 1 {
-                    format!("{}さんが「{}」をダウンロードしました", name, file_name)
-                } else {
-                    format!("{}さんが{}個のファイルをダウンロードしました", name, count)
-                }
-            }
-            None => {
-                if count == 1 {
-                    format!("匿名ユーザーが「{}」をダウンロードしました", file_name)
-                } else {
-                    format!("匿名ユーザーが{}個のファイルをダウンロードしました", count)
-                }
-            }
+            Some(name) => match &rep {
+                Some(r) => format!("{}さんが{}をダウンロードしました", name, r),
+                None => format!("{}さんが「{}」をダウンロードしました", name, file_name),
+            },
+            None => match &rep {
+                Some(r) => format!("匿名ユーザーが{}をダウンロードしました", r),
+                None => format!("匿名ユーザーが「{}」をダウンロードしました", file_name),
+            },
         },
         "zh-CN" => {
             let who = downloader_name.unwrap_or("匿名用户");
-            if count == 1 {
-                format!("{}下载了「{}」", who, file_name)
-            } else {
-                format!("{}下载了{}个文件", who, count)
+            match &rep {
+                Some(r) => format!("{}下载了{}", who, r),
+                None => format!("{}下载了「{}」", who, file_name),
             }
         }
         "zh-TW" => {
             let who = downloader_name.unwrap_or("匿名使用者");
-            if count == 1 {
-                format!("{}下載了「{}」", who, file_name)
-            } else {
-                format!("{}下載了{}個檔案", who, count)
+            match &rep {
+                Some(r) => format!("{}下載了{}", who, r),
+                None => format!("{}下載了「{}」", who, file_name),
             }
         }
         _ => match downloader_name {
-            Some(name) => {
-                if count == 1 {
-                    format!("{}님이 \"{}\" 파일을 다운로드하였습니다.", name, file_name)
-                } else {
-                    format!("{}님이 {}개의 파일을 다운로드하였습니다.", name, count)
-                }
-            }
-            None => {
-                if count == 1 {
-                    format!("익명의 사용자가 \"{}\" 파일을 다운로드하였습니다.", file_name)
-                } else {
-                    format!("익명의 사용자가 {}개의 파일을 다운로드하였습니다.", count)
-                }
-            }
+            Some(name) => match &rep {
+                Some(r) => format!("{}님이 {}를 다운로드하였습니다.", name, r),
+                None => format!("{}님이 \"{}\" 파일을 다운로드하였습니다.", name, file_name),
+            },
+            None => match &rep {
+                Some(r) => format!("익명의 사용자가 {}를 다운로드하였습니다.", r),
+                None => format!("익명의 사용자가 \"{}\" 파일을 다운로드하였습니다.", file_name),
+            },
         },
     }
 }
@@ -1261,7 +1201,7 @@ impl EmailService {
         let t = get_email_translations(lang);
         DownloadTemplate {
             html_lang: html_lang_attr(lang),
-            title: download_title(lang, files.len()),
+            title: download_title(lang, &files[0].file_name, files.len()),
             t,
             files: FileRow::list(files),
             share_code,
@@ -1287,7 +1227,7 @@ impl EmailService {
 
         DownloadAlertTemplate {
             html_lang: html_lang_attr(lang),
-            title: alert_title(lang, files.len()),
+            title: alert_title(lang, &files[0].file_name, files.len()),
             downloader_desc: alert_desc(lang, downloader_name),
             t,
             files: FileRow::list(files),

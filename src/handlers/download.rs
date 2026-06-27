@@ -825,11 +825,6 @@ pub async fn download_multiple_files(
     Ok(response)
 }
 
-/// Send ONE aggregated "files downloaded" notification for a multi-file download event.
-///
-/// The client fetches each presigned URL with `defer_notify=true` (so no per-file email
-/// fires) and then calls this once with the full id list, producing a single
-/// "{representative} +N" notification instead of one email per file.
 pub async fn notify_download_event(
     State(state): State<DownloadState>,
     headers: HeaderMap,
@@ -1004,9 +999,6 @@ pub async fn get_download_url(
         .unwrap_or("false")
         == "true";
 
-    // Multi-file downloads set defer_notify so the client can send ONE aggregated
-    // "N files downloaded" email afterwards instead of firing a per-file notification
-    // for every presigned URL it requests. The download itself is still logged.
     let defer_notify = params
         .get("defer_notify")
         .and_then(|v| v.as_str())
