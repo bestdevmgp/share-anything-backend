@@ -9,26 +9,6 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// Adapter that makes a `futures::channel::mpsc::Receiver<T>` implement `Sync`
-/// by wrapping it in a `Mutex`. `poll_next` acquires the lock, polls once, and
-/// immediately releases it — no lock is held across any `.await` point, so the
-/// wrapper is safe to use in a `Send` future.
-struct SyncReceiver<T>(std::sync::Arc<std::sync::Mutex<futures::channel::mpsc::Receiver<T>>>);
-
-impl<T> futures::Stream for SyncReceiver<T>
-where
-    T: Send,
-{
-    type Item = T;
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<T>> {
-        use futures::StreamExt;
-        self.0.lock().unwrap().poll_next_unpin(cx)
-    }
-}
-
 use crate::{
     config::Config,
     db::{repository, DbPool},
@@ -120,8 +100,6 @@ pub async fn cli_upload(
     headers: axum::http::HeaderMap,
     mut multipart: Multipart,
 ) -> Result<PrettyJson<CliUploadResponse>, AppError> {
-    use futures::{SinkExt, StreamExt};
-
     let token_user = token_user.map(|ext| ext.0.clone());
 
     let mut description: Option<String> = None;
@@ -203,46 +181,23 @@ pub async fn cli_upload(
                     .unwrap_or("application/octet-stream")
                     .to_string();
 
-                let part_content_length: Option<i64> = field
-                    .headers()
-                    .get(axum::http::header::CONTENT_LENGTH)
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|s| s.parse().ok());
-
                 let storage_key = generate_storage_key(
                     &state.config.s3.prefix,
                     &Uuid::new_v4().to_string(),
                     &file_name,
                 );
 
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|_| bad_request("Failed to read file data"))?;
+                let file_size = data.len() as i64;
 
-                let (mut tx, rx) = futures::channel::mpsc::channel::<
-                    Result<bytes::Bytes, axum::extract::multipart::MultipartError>,
-                >(8);
-
-                let sync_stream = SyncReceiver(std::sync::Arc::new(std::sync::Mutex::new(rx)));
-
-                let forward_fut = async {
-                    let mut field = field;
-                    while let Some(chunk) = field.next().await {
-                        if tx.send(chunk).await.is_err() {
-                            break;
-                        }
-                    }
-                };
-
-                let upload_fut = state.storage.upload_file_stream(
-                    &storage_key,
-                    sync_stream,
-                    part_content_length,
-                    &content_type,
-                );
-
-                let ((), upload_result) = futures::future::join(forward_fut, upload_fut).await;
-                upload_result
+                state
+                    .storage
+                    .upload_file(&storage_key, data.to_vec(), &content_type)
+                    .await
                     .map_err(|e| internal_error(format!("Storage upload failed: {}", e)))?;
-
-                let file_size = part_content_length.unwrap_or(0);
                 total_size += file_size;
                 if api_key_id_for_quota.is_some()
                     && existing_active_storage + total_size > API_KEY_ACTIVE_STORAGE_LIMIT
