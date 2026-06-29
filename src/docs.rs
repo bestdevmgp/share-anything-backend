@@ -1,5 +1,5 @@
 use utoipa::OpenApi;
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, Http, HttpAuthScheme, SecurityScheme};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::Modify;
 
 use crate::models::{
@@ -39,8 +39,11 @@ impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
             components.add_security_scheme(
-                "bearer_auth",
-                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+                "cookie_auth",
+                SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::with_description(
+                    "__Host-auth_token",
+                    "httpOnly session cookie issued on login (set automatically by the browser).",
+                ))),
             );
             components.add_security_scheme(
                 "admin_password",
@@ -140,6 +143,15 @@ impl Modify for SecurityAddon {
         crate::handlers::cli_auth::check_status,
         crate::handlers::cli_auth::complete_session,
         crate::handlers::session_token::exchange_session_token,
+        crate::handlers::quota::get_daily_quota,
+        crate::handlers::download::notify_download_event,
+        crate::handlers::download::delete_share,
+        crate::handlers::auth::get_me,
+        crate::handlers::auth::logout,
+        crate::handlers::health::health_live,
+        crate::handlers::health::health_db,
+        crate::handlers::health::health_r2,
+        crate::handlers::health::health_turn,
     ),
     components(
         schemas(
@@ -241,6 +253,8 @@ impl Modify for SecurityAddon {
             crate::models::api_key::ApiKeyRevealResponse,
             crate::handlers::session_token::ExchangeRequest,
             crate::handlers::session_token::ExchangeResponse,
+            crate::handlers::quota::DailyQuotaResponse,
+            crate::handlers::auth::MeResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -260,6 +274,7 @@ impl Modify for SecurityAddon {
         (name = "admin", description = "Admin actions (requires X-Admin-Password header)"),
         (name = "cli", description = "CLI tool endpoints (authenticated via X-Personal-Token header)"),
         (name = "cli-auth", description = "CLI device pairing / authentication flow"),
+        (name = "health", description = "Liveness and dependency health probes"),
     ),
     info(
         title = "Share Anything API",

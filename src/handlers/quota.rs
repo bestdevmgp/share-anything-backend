@@ -5,7 +5,7 @@ use crate::db::{repository, DbPool};
 use crate::middleware::auth::Claims;
 use crate::models::AppError;
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct DailyQuotaResponse {
     pub used_bytes: i64,
     pub limit_bytes: i64,
@@ -14,6 +14,14 @@ pub struct DailyQuotaResponse {
     pub authenticated: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/file/quota",
+    tag = "upload",
+    responses(
+        (status = 200, description = "Daily upload quota for the caller (anonymous or authenticated)", body = DailyQuotaResponse)
+    )
+)]
 pub async fn get_daily_quota(
     State(db): State<DbPool>,
     claims: Option<Extension<Claims>>,

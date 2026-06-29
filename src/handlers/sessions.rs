@@ -28,7 +28,7 @@ pub struct SessionsState {
         (status = 200, description = "Sessions listed successfully", body = Vec<SessionResponse>),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn list_sessions(
     State(state): State<SessionsState>,
@@ -89,7 +89,7 @@ pub async fn list_sessions(
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Session not found")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn terminate_session(
     State(state): State<SessionsState>,
@@ -119,7 +119,7 @@ pub async fn terminate_session(
         (status = 204, description = "Other sessions terminated"),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn terminate_other_sessions(
     State(state): State<SessionsState>,
@@ -138,7 +138,7 @@ pub async fn terminate_other_sessions(
         (status = 200, description = "Trusted devices listed", body = Vec<TrustedDeviceResponse>),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn list_trusted_devices(
     State(state): State<SessionsState>,
@@ -174,7 +174,7 @@ pub async fn list_trusted_devices(
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Trusted device not found")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn delete_trusted_device(
     State(state): State<SessionsState>,

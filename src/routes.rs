@@ -465,7 +465,7 @@ pub fn create_router(
     let install_route = Router::new()
         .route("/install", get(handlers::cli::cli_install_script));
 
-    let health_route = Router::new().route("/health", get(|| async { "OK" }));
+    let health_route = Router::new().route("/health", get(handlers::health::health_live));
 
     let health_checks_route = Router::new()
         .route("/health/db", get(handlers::health::health_db))

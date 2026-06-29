@@ -736,13 +736,22 @@ pub async fn email_status(
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct MeResponse {
     pub user: Option<crate::models::auth::UserResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Current user, or null with a reason when not authenticated", body = MeResponse)
+    ),
+    security(("cookie_auth" = []))
+)]
 pub async fn get_me(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -770,6 +779,15 @@ pub async fn get_me(
     Ok(Json(MeResponse { user: None, reason }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Logged out; the auth cookie is cleared")
+    ),
+    security(("cookie_auth" = []))
+)]
 pub async fn logout(
     State(state): State<AppState>,
     claims: Option<axum::Extension<crate::middleware::auth::Claims>>,

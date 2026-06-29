@@ -38,7 +38,7 @@ pub struct UploadState {
         (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn upload_file(

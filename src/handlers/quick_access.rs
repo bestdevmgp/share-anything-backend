@@ -40,7 +40,7 @@ pub struct QuickAccessState {
         (status = 401, description = "Unauthorized"),
         (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn init_quick_access_upload(
     State(state): State<QuickAccessState>,
@@ -150,7 +150,7 @@ pub async fn init_quick_access_upload(
         (status = 200, description = "Quick Access files listed", body = QuickAccessListResponse),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn list_quick_access_files(
     State(state): State<QuickAccessState>,
@@ -199,7 +199,7 @@ pub async fn list_quick_access_files(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "File not found")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn delete_quick_access_file(
     State(state): State<QuickAccessState>,
@@ -253,7 +253,7 @@ pub async fn delete_quick_access_file(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "File not found or expired")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn preview_quick_access_file(
     State(state): State<QuickAccessState>,
@@ -316,7 +316,7 @@ pub async fn preview_quick_access_file(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "File not found or expired")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn share_quick_access_file(
     State(state): State<QuickAccessState>,
@@ -381,7 +381,7 @@ pub async fn share_quick_access_file(
         (status = 403, description = "Forbidden"),
         (status = 404, description = "File not found or expired")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn download_quick_access_file(
     State(state): State<QuickAccessState>,

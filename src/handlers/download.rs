@@ -274,7 +274,7 @@ pub async fn get_file_info(
         (status = 404, description = "File not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn download_single_file(
@@ -421,7 +421,7 @@ pub async fn download_single_file(
         (status = 404, description = "File not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn preview_file(
@@ -514,7 +514,7 @@ pub async fn preview_file(
         (status = 404, description = "File not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn download_file(
@@ -634,7 +634,7 @@ pub async fn download_file(
         (status = 404, description = "Files not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn download_multiple_files(
@@ -825,6 +825,16 @@ pub async fn download_multiple_files(
     Ok(response)
 }
 
+#[utoipa::path(
+    post,
+    path = "/download/notify",
+    tag = "download",
+    request_body = DownloadFilesRequest,
+    responses(
+        (status = 200, description = "Download notification processed"),
+        (status = 204, description = "No files to notify")
+    )
+)]
 pub async fn notify_download_event(
     State(state): State<DownloadState>,
     headers: HeaderMap,
@@ -1090,6 +1100,20 @@ pub async fn get_download_url(
 /// or uploaded it from this device (matching device_id). A public share grant
 /// code drops only the grant (the underlying Quick Access file is kept); a
 /// regular code hard-deletes all rows so downloads stop immediately.
+#[utoipa::path(
+    delete,
+    path = "/shares/{code}",
+    tag = "download",
+    params(
+        ("code" = String, Path, description = "Share code to revoke")
+    ),
+    responses(
+        (status = 200, description = "Share revoked"),
+        (status = 403, description = "Not allowed to revoke this share"),
+        (status = 404, description = "Share not found")
+    ),
+    security(("cookie_auth" = []))
+)]
 pub async fn delete_share(
     State(state): State<DownloadState>,
     Path(code): Path<String>,

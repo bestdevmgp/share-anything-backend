@@ -141,7 +141,7 @@ pub async fn check_status(
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Session not found")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn complete_session(
     State(state): State<CliAuthHandlerState>,

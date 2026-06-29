@@ -41,7 +41,7 @@ fn generate_personal_token() -> String {
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn create_personal_token(
     State(state): State<PersonalTokenState>,
@@ -99,7 +99,7 @@ pub async fn create_personal_token(
         (status = 200, description = "Personal tokens listed", body = Vec<PersonalTokenResponse>),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn list_personal_tokens(
     State(state): State<PersonalTokenState>,
@@ -137,7 +137,7 @@ pub async fn list_personal_tokens(
         (status = 401, description = "Unauthorized"),
         (status = 404, description = "Token not found")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn delete_personal_token(
     State(state): State<PersonalTokenState>,

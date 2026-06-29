@@ -54,6 +54,15 @@ fn unavailable() -> Response {
 /// back a cached connection to a dead/failed-over server (false healthy), and can
 /// also block until the acquire timeout when the pool is merely saturated by real
 /// traffic (false unhealthy).
+#[utoipa::path(
+    get,
+    path = "/health/db",
+    tag = "health",
+    responses(
+        (status = 200, description = "Database reachable"),
+        (status = 503, description = "Database unavailable")
+    )
+)]
 pub async fn health_db(State(state): State<HealthState>) -> Response {
     match tokio::time::timeout(PROBE_TIMEOUT, sqlx::query("SELECT 1").execute(&state.db)).await {
         Ok(Ok(_)) => ok(),
@@ -71,6 +80,15 @@ pub async fn health_db(State(state): State<HealthState>) -> Response {
 /// `GET /health/r2` — R2/S3 connectivity via a cheap credentialed `HeadObject` on
 /// a reserved key (a 404 proves R2 is reachable + credentials valid). No object
 /// listing or data transfer. See `StorageService::health_check`.
+#[utoipa::path(
+    get,
+    path = "/health/r2",
+    tag = "health",
+    responses(
+        (status = 200, description = "R2/S3 storage reachable"),
+        (status = 503, description = "R2/S3 storage unavailable")
+    )
+)]
 pub async fn health_r2(State(state): State<HealthState>) -> Response {
     match tokio::time::timeout(PROBE_TIMEOUT, state.storage.health_check()).await {
         Ok(true) => ok(),
@@ -87,6 +105,15 @@ pub async fn health_r2(State(state): State<HealthState>) -> Response {
 /// proves reachability + a valid Turn key/token). No credentials are returned to the
 /// caller — the body is a minimal `{status}`. P2P/secure transfer can't connect peers
 /// without this; standard uploads are unaffected.
+#[utoipa::path(
+    get,
+    path = "/health/turn",
+    tag = "health",
+    responses(
+        (status = 200, description = "TURN dependency reachable"),
+        (status = 503, description = "TURN dependency unavailable")
+    )
+)]
 pub async fn health_turn(State(state): State<HealthState>) -> Response {
     let url = format!(
         "https://rtc.live.cloudflare.com/v1/turn/keys/{}/credentials/generate-ice-servers",
@@ -116,4 +143,16 @@ pub async fn health_turn(State(state): State<HealthState>) -> Response {
             unavailable()
         }
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is live")
+    )
+)]
+pub async fn health_live() -> &'static str {
+    "OK"
 }

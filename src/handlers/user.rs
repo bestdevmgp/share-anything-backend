@@ -38,7 +38,7 @@ pub struct UserState {
         (status = 401, description = "Unauthorized - authentication required")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn get_upload_history(
@@ -134,7 +134,7 @@ pub async fn get_upload_history(
         (status = 404, description = "File not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn get_download_logs(
@@ -190,7 +190,7 @@ pub async fn get_download_logs(
         (status = 404, description = "File not found")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn delete_file_share(
@@ -236,7 +236,7 @@ pub async fn delete_file_share(
         (status = 401, description = "Unauthorized - authentication required")
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn delete_all_file_shares(
@@ -274,7 +274,7 @@ pub async fn delete_all_file_shares(
         (status = 400, description = "Invalid name (empty or too long)"),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn update_name(
     State(state): State<UserState>,
@@ -314,7 +314,7 @@ pub async fn update_name(
         (status = 204, description = "Account deleted successfully"),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn delete_account(
     State(state): State<UserState>,
@@ -345,7 +345,7 @@ pub async fn delete_account(
         (status = 200, description = "Notification settings retrieved", body = NotificationSettingsResponse),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn get_notification_settings(
     State(state): State<UserState>,
@@ -381,7 +381,7 @@ pub async fn get_notification_settings(
         (status = 200, description = "Notification settings updated", body = NotificationSettingsResponse),
         (status = 401, description = "Unauthorized")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn update_notification_settings(
     State(state): State<UserState>,

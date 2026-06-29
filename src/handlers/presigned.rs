@@ -47,7 +47,7 @@ const PRESIGNED_URL_EXPIRY_SECS: u64 = 3600;
         (status = 401, description = "Authentication required for some options"),
         (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn request_presigned_upload(
     State(state): State<PresignedState>,
@@ -319,7 +319,7 @@ pub async fn complete_presigned_upload(
         (status = 401, description = "Authentication required for some options"),
         (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
     ),
-    security(("bearer_auth" = []))
+    security(("cookie_auth" = []))
 )]
 pub async fn init_multipart_upload(
     State(state): State<PresignedState>,

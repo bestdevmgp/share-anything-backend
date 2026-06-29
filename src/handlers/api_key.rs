@@ -43,7 +43,7 @@ pub struct ApiKeyState {
         (status = 429, description = "Rate limit exceeded - one application per calendar day"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn apply(
@@ -137,7 +137,7 @@ pub async fn apply(
         (status = 401, description = "Unauthorized - authentication required"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn list_my_applications(
@@ -175,7 +175,7 @@ pub async fn list_my_applications(
         (status = 404, description = "Application not found or does not belong to you"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn get_my_application(
@@ -213,7 +213,7 @@ pub async fn get_my_application(
         (status = 401, description = "Unauthorized - authentication required"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn list_my_api_keys(
@@ -262,7 +262,7 @@ pub async fn list_my_api_keys(
         (status = 404, description = "API key not found or does not belong to you"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn revoke_api_key(
@@ -297,7 +297,7 @@ pub async fn revoke_api_key(
         (status = 409, description = "Application is not in pending status and cannot be cancelled"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn cancel_application(
@@ -355,7 +355,7 @@ impl IntoResponse for RevealError {
         (status = 410, description = "Token already used (reason=already_revealed) or expired (reason=expired)"),
     ),
     security(
-        ("bearer_auth" = [])
+        ("cookie_auth" = [])
     )
 )]
 pub async fn reveal_api_key(
