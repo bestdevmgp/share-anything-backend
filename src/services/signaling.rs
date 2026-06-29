@@ -108,6 +108,30 @@ impl SignalingState {
         Ok(ActiveSlot { counter })
     }
 
+    pub fn active_count(&self, key: &str) -> usize {
+        self.active_per_key
+            .get(key)
+            .map(|c| c.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    pub fn attempt_status(&self, key: &str) -> (u32, u64) {
+        let now = Instant::now();
+        let window = Duration::from_secs(60);
+        let (count, window_start) = match self.attempts_per_key.get(key) {
+            Some(r) if now.duration_since(r.window_start) <= window => (r.count, r.window_start),
+            _ => (0, now),
+        };
+        let elapsed_secs = now.duration_since(window_start).as_secs();
+        let seconds_remaining = 60u64.saturating_sub(elapsed_secs);
+        let reset_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .saturating_add(seconds_remaining);
+        (count, reset_unix)
+    }
+
     pub fn register_uploader_with_device(&self, share_code: String, peer_id: String, device_info: Option<String>) {
         self.uploaders.insert(share_code, UploaderInfo {
             peer_id,

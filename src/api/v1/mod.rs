@@ -21,6 +21,7 @@ pub struct V1State {
     pub db: DbPool,
     pub storage: StorageService,
     pub signaling: SignalingState,
+    pub cli_rate_limiter: CliRateLimiter,
 }
 
 pub fn router(
@@ -48,6 +49,7 @@ pub fn router(
 
     let auth_protected = Router::new()
         .route("/v1/me", get(handlers::me::get_me))
+        .route("/v1/rate-limit", get(handlers::rate_limit::get_rate_limit))
         .route("/v1/uploads", post(handlers::uploads::post_upload))
         .route("/v1/uploads/multipart", post(handlers::uploads::post_multipart_init))
         .route("/v1/uploads/multipart/:id/parts", post(handlers::uploads::post_multipart_parts))
@@ -85,10 +87,7 @@ pub fn router(
         .route("/v1/openapi.json", get(docs::openapi_json))
         .route("/reference", get(docs::scalar_html));
 
-    let public_router = Router::new().route(
-        "/v1/health",
-        get(|| async { axum::Json(serde_json::json!({ "status": "healthy" })) }),
-    );
+    let public_router = Router::new().route("/v1/health", get(handlers::health::health));
 
     auth_protected
         .merge(ws_router)

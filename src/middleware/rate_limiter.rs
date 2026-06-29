@@ -294,6 +294,37 @@ impl CliRateLimiter {
         }
     }
 
+    pub fn peek(&self, key: &str, bucket: Bucket) -> RateLimitStatus {
+        let now = Instant::now();
+        let window = Duration::from_secs(3600);
+        let limit = bucket.limit();
+
+        let map = match bucket {
+            Bucket::Read => &self.read,
+            Bucket::Upload => &self.upload,
+            Bucket::Download => &self.download,
+        };
+
+        let (count, window_start) = match map.get(key) {
+            Some(r) if now.duration_since(r.window_start) <= window => (r.count, r.window_start),
+            _ => (0, now),
+        };
+
+        let elapsed_secs = now.duration_since(window_start).as_secs();
+        let seconds_remaining = 3600u64.saturating_sub(elapsed_secs);
+        let reset_unix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .saturating_add(seconds_remaining);
+
+        RateLimitStatus {
+            limit,
+            remaining: limit.saturating_sub(count),
+            reset_unix,
+        }
+    }
+
     async fn cli_cleanup_task(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(300));
         loop {
@@ -330,6 +361,10 @@ pub async fn cli_rate_limit_middleware(
     }
     let path = request.uri().path().to_string();
     let method = request.method().clone();
+
+    if path == "/v1/rate-limit" {
+        return next.run(request).await;
+    }
 
     let bucket = if method == axum::http::Method::POST && path.starts_with("/v1/uploads") {
         Bucket::Upload

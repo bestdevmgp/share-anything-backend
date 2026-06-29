@@ -450,6 +450,7 @@ pub fn create_router(
         db: db.clone(),
         storage: storage.clone(),
         signaling: signaling_state.clone(),
+        cli_rate_limiter: cli_rate_limiter.clone(),
     };
     let v1_auth_state = V1AuthState {
         db: db.clone(),

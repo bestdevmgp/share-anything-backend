@@ -40,6 +40,8 @@ impl Modify for ApiKeySecurity {
         crate::api::v1::handlers::p2p::get_p2p_status,
         crate::api::v1::handlers::p2p::get_v1_turn_credentials,
         crate::api::v1::handlers::p2p::signaling_ws,
+        crate::api::v1::handlers::rate_limit::get_rate_limit,
+        crate::api::v1::handlers::health::health,
     ),
     components(
         schemas(
@@ -71,6 +73,13 @@ impl Modify for ApiKeySecurity {
             crate::models::TurnCredentialsResponse,
             crate::models::signaling::SignalingMessage,
             crate::models::signaling::PeerRole,
+            crate::api::v1::handlers::rate_limit::RateLimitResponse,
+            crate::api::v1::handlers::rate_limit::ResourceLimits,
+            crate::api::v1::handlers::rate_limit::ResourceLimit,
+            crate::api::v1::handlers::rate_limit::P2pLimits,
+            crate::api::v1::handlers::rate_limit::ConcurrencyGauge,
+            crate::api::v1::handlers::rate_limit::AttemptLimit,
+            crate::api::v1::handlers::health::HealthResponse,
         )
     ),
     modifiers(&ApiKeySecurity, &CodeSamples),
@@ -80,6 +89,8 @@ impl Modify for ApiKeySecurity {
         (name = "p2p", description = "Peer-to-peer transfers — create a P2P session, check uploader liveness, fetch TURN/STUN credentials, and connect to the signaling WebSocket. Use these when you want WebRTC end-to-end transfers without operating your own TURN infrastructure."),
         (name = "shares", description = "Inspect and download shares"),
         (name = "history", description = "Owner-side history"),
+        (name = "rate-limit", description = "Live rate-limit and quota usage for your API key"),
+        (name = "health", description = "Service liveness"),
     ),
     info(
         title = "ShareAnything Public API",
