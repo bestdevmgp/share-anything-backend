@@ -62,6 +62,25 @@ pub struct RateLimitResponse {
     pub p2p: P2pLimits,
 }
 
+/// Get rate-limit and quota usage
+///
+/// Returns the live rate-limit state for the API key making the request. This call
+/// is free — it never counts against any of your limits.
+///
+/// **Use case:** Inspect remaining quota before sending a batch of requests, or
+/// surface usage in a dashboard, without spending a request from your budget.
+///
+/// **Response fields:**
+/// - `resources.{read,upload,download}` — the hourly request buckets, each with
+///   `limit`, `used`, `remaining`, and `reset` (the Unix epoch second at which the
+///   one-hour window rolls over).
+/// - `p2p.concurrent_connections` — a live gauge of signaling connections open
+///   right now (`limit`, `active`, `available`). It has no `reset` because a slot
+///   is freed the instant a connection closes.
+/// - `p2p.connect_attempts` — the per-minute signaling connect-attempt limit, with
+///   `used`, `remaining`, and `reset`.
+///
+/// **Required scope:** none — any valid API key may read its own usage.
 #[utoipa::path(
     get,
     path = "/v1/rate-limit",
