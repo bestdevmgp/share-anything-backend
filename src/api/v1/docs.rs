@@ -77,6 +77,7 @@ impl Modify for ApiKeySecurity {
             crate::api::v1::handlers::rate_limit::ResourceLimits,
             crate::api::v1::handlers::rate_limit::ResourceLimit,
             crate::api::v1::handlers::rate_limit::P2pLimits,
+            crate::api::v1::handlers::rate_limit::StorageQuota,
             crate::api::v1::handlers::rate_limit::ConcurrencyGauge,
             crate::api::v1::handlers::rate_limit::AttemptLimit,
             crate::api::v1::handlers::health::HealthResponse,

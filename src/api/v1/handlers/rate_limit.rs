@@ -3,6 +3,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::api::v1::{auth::require_token, error::PublicApiError, V1State};
+use crate::db::repository;
+use crate::handlers::cli::API_KEY_ACTIVE_STORAGE_LIMIT;
 use crate::middleware::personal_token_auth::PersonalTokenUser;
 use crate::middleware::rate_limiter::Bucket;
 use crate::services::signaling::{MAX_ACTIVE_PER_KEY, MAX_CONNECT_ATTEMPTS_PER_MINUTE};
@@ -24,6 +26,16 @@ pub struct ResourceLimits {
     pub read: ResourceLimit,
     pub upload: ResourceLimit,
     pub download: ResourceLimit,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct StorageQuota {
+    #[schema(example = 536870912000_i64)]
+    pub limit_bytes: i64,
+    #[schema(example = 1048576_i64)]
+    pub used_bytes: i64,
+    #[schema(example = 536869863424_i64)]
+    pub available_bytes: i64,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -59,13 +71,14 @@ pub struct P2pLimits {
 #[derive(Serialize, ToSchema)]
 pub struct RateLimitResponse {
     pub resources: ResourceLimits,
+    pub storage: StorageQuota,
     pub p2p: P2pLimits,
 }
 
 /// Get rate-limit and quota usage
 ///
-/// Returns the live rate-limit state for the API key making the request. This call
-/// is free — it never counts against any of your limits.
+/// Returns the live rate-limit and quota state for the API key making the request.
+/// This call is free — it never counts against any of your limits.
 ///
 /// **Use case:** Inspect remaining quota before sending a batch of requests, or
 /// surface usage in a dashboard, without spending a request from your budget.
@@ -74,6 +87,9 @@ pub struct RateLimitResponse {
 /// - `resources.{read,upload,download}` — the hourly request buckets, each with
 ///   `limit`, `used`, `remaining`, and `reset` (the Unix epoch second at which the
 ///   one-hour window rolls over).
+/// - `storage` — a live gauge of the total bytes held across your unexpired shares
+///   (`limit_bytes`, `used_bytes`, `available_bytes`). It has no reset; capacity is
+///   reclaimed as shares expire or are deleted.
 /// - `p2p.concurrent_connections` — a live gauge of signaling connections open
 ///   right now (`limit`, `active`, `available`). It has no `reset` because a slot
 ///   is freed the instant a connection closes.
@@ -87,7 +103,7 @@ pub struct RateLimitResponse {
     tag = "rate-limit",
     responses(
         (status = 200,
-            description = "Current rate-limit usage for the API key making the request. The hourly request buckets (read, upload, download) report limit, used, remaining, and a reset time (Unix epoch seconds). P2P `concurrent_connections` is a live gauge — the number of signaling connections open right now out of the cap, with no reset because a slot frees the moment a connection closes. P2P `connect_attempts` is the per-minute signaling rate limit. Calling this endpoint does not count against any limit.",
+            description = "Current rate-limit and quota usage for the API key making the request. The hourly request buckets (read, upload, download) report limit, used, remaining, and reset (Unix epoch seconds). `storage` is a live gauge of total bytes across your unexpired shares. P2P `concurrent_connections` is a live gauge of open signaling connections, and `connect_attempts` is the per-minute signaling limit. Calling this endpoint does not count against any limit.",
             body = RateLimitResponse),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired.",
@@ -112,6 +128,13 @@ pub async fn get_rate_limit(
         }
     };
 
+    let storage_used = match &user.api_key_id {
+        Some(kid) => repository::sum_active_storage_for_api_key(&state.db, kid)
+            .await
+            .map_err(|_| PublicApiError::Internal)?,
+        None => 0,
+    };
+
     let active = state.signaling.active_count(key) as u32;
     let (attempts_used, attempts_reset) = state.signaling.attempt_status(key);
     let active_limit = MAX_ACTIVE_PER_KEY as u32;
@@ -122,6 +145,11 @@ pub async fn get_rate_limit(
             read: resource(Bucket::Read),
             upload: resource(Bucket::Upload),
             download: resource(Bucket::Download),
+        },
+        storage: StorageQuota {
+            limit_bytes: API_KEY_ACTIVE_STORAGE_LIMIT,
+            used_bytes: storage_used,
+            available_bytes: (API_KEY_ACTIVE_STORAGE_LIMIT - storage_used).max(0),
         },
         p2p: P2pLimits {
             concurrent_connections: ConcurrencyGauge {
