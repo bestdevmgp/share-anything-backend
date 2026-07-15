@@ -48,7 +48,7 @@ pub struct MeResponse {
         (status = 401,
             description = "API Key is missing, malformed (must start with `sak_`), revoked, \
                            expired, or associated with a deleted user account. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key exists and is valid but does not carry the `read` scope. \

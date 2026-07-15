@@ -89,8 +89,8 @@ fn parse_cli_expiration(s: &str) -> Option<ExpirationPeriod> {
         (status = 200, description = "Files uploaded", body = CliUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
-        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://shareany.app/api-terms-of-use for current limits."),
+        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://shareany.app/api-terms-of-use for current limits."),
         (status = 500, description = "Storage upload failed")
     )
 )]
@@ -412,8 +412,8 @@ pub async fn cli_p2p_create(
         (status = 200, description = "Upload session created", body = CliMultipartInitResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Personal token required for password / expiration / one-time"),
-        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits."),
-        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://share.mingyu.dev/api-terms-of-use for current limits."),
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://shareany.app/api-terms-of-use for current limits."),
+        (status = 429, description = "`storage_quota_exceeded` — API key storage quota exceeded (only on requests authenticated by an API key, `sak_`). See https://shareany.app/api-terms-of-use for current limits."),
         (status = 500, description = "Failed to create multipart upload on storage")
     )
 )]

@@ -38,7 +38,7 @@ pub struct QuickAccessState {
         (status = 200, description = "Upload session initialized", body = InitMultipartUploadResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Unauthorized"),
-        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://share.mingyu.dev/api-terms-of-use for current limits.")
+        (status = 413, description = "`file_too_large` — upload size limit exceeded. See https://shareany.app/api-terms-of-use for current limits.")
     ),
     security(("cookie_auth" = []))
 )]

@@ -63,7 +63,7 @@ impl From<CliUploadResponse> for V1UploadResponse {
 /// - Uploading zero bytes files is rejected with `400`.
 ///
 /// **Limits:** Single file size and per-API-key active storage limits apply. Exact values are
-/// published at <https://share.mingyu.dev/api-terms-of-use>. Exceeding them returns `413` or
+/// published at <https://shareany.app/api-terms-of-use>. Exceeding them returns `413` or
 /// `429` respectively — error messages do not include the numeric limits.
 ///
 /// **Required scope:** `upload`
@@ -80,7 +80,7 @@ impl From<CliUploadResponse> for V1UploadResponse {
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
@@ -90,7 +90,7 @@ impl From<CliUploadResponse> for V1UploadResponse {
             description = "A single file exceeds the upload size limit. \
                            `error.code` = `file_too_large`; \
                            `error.message` = `Upload size limit exceeded.` \
-                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
+                           Numeric limit at <https://shareany.app/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Per-API-key active storage quota exceeded — uploading this file would push \
@@ -98,7 +98,7 @@ impl From<CliUploadResponse> for V1UploadResponse {
                            of your existing shares or wait for them to expire to reclaim quota. \
                            `error.code` = `storage_quota_exceeded`; \
                            `error.message` = `API key storage quota exceeded.` \
-                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
+                           Numeric limit at <https://shareany.app/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -152,7 +152,7 @@ pub async fn post_upload(
 /// - An abandoned session (never completed) is cleaned up by a background job after 24 hours.
 ///
 /// **Limits:** Single file size and per-API-key active storage limits apply. Exact values are
-/// published at <https://share.mingyu.dev/api-terms-of-use>. Exceeding them returns `413` or
+/// published at <https://shareany.app/api-terms-of-use>. Exceeding them returns `413` or
 /// `429` respectively — error messages do not include the numeric limits.
 ///
 /// **Required scope:** `upload`
@@ -174,7 +174,7 @@ pub async fn post_upload(
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `upload` scope (`error.code` will be `insufficient_scope`). \
@@ -184,7 +184,7 @@ pub async fn post_upload(
             description = "A single file in the manifest exceeds the upload size limit. \
                            `error.code` = `file_too_large`; \
                            `error.message` = `Upload size limit exceeded.` \
-                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
+                           Numeric limit at <https://shareany.app/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 429,
             description = "Per-API-key active storage quota exceeded — initialising this session would \
@@ -192,7 +192,7 @@ pub async fn post_upload(
                            some of your existing shares or wait for them to expire to reclaim quota. \
                            `error.code` = `storage_quota_exceeded`; \
                            `error.message` = `API key storage quota exceeded.` \
-                           Numeric limit at <https://share.mingyu.dev/api-terms-of-use>.",
+                           Numeric limit at <https://shareany.app/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))
@@ -255,7 +255,7 @@ pub async fn post_multipart_init(
             body = CliPresignPartsResponse),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \
@@ -332,7 +332,7 @@ pub async fn post_multipart_parts(
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \

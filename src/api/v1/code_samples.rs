@@ -64,7 +64,7 @@ fn signaling_samples() -> serde_json::Value {
 
 const JS_DOWNLOADER: &str = r#"// Share-Anything P2P Downloader — Browser JavaScript
 
-const API_BASE  = 'https://share-api.mingyu.dev';
+const API_BASE  = 'https://api.shareany.app';
 const apiKey    = 'sak_xxxxxxxxxxxx';   // your API key
 const shareCode = '482917';
 const password  = undefined;            // set if the share is password-protected
@@ -154,7 +154,7 @@ import { writeFile } from 'node:fs/promises';
 
 const { RTCPeerConnection } = wrtc;
 
-const API_BASE  = 'https://share-api.mingyu.dev';
+const API_BASE  = 'https://api.shareany.app';
 const apiKey    = process.env.API_KEY!;
 const shareCode = '482917';
 const password: string | undefined = undefined;
@@ -243,7 +243,7 @@ from aiortc import (
     RTCConfiguration, RTCIceServer,
 )
 
-API_BASE   = "https://share-api.mingyu.dev"
+API_BASE   = "https://api.shareany.app"
 API_KEY    = os.environ["API_KEY"]
 SHARE_CODE = "482917"
 PASSWORD   = None  # set for password-protected shares
@@ -334,7 +334,7 @@ use webrtc::peer_connection::{configuration::RTCConfiguration, sdp::session_desc
 use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 use webrtc::data_channel::data_channel_message::DataChannelMessage;
 
-const API_BASE: &str   = "https://share-api.mingyu.dev";
+const API_BASE: &str   = "https://api.shareany.app";
 const SHARE_CODE: &str = "482917";
 
 #[tokio::main]
@@ -442,7 +442,7 @@ import (
 )
 
 const (
-    apiBase   = "https://share-api.mingyu.dev"
+    apiBase   = "https://api.shareany.app"
     shareCode = "482917"
 )
 
@@ -564,7 +564,7 @@ import java.util.*
 
 @Service
 class P2PDownloader(private val mapper: ObjectMapper) {
-    private val apiBase   = "https://share-api.mingyu.dev"
+    private val apiBase   = "https://api.shareany.app"
     private val apiKey    = System.getenv("API_KEY")
     private val shareCode = "482917"
     private val password: String? = null
@@ -671,7 +671,7 @@ import java.util.*;
 
 @Service
 public class P2PDownloader {
-    private static final String API_BASE   = "https://share-anything.mingyu.dev";
+    private static final String API_BASE   = "https://api.shareany.app";
     private static final String SHARE_CODE = "482917";
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -795,7 +795,7 @@ $headers = [
     'Sec-WebSocket-Protocol' => "share-anything.v1, api-key.$apiKey",
 ];
 
-$connector("wss://share-api.mingyu.dev/v1/ws/signaling", [], $headers)
+$connector("wss://api.shareany.app/v1/ws/signaling", [], $headers)
     ->then(function (WebSocket $ws) use ($shareCode, $password) {
         $join = [
             'type'       => 'downloader_join',
@@ -833,7 +833,7 @@ $loop->run();
 
 const JS_UPLOADER: &str = r#"// Share-Anything P2P Uploader — Browser JavaScript
 
-const API_BASE = 'https://share-api.mingyu.dev';
+const API_BASE = 'https://api.shareany.app';
 const apiKey   = 'sak_xxxxxxxxxxxx';
 const password = undefined;                  // set to require a password
 const files    = /* HTMLInputElement.files */ [];
@@ -931,7 +931,7 @@ import { basename } from 'node:path';
 
 const { RTCPeerConnection } = wrtc;
 
-const API_BASE = 'https://share-api.mingyu.dev';
+const API_BASE = 'https://api.shareany.app';
 const apiKey   = process.env.API_KEY!;
 const password: string | undefined = undefined;
 const paths    = ['./report.pdf'];
@@ -1025,7 +1025,7 @@ from aiortc import (
     RTCConfiguration, RTCIceServer,
 )
 
-API_BASE = "https://share-api.mingyu.dev"
+API_BASE = "https://api.shareany.app"
 API_KEY  = os.environ["API_KEY"]
 PASSWORD = None
 PATHS    = ["./report.pdf"]
@@ -1126,7 +1126,7 @@ use webrtc::data_channel::data_channel_init::RTCDataChannelInit;
 use webrtc::ice_transport::{ice_candidate::RTCIceCandidateInit, ice_server::RTCIceServer};
 use webrtc::peer_connection::{configuration::RTCConfiguration, sdp::session_description::RTCSessionDescription};
 
-const API_BASE: &str = "https://share-api.mingyu.dev";
+const API_BASE: &str = "https://api.shareany.app";
 const CHUNK: usize   = 64 * 1024;
 const HIGH: usize    = 1024 * 1024;
 
@@ -1278,7 +1278,7 @@ import (
 )
 
 const (
-    apiBase = "https://share-api.mingyu.dev"
+    apiBase = "https://api.shareany.app"
     chunk   = 64 * 1024
     high    = 1024 * 1024
 )
@@ -1399,7 +1399,7 @@ import java.util.*
 
 @Service
 class P2PUploader(private val mapper: ObjectMapper) {
-    private val apiBase = "https://share-api.mingyu.dev"
+    private val apiBase = "https://api.shareany.app"
     private val apiKey  = System.getenv("API_KEY")
     private val path    = Path.of("./report.pdf")
     private val password: String? = null
@@ -1522,7 +1522,7 @@ import java.util.*;
 
 @Service
 public class P2PUploader {
-    private static final String API_BASE = "https://share-api.mingyu.dev";
+    private static final String API_BASE = "https://api.shareany.app";
     private static final int CHUNK = 64 * 1024;
     private static final int HIGH  = 1024 * 1024;
 
@@ -1644,7 +1644,7 @@ $apiKey = getenv('API_KEY');
 $path   = './report.pdf';
 $bytes  = file_get_contents($path);
 
-$http = new Client(['base_uri' => 'https://share-api.mingyu.dev']);
+$http = new Client(['base_uri' => 'https://api.shareany.app']);
 $res = $http->post('/v1/p2p/sessions', [
     'headers' => ['X-API-Key' => $apiKey, 'Content-Type' => 'application/json'],
     'json' => [
@@ -1663,7 +1663,7 @@ $loop = React\EventLoop\Loop::get();
 $connector = new Connector($loop);
 $headers = ['Sec-WebSocket-Protocol' => "share-anything.v1, api-key.$apiKey"];
 
-$connector("wss://share-api.mingyu.dev/v1/ws/signaling", [], $headers)
+$connector("wss://api.shareany.app/v1/ws/signaling", [], $headers)
     ->then(function ($ws) use ($shareCode) {
         $ws->send(json_encode([
             'type'        => 'uploader_ready',

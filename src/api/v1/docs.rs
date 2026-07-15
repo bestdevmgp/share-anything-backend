@@ -96,12 +96,12 @@ impl Modify for ApiKeySecurity {
     info(
         title = "ShareAnything Public API",
         version = "1.1.0",
-        description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys). Use of this API is governed by the [OpenAPI Terms of Use](https://share.mingyu.dev/api-terms-of-use).",
+        description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://shareany.app/settings?tab=api-keys). Use of this API is governed by the [OpenAPI Terms of Use](https://shareany.app/api-terms-of-use).",
         contact(name = "ShareAnything", email = "shareanything@mingyu.dev"),
         license(name = "Proprietary"),
     ),
     servers(
-        (url = "https://share-api.mingyu.dev", description = "Production"),
+        (url = "https://api.shareany.app", description = "Production"),
     )
 )]
 pub struct PublicApiDoc;
@@ -116,8 +116,8 @@ const SCALAR_HTML: &str = r#"<!DOCTYPE html>
     <title>ShareAnything API Reference</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="https://share.mingyu.dev/favicon.svg" />
-    <link rel="apple-touch-icon" href="https://share.mingyu.dev/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="https://shareany.app/favicon.svg" />
+    <link rel="apple-touch-icon" href="https://shareany.app/apple-touch-icon.png" />
   </head>
   <body>
     <script

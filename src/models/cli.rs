@@ -7,7 +7,7 @@ pub struct CliUploadResponse {
     pub share_code: String,
     #[schema(example = json!(["report.pdf", "photo.jpg"]))]
     pub files: Vec<String>,
-    #[schema(example = "curl -OJ -H \"X-Personal-Token: sat_5UqEU7qHLkMi6aLAAmcrpNo4wS7p8pi3SYnv3dQa\" https://share-api.mingyu.dev/cli/shares/482917/download")]
+    #[schema(example = "curl -OJ -H \"X-Personal-Token: sat_5UqEU7qHLkMi6aLAAmcrpNo4wS7p8pi3SYnv3dQa\" https://api.shareany.app/cli/shares/482917/download")]
     pub curl_command: String,
     #[schema(example = "2026-05-21 14:30")]
     pub expires_at: String,

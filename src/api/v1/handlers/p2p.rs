@@ -235,7 +235,7 @@ pub async fn get_v1_turn_credentials(
 ///
 /// ```js
 /// const ws = new WebSocket(
-///   'wss://share-api.mingyu.dev/v1/ws/signaling',
+///   'wss://api.shareany.app/v1/ws/signaling',
 ///   ['share-anything.v1', `api-key.${apiKey}`]
 /// );
 /// ```
@@ -245,7 +245,7 @@ pub async fn get_v1_turn_credentials(
 /// ```js
 /// import WebSocket from 'ws';
 /// const ws = new WebSocket(
-///   'wss://share-api.mingyu.dev/v1/ws/signaling',
+///   'wss://api.shareany.app/v1/ws/signaling',
 ///   ['share-anything.v1', `api-key.${apiKey}`]
 /// );
 /// ```
@@ -415,7 +415,7 @@ pub async fn get_v1_turn_credentials(
         (status = 429,
             description = "Either `p2p_connection_limit` — too many concurrent P2P WebSocket connections for this API key, or \
                            `p2p_attempt_limit` — too many upgrade attempts within the last minute. \
-                           Numeric limits at <https://share.mingyu.dev/api-terms-of-use>.",
+                           Numeric limits at <https://shareany.app/api-terms-of-use>.",
             body = crate::api::v1::error::PublicErrorEnvelope),
     ),
     security(("api_key" = []))

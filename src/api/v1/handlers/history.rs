@@ -57,7 +57,7 @@ fn hide_forbidden_as_not_found(e: AppError) -> PublicApiError {
                            Each item includes `share_code`, `expires_at`, file metadata, and `download_count`."),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
@@ -114,7 +114,7 @@ pub async fn list_my_uploads(
         (status = 204, description = "Share permanently deleted. Response body is empty."),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `delete` scope (`error.code` will be `insufficient_scope`). \
@@ -176,7 +176,7 @@ pub async fn delete_my_upload(
                            Each entry contains `downloaded_at`, `ip_address`, `platform`, and `downloader_name` (nullable)."),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
@@ -238,7 +238,7 @@ pub async fn list_share_downloads(
                            Each item includes `share_code`, `downloaded_at`, and basic file metadata."),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \

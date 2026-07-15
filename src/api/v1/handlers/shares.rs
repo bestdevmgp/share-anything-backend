@@ -44,7 +44,7 @@ use crate::utils::PrettyJson;
         (status = 200, description = "Share metadata and file list", body = CliFileListResponse),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "API key does not have the `read` scope (`error.code` will be `insufficient_scope`). \
@@ -121,7 +121,7 @@ pub struct DownloadQuery {
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 401,
             description = "API key is missing, malformed (must start with `sak_`), revoked, or expired. \
-                           Issue a new API key at [Settings → API Keys](https://share.mingyu.dev/settings?tab=api-keys).",
+                           Issue a new API key at [Settings → API Keys](https://shareany.app/settings?tab=api-keys).",
             body = crate::api::v1::error::PublicErrorEnvelope),
         (status = 403,
             description = "Two distinct causes: \
