@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
 };
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::process::Command;
 
+use super::og_i18n::OgLocale;
 use crate::{
     config::Config,
     db::{repository, DbPool},
@@ -186,6 +187,7 @@ async fn resolve_og_image(state: &OgState, file: &FileShare) -> Option<String> {
 
 pub async fn get_og_page(
     State(state): State<OgState>,
+    headers: HeaderMap,
     Path(code): Path<String>,
 ) -> impl IntoResponse {
     let frontend_url = &state.config.server.frontend_url;
@@ -196,12 +198,17 @@ pub async fn get_og_page(
         .await
         .unwrap_or_default();
 
+    // The crawler fetches this page, not the viewer, so we localize to the
+    // uploader's stored UI language, falling back to Accept-Language then English.
+    let accept_language = headers
+        .get(header::ACCEPT_LANGUAGE)
+        .and_then(|v| v.to_str().ok());
+    let stored_locale = file_shares.first().and_then(|f| f.locale.as_deref());
+    let locale = OgLocale::resolve(stored_locale, accept_language);
+
     let (og_title, og_description, use_file_image) = if file_shares.is_empty() {
-        (
-            "유효하지 않은 파일입니다.".to_string(),
-            "ShareAnything - 간편하고 안전하게 파일을 공유해보세요.".to_string(),
-            false,
-        )
+        let (title, desc) = locale.invalid();
+        (title, desc, false)
     } else {
         let first = &file_shares[0];
         let has_password = first.password_hash.is_some();
@@ -217,35 +224,19 @@ pub async fn get_og_page(
             } else {
                 None
             };
-            let (name, suffix) = match uploader_name {
-                Some(n) => (n, "님이"),
-                None => ("익명의 사용자".to_string(), "가"),
-            };
-            (
-                format!("{}{} 파일을 공유하였습니다.", name, suffix),
-                "ShareAnything - 링크를 열어 다운로드하세요.".to_string(),
-                false,
-            )
+            let (title, desc) = locale.p2p(uploader_name.as_deref());
+            (title, desc, false)
         } else if has_password {
-            (
-                "비밀번호가 걸린 파일이 공유되었습니다.".to_string(),
-                "ShareAnything - 링크를 열어 다운로드하세요.".to_string(),
-                false,
-            )
+            let (title, desc) = locale.password();
+            (title, desc, false)
         } else if file_shares.len() == 1 {
             let previewable = is_previewable(&first.file_type)
                 && first.file_size <= MAX_THUMBNAIL_FILE_SIZE;
-            (
-                format!("ShareAnything - {}", first.file_name),
-                "파일이 공유되었습니다. 링크를 열어 다운로드하세요.".to_string(),
-                previewable,
-            )
+            let (title, desc) = locale.single(&first.file_name);
+            (title, desc, previewable)
         } else {
-            (
-                format!("{}개의 파일이 공유되었습니다.", file_shares.len()),
-                "ShareAnything - 링크를 열어 파일을 다운로드하세요.".to_string(),
-                false,
-            )
+            let (title, desc) = locale.multiple(file_shares.len());
+            (title, desc, false)
         }
     };
 
@@ -273,7 +264,7 @@ pub async fn get_og_page(
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html lang="ko">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -284,6 +275,7 @@ pub async fn get_og_page(
 <meta property="og:description" content="{description}"/>
 <meta property="og:image" content="{image}"/>
 <meta property="og:url" content="{og_url}"/>
+<meta property="og:locale" content="{og_locale}"/>
 <meta name="twitter:card" content="{twitter_card}"/>
 <meta name="twitter:title" content="{title}"/>
 <meta name="twitter:description" content="{description}"/>
@@ -294,10 +286,12 @@ pub async fn get_og_page(
 <script>window.location.replace("{redirect_url}");</script>
 </body>
 </html>"#,
+        lang = locale.html_lang(),
         title = og_title_escaped,
         description = og_description_escaped,
         image = html_escape(&og_image),
         og_url = og_url_escaped,
+        og_locale = locale.og_locale(),
         redirect_url = redirect_url_escaped,
         twitter_card = twitter_card,
     );

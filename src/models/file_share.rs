@@ -31,6 +31,10 @@ pub struct FileShare {
     pub device_id: Option<String>,
     #[sqlx(default)]
     pub relative_path: Option<String>,
+    /// Uploader's UI language at upload time (e.g. "ko", "en", "ja", "zh-CN",
+    /// "zh-TW"). Used to localize the Open Graph link preview. NULL = unknown.
+    #[sqlx(default)]
+    pub locale: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -190,6 +194,9 @@ pub struct PresignedUploadRequest {
     pub password: Option<String>,
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
+    /// Uploader's UI language, used to localize the Open Graph link preview.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -243,6 +250,9 @@ pub struct InitMultipartUploadRequest {
     pub expiration: Option<ExpirationPeriod>,
     pub is_one_time: Option<bool>,
     pub chunk_size: i64,
+    /// Uploader's UI language, used to localize the Open Graph link preview.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

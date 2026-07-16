@@ -235,6 +235,7 @@ pub async fn upload_file(
             idx as i32,
             device_id.clone(),
             None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;
@@ -346,6 +347,7 @@ pub async fn create_p2p_session(
 
     let expires_at = Utc::now() + chrono::Duration::hours(24);
     let share_group_id = Uuid::new_v4().to_string();
+    let locale = request.locale.clone();
     let mut uploaded_files: Vec<FileShareResponse> = Vec::new();
 
     for (idx, file_info) in request.files.into_iter().enumerate() {
@@ -370,6 +372,7 @@ pub async fn create_p2p_session(
             idx as i32,
             None,
             crate::utils::normalize_relative_path(file_info.relative_path.as_deref()),
+            locale.clone(),
         )
         .await
         .map_err(|e| internal_error(format!("Failed to save to database: {}", e)))?;

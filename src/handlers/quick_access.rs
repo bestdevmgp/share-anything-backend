@@ -126,6 +126,7 @@ pub async fn init_quick_access_upload(
         true,
         "twenty_four_hours",
         session_expires_at,
+        None,
     )
     .await
     .map_err(|e| {

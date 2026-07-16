@@ -284,6 +284,7 @@ pub async fn cli_upload(
             idx as i32,
             None,
             None,
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -378,6 +379,7 @@ pub async fn cli_p2p_create(
             idx as i32,
             None,
             crate::utils::normalize_relative_path(file_info.relative_path.as_deref()),
+            None,
         )
         .await
         .map_err(|e| internal_error(format!("Database save failed: {}", e)))?;
@@ -525,6 +527,7 @@ pub async fn cli_multipart_init(
         false,
         &expiration_period_str,
         session_expires_at,
+        None,
     )
     .await
     .map_err(|e| internal_error(format!("Failed to create upload session: {}", e)))?;
@@ -696,6 +699,7 @@ pub async fn cli_complete_multipart(
             None,
             None,
             idx as i32,
+            None,
             None,
             None,
         )

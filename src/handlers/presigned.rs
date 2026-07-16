@@ -152,6 +152,7 @@ pub async fn request_presigned_upload(
         false,
         &expiration_period_str,
         session_expires_at,
+        request.locale.as_deref(),
     )
     .await
     .map_err(|e| {
@@ -230,6 +231,7 @@ pub async fn complete_presigned_upload(
             idx as i32,
             device_id.clone(),
             None,
+            session.locale.clone(),
         )
         .await
         .map_err(|e| {
@@ -442,6 +444,7 @@ pub async fn init_multipart_upload(
         false,
         &expiration_period_str,
         session_expires_at,
+        request.locale.as_deref(),
     )
     .await
     .map_err(|e| {
@@ -595,6 +598,7 @@ pub async fn complete_multipart_upload(
             idx as i32,
             device_id.clone(),
             relative_path,
+            session.locale.clone(),
         )
         .await
         .map_err(|e| {

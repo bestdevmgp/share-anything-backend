@@ -204,6 +204,7 @@ pub async fn create_file_share(
     display_order: i32,
     device_id: Option<String>,
     relative_path: Option<String>,
+    locale: Option<String>,
 ) -> Result<FileShare, sqlx::Error> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now();
@@ -213,8 +214,8 @@ pub async fn create_file_share(
         INSERT INTO file_shares
         (id, share_group_id, user_id, created_via_api_key_id, share_code, file_name, file_size, file_type, transfer_type, storage_key,
          description, password_hash, is_one_time, is_quick_access, expires_at, created_at, updated_at,
-         image_width, image_height, display_order, device_id, relative_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         image_width, image_height, display_order, device_id, relative_path, locale)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&id)
@@ -239,6 +240,7 @@ pub async fn create_file_share(
     .bind(display_order)
     .bind(&device_id)
     .bind(&relative_path)
+    .bind(&locale)
     .execute(pool)
     .await?;
 
@@ -974,6 +976,8 @@ pub struct UploadSession {
     pub expires_at: chrono::DateTime<Utc>,
     pub completed: bool,
     pub created_at: chrono::DateTime<Utc>,
+    #[sqlx(default)]
+    pub locale: Option<String>,
 }
 
 pub async fn create_upload_session(
@@ -987,14 +991,15 @@ pub async fn create_upload_session(
     is_quick_access: bool,
     expiration_period: &str,
     expires_at: chrono::DateTime<Utc>,
+    locale: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
 
     sqlx::query(
         r#"
         INSERT INTO upload_sessions
-        (id, share_code, user_id, description, password_hash, is_one_time, is_quick_access, expiration_period, expires_at, completed, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
+        (id, share_code, user_id, description, password_hash, is_one_time, is_quick_access, expiration_period, expires_at, completed, created_at, locale)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?)
         "#,
     )
     .bind(id)
@@ -1007,6 +1012,7 @@ pub async fn create_upload_session(
     .bind(expiration_period)
     .bind(expires_at)
     .bind(now)
+    .bind(locale)
     .execute(pool)
     .await?;
 

@@ -28,4 +28,7 @@ pub struct CreateP2PSessionRequest {
     pub password: Option<String>,
     #[serde(default)]
     pub empty_folders: Vec<String>,
+    /// Uploader's UI language, used to localize the Open Graph link preview.
+    #[serde(default)]
+    pub locale: Option<String>,
 }
