@@ -198,8 +198,6 @@ pub async fn get_og_page(
         .await
         .unwrap_or_default();
 
-    // The crawler fetches this page, not the viewer, so we localize to the
-    // uploader's stored UI language, falling back to Accept-Language then English.
     let accept_language = headers
         .get(header::ACCEPT_LANGUAGE)
         .and_then(|v| v.to_str().ok());

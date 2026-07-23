@@ -56,8 +56,6 @@ impl OgLocale {
             if let Some(loc) = Self::from_tag(&tag) {
                 return Some(loc);
             }
-            // Fall back to language-prefix matching for regional variants we
-            // don't list explicitly (e.g. "en-CA", "ja-JP-mac").
             if tag.starts_with("ko") {
                 return Some(Self::Ko);
             }
