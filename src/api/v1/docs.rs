@@ -97,7 +97,7 @@ impl Modify for ApiKeySecurity {
         title = "ShareAnything Public API",
         version = "1.1.0",
         description = "Programmatic access to ShareAnything. Authenticate with an API Key in the 'X-API-Key' header. Issue API keys at [Settings → API Keys](https://shareany.app/settings?tab=api-keys). Use of this API is governed by the [OpenAPI Terms of Use](https://shareany.app/api-terms-of-use).",
-        contact(name = "ShareAnything", email = "shareanything@mingyu.dev"),
+        contact(name = "ShareAnything", email = "support@shareany.app"),
         license(name = "Proprietary"),
     ),
     servers(
