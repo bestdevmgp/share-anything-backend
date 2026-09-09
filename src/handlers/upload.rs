@@ -135,12 +135,12 @@ pub async fn upload_file(
     };
 
     let expiration = if let Some(exp) = metadata.expiration {
-        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("Guest users can only use the 5-minute expiration"));
+        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::ThirtyMinutes) {
+            return Err(unauthorized("Guest users can only use the 30-minute expiration"));
         }
         exp
     } else {
-        ExpirationPeriod::FiveMinutes
+        ExpirationPeriod::ThirtyMinutes
     };
 
     let transfer_type = metadata.transfer_type.unwrap_or(TransferType::Server);

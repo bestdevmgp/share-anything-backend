@@ -72,8 +72,8 @@ pub async fn request_presigned_upload(
     .await?;
 
     let expiration = if let Some(exp) = request.expiration {
-        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("Guest users can only use the 5-minute expiration"));
+        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::ThirtyMinutes) {
+            return Err(unauthorized("Guest users can only use the 30-minute expiration"));
         }
         exp
     } else {
@@ -346,8 +346,8 @@ pub async fn init_multipart_upload(
     .await?;
 
     let expiration = if let Some(exp) = request.expiration {
-        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::FiveMinutes) {
-            return Err(unauthorized("Guest users can only use the 5-minute expiration"));
+        if user_claims.is_none() && !matches!(exp, ExpirationPeriod::ThirtyMinutes) {
+            return Err(unauthorized("Guest users can only use the 30-minute expiration"));
         }
         exp
     } else {
