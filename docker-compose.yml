@@ -4,6 +4,13 @@ services:
   mysql:
     image: mysql:8.0
     container_name: share-anything-mysql
+    command:
+      - --performance-schema=OFF
+      - --innodb-buffer-pool-size=67108864
+      - --max-connections=30
+      - --table-open-cache=400
+      - --innodb-log-buffer-size=8388608
+      - --mysqlx=0
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -19,6 +26,12 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Application
   app:
     image: pmg3858/share-anything:latest
@@ -78,5 +91,11 @@ services:
       mysql:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
 volumes:
   mysql_data:
