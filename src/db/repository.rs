@@ -483,6 +483,15 @@ pub async fn find_quick_access_files_by_user(
     .await
 }
 
+/// Delete one `file_shares` row and return the number of rows removed (0 or 1).
+///
+/// Callers use the return value as an atomic claim for one-time downloads: of
+/// two concurrent deletes of the same id, exactly one observes `1`.
+///
+/// The share code is released back to the registry only once the *last* file
+/// using it is gone. Releasing it while sibling files of a multi-file share
+/// still exist would let a new upload reserve the same code and mix two
+/// unrelated shares under one code.
 pub async fn delete_file_share(
     pool: &MySqlPool,
     id: &str,
@@ -498,8 +507,17 @@ pub async fn delete_file_share(
         .execute(pool)
         .await?;
 
-    if let Some((code,)) = share_code {
-        release_share_code(pool, &code).await?;
+    if result.rows_affected() > 0 {
+        if let Some((code,)) = share_code {
+            let (remaining,): (i64,) =
+                sqlx::query_as("SELECT COUNT(*) FROM file_shares WHERE share_code = ?")
+                    .bind(&code)
+                    .fetch_one(pool)
+                    .await?;
+            if remaining == 0 {
+                release_share_code(pool, &code).await?;
+            }
+        }
     }
 
     Ok(result.rows_affected())
@@ -1103,19 +1121,40 @@ pub async fn find_email_auth_session_by_token(
     .await
 }
 
-pub async fn update_email_auth_session_status(
+/// Atomically move an email-auth session from `from` to `to`. Returns the
+/// number of rows changed: `0` means the session was not in `from` (already
+/// used, or a concurrent request won), so callers must not proceed.
+pub async fn transition_email_auth_session_status(
     pool: &MySqlPool,
     id: &str,
-    status: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"UPDATE email_auth_sessions SET status = ? WHERE id = ?"#,
+    from: &str,
+    to: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"UPDATE email_auth_sessions SET status = ? WHERE id = ? AND status = ?"#,
     )
-    .bind(status)
+    .bind(to)
     .bind(id)
+    .bind(from)
     .execute(pool)
     .await?;
-    Ok(())
+    Ok(result.rows_affected())
+}
+
+/// Delete email-auth sessions that are past their TTL. These rows hold a
+/// verification code and gate session minting via `session_id`, so they must
+/// not linger indefinitely. A short grace period past `expires_at` is allowed
+/// so an in-flight poll/verify is not cut off mid-request.
+pub async fn delete_expired_email_auth_sessions(
+    pool: &MySqlPool,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"DELETE FROM email_auth_sessions
+           WHERE expires_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 HOUR)"#,
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }
 
 pub async fn find_recent_email_auth_session(
@@ -2106,4 +2145,270 @@ pub async fn add_daily_upload_usage(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// Integration tests for the security-relevant SQL in this module (one-time
+/// claims, share-code release, email-auth state transitions, cleanup). They
+/// need a real MySQL 8 server, so they are `#[ignore]`d by default:
+///
+///   TEST_DATABASE_URL=mysql://user:pass@127.0.0.1:3306 cargo test -- --ignored
+///
+/// `TEST_DATABASE_URL` is a server URL with no database path. Each test
+/// creates and drops its own `sa_sec_test_<uuid>` database (even on panic), so
+/// existing tables are never touched. Never point this at production.
+#[cfg(test)]
+mod db_integration_tests {
+    use super::*;
+    use futures::FutureExt;
+    use sqlx::mysql::MySqlPoolOptions;
+    use std::future::Future;
+    use std::panic::AssertUnwindSafe;
+
+    async fn with_test_db<F, Fut>(f: F)
+    where
+        F: FnOnce(MySqlPool) -> Fut,
+        Fut: Future<Output = ()>,
+    {
+        let Ok(base) = std::env::var("TEST_DATABASE_URL") else {
+            eprintln!("TEST_DATABASE_URL not set; skipping DB integration test");
+            return;
+        };
+        let base = base.trim_end_matches('/').to_string();
+        let admin = MySqlPool::connect(&base)
+            .await
+            .expect("connect to TEST_DATABASE_URL");
+        let db_name = format!("sa_sec_test_{}", Uuid::new_v4().simple());
+        sqlx::query(&format!("CREATE DATABASE `{}`", db_name))
+            .execute(&admin)
+            .await
+            .expect("create test database");
+
+        let pool = MySqlPoolOptions::new()
+            .max_connections(16)
+            .connect(&format!("{}/{}", base, db_name))
+            .await
+            .expect("connect to test database");
+        create_schema(&pool).await;
+
+        let outcome = AssertUnwindSafe(f(pool.clone())).catch_unwind().await;
+
+        pool.close().await;
+        let _ = sqlx::query(&format!("DROP DATABASE `{}`", db_name))
+            .execute(&admin)
+            .await;
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+    }
+
+    async fn create_schema(pool: &MySqlPool) {
+        for ddl in [
+            // migrations/018_add_share_code_registry.sql
+            "CREATE TABLE share_codes (
+                code CHAR(6) NOT NULL PRIMARY KEY,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            // migrations/041_add_empty_folders.sql
+            "CREATE TABLE empty_folders (
+                share_code CHAR(6) NOT NULL,
+                relative_path VARCHAR(1024) NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (share_code, relative_path(190))
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            // Only the file_shares columns the functions under test touch.
+            "CREATE TABLE file_shares (
+                id CHAR(36) PRIMARY KEY,
+                share_code CHAR(6) NOT NULL,
+                INDEX idx_share_code (share_code)
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            // Not in migrations/ (created out of band); columns per EmailAuthSession.
+            "CREATE TABLE email_auth_sessions (
+                id VARCHAR(36) PRIMARY KEY,
+                email VARCHAR(255) NOT NULL,
+                token VARCHAR(64) NOT NULL,
+                verification_code VARCHAR(6) NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                request_ip VARCHAR(64) NOT NULL,
+                device_id VARCHAR(64) NOT NULL DEFAULT '',
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ] {
+            sqlx::query(ddl).execute(pool).await.expect("create schema");
+        }
+    }
+
+    async fn insert_share(pool: &MySqlPool, id: &str, code: &str) {
+        sqlx::query("INSERT INTO file_shares (id, share_code) VALUES (?, ?)")
+            .bind(id)
+            .bind(code)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT IGNORE INTO share_codes (code) VALUES (?)")
+            .bind(code)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    async fn code_reserved(pool: &MySqlPool, code: &str) -> bool {
+        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM share_codes WHERE code = ?")
+            .bind(code)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        n > 0
+    }
+
+    async fn insert_email_session(pool: &MySqlPool, id: &str, status: &str, expires_in_secs: i64) {
+        sqlx::query(
+            "INSERT INTO email_auth_sessions
+             (id, email, token, verification_code, status, request_ip, device_id, expires_at, created_at)
+             VALUES (?, 'u@example.com', ?, '123456', ?, '127.0.0.1', 'dev',
+                     DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND), UTC_TIMESTAMP())",
+        )
+        .bind(id)
+        .bind(format!("tok-{}", id))
+        .bind(status)
+        .bind(expires_in_secs)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn delete_file_share_is_an_exactly_once_claim() {
+        with_test_db(|pool| async move {
+            insert_share(&pool, "file-a", "111111").await;
+            assert_eq!(delete_file_share(&pool, "file-a").await.unwrap(), 1);
+            assert_eq!(delete_file_share(&pool, "file-a").await.unwrap(), 0);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn concurrent_one_time_claims_have_a_single_winner() {
+        with_test_db(|pool| async move {
+            insert_share(&pool, "file-race", "222222").await;
+            let mut handles = Vec::new();
+            for _ in 0..16 {
+                let pool = pool.clone();
+                handles.push(tokio::spawn(async move {
+                    delete_file_share(&pool, "file-race").await.unwrap()
+                }));
+            }
+            let mut winners = 0;
+            for handle in handles {
+                winners += handle.await.unwrap();
+            }
+            assert_eq!(winners, 1, "exactly one concurrent claim may succeed");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn share_code_released_only_after_last_file() {
+        with_test_db(|pool| async move {
+            insert_share(&pool, "multi-1", "333333").await;
+            insert_share(&pool, "multi-2", "333333").await;
+            sqlx::query("INSERT INTO empty_folders (share_code, relative_path) VALUES ('333333', 'docs')")
+                .execute(&pool)
+                .await
+                .unwrap();
+
+            delete_file_share(&pool, "multi-1").await.unwrap();
+            assert!(
+                code_reserved(&pool, "333333").await,
+                "code must stay reserved while a sibling file still uses it"
+            );
+            let (folders,): (i64,) =
+                sqlx::query_as("SELECT COUNT(*) FROM empty_folders WHERE share_code = '333333'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(folders, 1, "folder metadata must survive while the share exists");
+
+            delete_file_share(&pool, "multi-2").await.unwrap();
+            assert!(
+                !code_reserved(&pool, "333333").await,
+                "code is released together with the last file"
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn email_session_transitions_are_conditional() {
+        with_test_db(|pool| async move {
+            insert_email_session(&pool, "s1", "pending", 600).await;
+            // verify-code must not be able to complete a session still `pending`
+            assert_eq!(
+                transition_email_auth_session_status(&pool, "s1", "verified", "completed").await.unwrap(),
+                0
+            );
+            assert_eq!(
+                transition_email_auth_session_status(&pool, "s1", "pending", "verified").await.unwrap(),
+                1
+            );
+            // a replayed magic-link click loses
+            assert_eq!(
+                transition_email_auth_session_status(&pool, "s1", "pending", "verified").await.unwrap(),
+                0
+            );
+            assert_eq!(
+                transition_email_auth_session_status(&pool, "s1", "verified", "completed").await.unwrap(),
+                1
+            );
+            // the same code cannot complete the session twice
+            assert_eq!(
+                transition_email_auth_session_status(&pool, "s1", "verified", "completed").await.unwrap(),
+                0
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn concurrent_email_completion_has_a_single_winner() {
+        with_test_db(|pool| async move {
+            insert_email_session(&pool, "s-race", "verified", 600).await;
+            let mut handles = Vec::new();
+            for _ in 0..16 {
+                let pool = pool.clone();
+                handles.push(tokio::spawn(async move {
+                    transition_email_auth_session_status(&pool, "s-race", "verified", "completed")
+                        .await
+                        .unwrap()
+                }));
+            }
+            let mut winners = 0;
+            for handle in handles {
+                winners += handle.await.unwrap();
+            }
+            assert_eq!(winners, 1, "exactly one concurrent completion may succeed");
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn expired_email_sessions_are_purged_after_grace() {
+        with_test_db(|pool| async move {
+            insert_email_session(&pool, "live", "pending", 600).await;
+            insert_email_session(&pool, "recently-expired", "completed", -60).await;
+            insert_email_session(&pool, "long-expired", "completed", -2 * 3600).await;
+
+            assert_eq!(delete_expired_email_auth_sessions(&pool).await.unwrap(), 1);
+            assert!(find_email_auth_session_by_id(&pool, "live").await.unwrap().is_some());
+            assert!(find_email_auth_session_by_id(&pool, "recently-expired").await.unwrap().is_some());
+            assert!(find_email_auth_session_by_id(&pool, "long-expired").await.unwrap().is_none());
+        })
+        .await;
+    }
 }

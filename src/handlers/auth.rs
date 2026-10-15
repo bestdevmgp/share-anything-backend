@@ -35,6 +35,61 @@ pub struct AppState {
     pub auth: Arc<AuthService>,
 }
 
+/// Origins we are willing to hand an OAuth authorization `code` to: the CORS
+/// allowlist plus our own frontend and backend URLs.
+fn allowed_redirect_origins(config: &Config) -> Vec<String> {
+    let mut origins = config.cors.allowed_origins.clone();
+    origins.push(config.server.frontend_url.clone());
+    origins.push(config.server.base_url.clone());
+    origins
+}
+
+/// True when `candidate` is an absolute URL whose origin (scheme+host+port)
+/// matches one of `allowed`. Opaque/relative/non-http origins never match.
+///
+/// This is the gate that stops an attacker-supplied OAuth `redirect_uri` /
+/// `state` from redirecting the authorization code (and therefore the issued
+/// session) to a host they control.
+fn redirect_origin_allowed(candidate: &str, allowed: &[String]) -> bool {
+    use oauth2::url::Url;
+    let Ok(candidate_url) = Url::parse(candidate) else {
+        return false;
+    };
+    let candidate_origin = candidate_url.origin();
+    if !candidate_origin.is_tuple() {
+        return false;
+    }
+    allowed.iter().any(|a| {
+        Url::parse(a)
+            .map(|u| u.origin() == candidate_origin)
+            .unwrap_or(false)
+    })
+}
+
+/// Resolve the frontend callback used to start an OAuth login. The client's
+/// requested `redirect_uri` is honored only when its origin is allowlisted;
+/// otherwise we fall back to this server's own default callback so a crafted
+/// `redirect_uri` cannot be reflected back by the provider.
+fn resolve_login_redirect(config: &Config, provider: &str, requested: Option<String>) -> String {
+    let default = format!("{}/auth/callback/{}", config.server.base_url, provider);
+    match requested {
+        Some(uri) if redirect_origin_allowed(&uri, &allowed_redirect_origins(config)) => uri,
+        _ => default,
+    }
+}
+
+/// Sanitize the `state` echoed back on an OAuth callback before using it as a
+/// redirect target. Only allowlisted origins are used verbatim; anything else
+/// falls back to the frontend URL, so the callback cannot be abused as an open
+/// redirect that leaks the authorization code to an arbitrary host.
+fn safe_callback_target(config: &Config, state: &str) -> String {
+    if redirect_origin_allowed(state, &allowed_redirect_origins(config)) {
+        state.to_string()
+    } else {
+        config.server.frontend_url.clone()
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/auth/google",
@@ -50,9 +105,8 @@ pub async fn google_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
-        format!("{}/auth/callback/google", state.config.server.base_url)
-    });
+    let frontend_callback =
+        resolve_login_redirect(&state.config, "google", query.redirect_uri);
 
     let client = create_google_oauth_client(&state.config);
 
@@ -79,10 +133,10 @@ pub async fn google_login(
     )
 )]
 pub async fn google_callback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(query): Query<GoogleCallbackQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = &query.state;
+    let frontend_callback = safe_callback_target(&state.config, &query.state);
 
     let redirect_url = format!(
         "{}?code={}&state={}",
@@ -151,9 +205,8 @@ pub async fn naver_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
-        format!("{}/auth/callback/naver", state.config.server.base_url)
-    });
+    let frontend_callback =
+        resolve_login_redirect(&state.config, "naver", query.redirect_uri);
 
     let client = create_naver_oauth_client(&state.config);
 
@@ -178,10 +231,10 @@ pub async fn naver_login(
     )
 )]
 pub async fn naver_callback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(query): Query<NaverCallbackQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = &query.state;
+    let frontend_callback = safe_callback_target(&state.config, &query.state);
 
     let redirect_url = format!(
         "{}?code={}&state={}",
@@ -250,9 +303,8 @@ pub async fn kakao_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
-        format!("{}/auth/callback/kakao", state.config.server.base_url)
-    });
+    let frontend_callback =
+        resolve_login_redirect(&state.config, "kakao", query.redirect_uri);
 
     let client = create_kakao_oauth_client(&state.config);
 
@@ -280,10 +332,10 @@ pub async fn kakao_login(
     )
 )]
 pub async fn kakao_callback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(query): Query<KakaoCallbackQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = &query.state;
+    let frontend_callback = safe_callback_target(&state.config, &query.state);
 
     let redirect_url = format!(
         "{}?code={}&state={}",
@@ -350,9 +402,8 @@ pub async fn apple_login(
     State(state): State<AppState>,
     Query(query): Query<OAuthLoginQuery>,
 ) -> impl IntoResponse {
-    let frontend_callback = query.redirect_uri.unwrap_or_else(|| {
-        format!("{}/auth/callback/apple", state.config.server.base_url)
-    });
+    let frontend_callback =
+        resolve_login_redirect(&state.config, "apple", query.redirect_uri);
 
     let client = create_apple_oauth_client(&state.config);
 
@@ -376,10 +427,10 @@ pub async fn apple_login(
     )
 )]
 pub async fn apple_callback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Form(form): Form<AppleCallbackForm>,
 ) -> impl IntoResponse {
-    let frontend_callback = &form.state;
+    let frontend_callback = safe_callback_target(&state.config, &form.state);
 
     let mut redirect_url = format!(
         "{}?code={}&state=apple",
@@ -492,6 +543,44 @@ fn build_email_auth_data(
     }
 }
 
+/// Wrong-code attempts allowed per email-auth session before it is refused.
+const MAX_EMAIL_CODE_ATTEMPTS: u32 = 5;
+
+type CodeFailureMap = dashmap::DashMap<String, (u32, std::time::Instant)>;
+
+/// Per-session wrong-code counters. Process-local on purpose: a schema column
+/// would not reach production (migrations only run on a fresh database), and
+/// sessions live for 10 minutes, so losing counters on restart is acceptable.
+fn email_code_failures() -> &'static CodeFailureMap {
+    static FAILURES: std::sync::OnceLock<CodeFailureMap> = std::sync::OnceLock::new();
+    FAILURES.get_or_init(dashmap::DashMap::new)
+}
+
+fn email_code_attempts_exceeded(session_id: &str) -> bool {
+    email_code_failures()
+        .get(session_id)
+        .map(|entry| entry.0 >= MAX_EMAIL_CODE_ATTEMPTS)
+        .unwrap_or(false)
+}
+
+fn record_email_code_failure(session_id: &str) {
+    let failures = email_code_failures();
+    if failures.len() > 10_000 {
+        // Sessions expire after 10 minutes; drop stale counters so the map
+        // stays bounded.
+        let ttl = std::time::Duration::from_secs(15 * 60);
+        failures.retain(|_, (_, first_failure)| first_failure.elapsed() < ttl);
+    }
+    failures
+        .entry(session_id.to_string())
+        .and_modify(|(count, _)| *count += 1)
+        .or_insert((1, std::time::Instant::now()));
+}
+
+fn clear_email_code_failures(session_id: &str) {
+    email_code_failures().remove(session_id);
+}
+
 /// Send a magic-link authentication email.
 #[utoipa::path(
     post,
@@ -593,7 +682,11 @@ pub async fn email_verify(
     let welcome_lang = welcome_email_language(&headers);
 
     if same_device {
-        repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
+        // Conditional transition: a replayed or concurrent click of the same
+        // magic link loses here instead of minting a second login.
+        if repository::transition_email_auth_session_status(&state.db, &session.id, "pending", "completed").await? == 0 {
+            return Err(StatusCode::GONE.into());
+        }
 
         let (outcome, existing_provider) = state
             .auth
@@ -612,7 +705,9 @@ pub async fn email_verify(
         )
             .into_response())
     } else {
-        repository::update_email_auth_session_status(&state.db, &session.id, "verified").await?;
+        if repository::transition_email_auth_session_status(&state.db, &session.id, "pending", "verified").await? == 0 {
+            return Err(StatusCode::GONE.into());
+        }
 
         Ok(Json(EmailVerifyResponse {
             same_device: false,
@@ -653,11 +748,30 @@ pub async fn email_verify_code(
         return Err(StatusCode::GONE.into());
     }
 
+    // The code is only ever revealed by /auth/email/verify after the magic
+    // link (proof of inbox access) was opened, which moves the session to
+    // `verified`. Accepting it in any other state would let anyone holding a
+    // session_id guess the 6-digit code without touching the inbox. `pending`
+    // answers exactly like a wrong code so it is not an oracle.
+    match session.status.as_str() {
+        "verified" => {}
+        "completed" => return Err(StatusCode::GONE.into()),
+        _ => return Err(StatusCode::UNAUTHORIZED.into()),
+    }
+
+    if email_code_attempts_exceeded(&session.id) {
+        return Err(StatusCode::GONE.into());
+    }
+
     if session.verification_code != body.code {
+        record_email_code_failure(&session.id);
         return Err(StatusCode::UNAUTHORIZED.into());
     }
 
-    repository::update_email_auth_session_status(&state.db, &session.id, "completed").await?;
+    if repository::transition_email_auth_session_status(&state.db, &session.id, "verified", "completed").await? == 0 {
+        return Err(StatusCode::GONE.into());
+    }
+    clear_email_code_failures(&session.id);
 
     let client_ip = crate::utils::client_ip(&headers);
     let welcome_lang = welcome_email_language(&headers);
@@ -710,6 +824,18 @@ pub async fn email_status(
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)?;
+
+    // A completed email-auth session must not remain a reusable credential
+    // after its TTL. Without this check the `session_id` could be replayed to
+    // mint fresh login sessions indefinitely (the row is otherwise never
+    // consumed on this path).
+    if session.expires_at < chrono::Utc::now() {
+        return Ok(Json(EmailStatusResponse {
+            status: "expired".to_string(),
+            auth: None,
+        })
+        .into_response());
+    }
 
     if session.status == "completed" {
         let (outcome, existing_provider) = state
@@ -802,4 +928,62 @@ pub async fn logout(
         )],
         Json(serde_json::json!({ "ok": true })),
     )
+}
+
+#[cfg(test)]
+mod redirect_allowlist_tests {
+    use super::{redirect_origin_allowed};
+
+    fn allowed() -> Vec<String> {
+        vec![
+            "https://shareany.app".to_string(),
+            "https://www.shareany.app".to_string(),
+            "http://localhost:3000".to_string(),
+        ]
+    }
+
+    #[test]
+    fn allows_exact_origin_any_path() {
+        let a = allowed();
+        assert!(redirect_origin_allowed(
+            "https://shareany.app/auth/callback/google",
+            &a
+        ));
+        assert!(redirect_origin_allowed("https://shareany.app/", &a));
+        assert!(redirect_origin_allowed("http://localhost:3000/auth/callback/apple", &a));
+    }
+
+    #[test]
+    fn rejects_foreign_host() {
+        let a = allowed();
+        assert!(!redirect_origin_allowed("https://evil.com/capture", &a));
+        // look-alike / subdomain confusion must not pass
+        assert!(!redirect_origin_allowed("https://shareany.app.evil.com/x", &a));
+        assert!(!redirect_origin_allowed("https://evilshareany.app/x", &a));
+    }
+
+    #[test]
+    fn rejects_scheme_and_port_mismatch() {
+        let a = allowed();
+        // scheme differs (https vs configured http) for localhost
+        assert!(!redirect_origin_allowed("https://localhost:3000/x", &a));
+        // port differs
+        assert!(!redirect_origin_allowed("http://localhost:4000/x", &a));
+        // http where only https is allowed
+        assert!(!redirect_origin_allowed("http://shareany.app/x", &a));
+    }
+
+    #[test]
+    fn rejects_non_absolute_or_opaque() {
+        let a = allowed();
+        assert!(!redirect_origin_allowed("/auth/callback/google", &a));
+        assert!(!redirect_origin_allowed("javascript:alert(1)", &a));
+        assert!(!redirect_origin_allowed("not a url", &a));
+        assert!(!redirect_origin_allowed("", &a));
+    }
+
+    #[test]
+    fn empty_allowlist_rejects_everything() {
+        assert!(!redirect_origin_allowed("https://shareany.app/x", &[]));
+    }
 }
