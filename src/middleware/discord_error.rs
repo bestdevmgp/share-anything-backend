@@ -30,7 +30,13 @@ pub async fn discord_error_middleware(request: Request, next: Next) -> Response 
             } else {
                 let text = String::from_utf8_lossy(&bytes).to_string();
                 if text.len() > 1000 {
-                    format!("{}...", &text[..1000])
+                    // Back off to a char boundary: slicing mid-codepoint panics
+                    // on multi-byte (e.g. Korean) error bodies.
+                    let mut end = 1000;
+                    while !text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    format!("{}...", &text[..end])
                 } else {
                     text
                 }

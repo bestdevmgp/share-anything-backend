@@ -6,6 +6,20 @@ use axum::{
     response::Response,
 };
 use base64::Engine;
+use sha2::{Digest, Sha256};
+
+/// Constant-time equality for two byte slices. Hashing both sides first means
+/// the comparison runs over fixed-length digests, so neither the length nor the
+/// content of the secret leaks through timing.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    let a_hash = Sha256::digest(a);
+    let b_hash = Sha256::digest(b);
+    a_hash
+        .iter()
+        .zip(b_hash.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
 
 pub async fn swagger_basic_auth(request: Request, next: Next) -> Response {
     let path = request.uri().path();
@@ -26,9 +40,10 @@ pub async fn swagger_basic_auth(request: Request, next: Next) -> Response {
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Basic "));
+        .and_then(|v| v.strip_prefix("Basic "))
+        .unwrap_or("");
 
-    if provided != Some(expected_b64.as_str()) {
+    if !constant_time_eq(provided.as_bytes(), expected_b64.as_bytes()) {
         return basic_auth_challenge();
     }
 
