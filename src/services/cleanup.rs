@@ -36,6 +36,10 @@ pub async fn start_cleanup_task(pool: DbPool, storage: StorageService, email_ser
             error!("Failed to delete expired CLI auth sessions: {}", e);
         }
 
+        if let Err(e) = repository::delete_expired_email_auth_sessions(&pool).await {
+            error!("Failed to delete expired email auth sessions: {}", e);
+        }
+
         if let Err(e) = repository::delete_expired_sessions(&pool).await {
             error!("Failed to delete expired sessions: {}", e);
         }

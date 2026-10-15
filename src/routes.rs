@@ -342,6 +342,10 @@ pub fn create_router(
     let og_routes = Router::new()
         .route("/og/:code", get(handlers::og::get_og_page))
         .route("/og/:code/image", get(handlers::og::get_og_image))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .with_state(og_state);
 
     let personal_token_state = handlers::personal_token::PersonalTokenState {
@@ -383,6 +387,10 @@ pub fn create_router(
         .route("/admin/api-keys/applications", get(handlers::admin::admin_list_applications))
         .route("/admin/api-keys/applications/:id/approve", post(handlers::admin::admin_approve))
         .route("/admin/api-keys/applications/:id/reject", post(handlers::admin::admin_reject))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            crate::middleware::rate_limiter::rate_limit_middleware,
+        ))
         .with_state(admin_state);
 
     let cli_auth_state = CliAuthState {
@@ -521,6 +529,9 @@ pub fn create_router(
         ))
         .layer(axum::middleware::from_fn(
             crate::middleware::discord_error::discord_error_middleware,
+        ))
+        .layer(axum::middleware::from_fn(
+            crate::middleware::security_headers::security_headers,
         ))
         .layer(axum::Extension(discord))
         .layer(cors)
