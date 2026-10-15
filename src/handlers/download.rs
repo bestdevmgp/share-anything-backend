@@ -32,6 +32,23 @@ pub struct DownloadState {
     pub notifications: Arc<NotificationService>,
 }
 
+/// Atomically consume a one-time share row before its content is served.
+///
+/// The row delete is the claim: of any set of concurrent requests for the same
+/// one-time file exactly one sees a row removed, and every other request gets
+/// 404 — so a one-time file cannot be delivered twice by racing requests.
+/// Fails closed: a DB error refuses the download rather than serving it
+/// without consuming the share.
+pub(crate) async fn claim_one_time_share(db: &DbPool, file_share_id: &str) -> Result<(), AppError> {
+    let claimed = repository::delete_file_share(db, file_share_id)
+        .await
+        .map_err(|e| internal_error(format!("Failed to consume one-time share: {}", e)))?;
+    if claimed == 0 {
+        return Err(not_found("File not found or expired"));
+    }
+    Ok(())
+}
+
 /// Reduce an uploader-supplied file name to a safe ZIP entry: basename only, no
 /// `.` / `..` / empty, and de-duplicated within one archive so a collision doesn't
 /// silently overwrite an earlier entry on extract. The `fallback_id` is the
@@ -330,6 +347,18 @@ pub async fn download_single_file(
         }
     }
 
+    // Open the object first so a storage failure leaves a one-time share
+    // unconsumed (retryable), then claim it atomically before any logging or
+    // notification so a losing concurrent request has no side effects.
+    let s3_resp = state
+        .storage
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+
+    if file_share.is_one_time {
+        claim_one_time_share(&state.db, &file_share.id).await?;
+    }
+
     let user_claims = request.extensions().get::<Claims>().cloned();
 
     let ip_address = crate::utils::client_ip(&headers);
@@ -370,17 +399,12 @@ pub async fn download_single_file(
         )
         .await;
 
-    let s3_resp = state
-        .storage
-        .download_file_stream(&file_share.storage_key)
-        .await?;
-
     let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
+        // Row was already claimed above; the open GetObject stream keeps
+        // serving the bytes after the object is deleted.
         let _ = state.storage.delete_file(&file_share.storage_key).await;
-
-        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
     let async_read = s3_resp.body.into_async_read();
@@ -546,6 +570,18 @@ pub async fn download_file(
         }
     }
 
+    // Open the object first so a storage failure leaves a one-time share
+    // unconsumed (retryable), then claim it atomically before any logging or
+    // notification so a losing concurrent request has no side effects.
+    let s3_resp = state
+        .storage
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+
+    if file_share.is_one_time {
+        claim_one_time_share(&state.db, &file_share.id).await?;
+    }
+
     let user_claims = request.extensions().get::<Claims>().cloned();
 
     let ip_address = crate::utils::client_ip(&headers);
@@ -586,17 +622,12 @@ pub async fn download_file(
         )
         .await;
 
-    let s3_resp = state
-        .storage
-        .download_file_stream(&file_share.storage_key)
-        .await?;
-
     let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
+        // Row was already claimed above; the open GetObject stream keeps
+        // serving the bytes after the object is deleted.
         let _ = state.storage.delete_file(&file_share.storage_key).await;
-
-        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
     let async_read = s3_resp.body.into_async_read();
@@ -738,6 +769,16 @@ pub async fn download_multiple_files(
         fetched.insert(idx, (name, bytes));
     }
 
+    // Everything is buffered and nothing has been sent yet: consume every
+    // one-time row now, before logging, so a racing request cannot also get
+    // the archive. Any lost claim aborts the whole download (fail closed).
+    let is_one_time = files_to_download[0].is_one_time;
+    if is_one_time {
+        for file_share in files_to_download.iter() {
+            claim_one_time_share(&state.db, &file_share.id).await?;
+        }
+    }
+
     let buffer = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(buffer);
     let options = FileOptions::default()
@@ -800,12 +841,9 @@ pub async fn download_multiple_files(
         )
         .await;
 
-    let is_one_time = files_to_download[0].is_one_time;
     if is_one_time {
         for file_share in files_to_download.iter() {
             let _ = state.storage.delete_file(&file_share.storage_key).await;
-
-            let _ = repository::delete_file_share(&state.db, &file_share.id).await;
         }
     }
 
@@ -1078,15 +1116,16 @@ pub async fn get_download_url(
         .map_err(|e| internal_error(format!("Failed to create download URL: {}", e)))?;
 
     if file_share.is_one_time {
-        let storage_key = file_share.storage_key.clone();
-        let file_id = file_share.id.clone();
-        let storage = state.storage.clone();
-        let db = state.db.clone();
+        // Atomic claim: only one concurrent caller is handed a usable URL for a
+        // one-time share; the row is consumed now and the object is removed
+        // once the issued URL has expired.
+        claim_one_time_share(&state.db, &file_share.id).await?;
 
+        let storage_key = file_share.storage_key.clone();
+        let storage = state.storage.clone();
         tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(DOWNLOAD_URL_EXPIRY_SECS + 60)).await;
             let _ = storage.delete_file(&storage_key).await;
-            let _ = repository::delete_file_share(&db, &file_id).await;
         });
     }
 

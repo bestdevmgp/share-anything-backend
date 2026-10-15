@@ -26,6 +26,7 @@ use crate::{
     },
     services::StorageService,
 };
+use crate::handlers::download::claim_one_time_share;
 
 #[allow(unused_imports)]
 use crate::models::{
@@ -806,6 +807,18 @@ pub async fn cli_download(
         }
     }
 
+    // Open the object first (a storage failure leaves the share unconsumed),
+    // then claim a one-time share atomically before logging so concurrent
+    // requests cannot both receive it.
+    let s3_resp = state
+        .storage
+        .download_file_stream(&file_share.storage_key)
+        .await?;
+
+    if file_share.is_one_time {
+        claim_one_time_share(&state.db, &file_share.id).await?;
+    }
+
     let ip_address = crate::utils::client_ip(&headers);
 
     let user_agent = headers
@@ -827,15 +840,10 @@ pub async fn cli_download(
     )
     .await;
 
-    let s3_resp = state
-        .storage
-        .download_file_stream(&file_share.storage_key)
-        .await?;
     let content_length = s3_resp.content_length();
 
     if file_share.is_one_time {
         let _ = state.storage.delete_file(&file_share.storage_key).await;
-        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
     }
 
     let async_read = s3_resp.body.into_async_read();
@@ -957,19 +965,18 @@ pub async fn cli_download_url(
         .map_err(|e| internal_error(format!("Failed to create download URL: {}", e)))?;
 
     if file_share.is_one_time {
-        let _ = repository::delete_file_share(&state.db, &file_share.id).await;
+        // Atomic claim: only one concurrent caller gets a URL for a one-time
+        // share (the documented "second request returns 404" contract).
+        claim_one_time_share(&state.db, &file_share.id).await?;
 
         let storage = state.storage.clone();
-        let db = state.db.clone();
         let storage_key = file_share.storage_key.clone();
-        let file_id = file_share.id.clone();
         tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_secs(
                 CLI_DOWNLOAD_URL_EXPIRY_SECS + 60,
             ))
             .await;
             let _ = storage.delete_file(&storage_key).await;
-            let _ = repository::delete_file_share(&db, &file_id).await;
         });
     }
 
